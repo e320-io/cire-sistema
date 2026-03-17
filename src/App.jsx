@@ -438,20 +438,90 @@ function POS({session,onSwitchSucursal,isAdmin}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD
+// DASHBOARD — Vista ejecutiva para dueño de negocio
 // ══════════════════════════════════════════════════════════════════════════════
+const inicioSemana=()=>{const d=new Date(),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
+const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
+
 function Dashboard({onLogout}){
   useCSSInjection();
-  const[tab,setTab]=useState("resumen");const[tickets,setTickets]=useState([]);const[loadingDB,setLoadingDB]=useState(false);const[metaData,setMetaData]=useState(null);const[loadingMeta,setLoadingMeta]=useState(false);const[metaError,setMetaError]=useState("");const[posSuc,setPosSuc]=useState(null);
-  const cargarT=async()=>{setLoadingDB(true);const{data,error}=await supabase.from("tickets").select("*").gte("fecha",inicioMes()).lte("fecha",hoy()).order("created_at",{ascending:false});if(!error&&data)setTickets(data);setLoadingDB(false);};
-  const cargarMeta=async()=>{setLoadingMeta(true);setMetaError("");try{const since=inicioMes(),until=hoy(),fields="adset_name,spend,actions,impressions,clicks,reach";const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;const res=await fetch(url);const json=await res.json();if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}const rows=json.data||[];const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};let tS=0,tM=0,tI=0,tC=0,tA=0;const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});}catch(e){setMetaError("Error Meta.");}setLoadingMeta(false);};
-  useEffect(()=>{cargarT();cargarMeta();},[]);
-  const vM=tickets.reduce((s,t)=>s+Number(t.total),0),nM=tickets.filter(t=>t.tipo_clienta==="Nueva").length,rM=tickets.filter(t=>t.tipo_clienta==="Recurrente").length,tP=tickets.length?vM/tickets.length:0;
-  const inv=metaData?.spend||0,msgs=metaData?.mensajes||0,cpa=nM>0&&inv>0?inv/nM:0,roas=inv>0?vM/inv:0,conv=msgs>0?((nM/msgs)*100).toFixed(1):"—";
-  const vSuc=SUCURSALES_NAMES.map(n=>({nombre:n,ventas:tickets.filter(t=>t.sucursal_nombre===n).reduce((s,t)=>s+Number(t.total),0),nuevas:tickets.filter(t=>t.sucursal_nombre===n&&t.tipo_clienta==="Nueva").length,tickets:tickets.filter(t=>t.sucursal_nombre===n).length}));
-  const maxV=Math.max(...vSuc.map(s=>s.ventas),1);
-  const mSuc=SUCURSALES_NAMES.map(n=>{const v=vSuc.find(x=>x.nombre===n),m=metaData?.porSucursal?.[n],sp=m?.spend||0,ms=m?.mensajes||0,nv=v?.nuevas||0;return{nombre:n,spend:sp,mensajes:ms,nuevas:nv,cpa:nv>0&&sp>0?sp/nv:0};}).sort((a,b)=>b.mensajes-a.mensajes);
-  const maxMs=Math.max(...mSuc.map(s=>s.mensajes),1);
+  const[tab,setTab]=useState("resumen");
+  const[periodo,setPeriodo]=useState("semana"); // "semana" | "mes"
+  const[tickets,setTickets]=useState([]);
+  const[citas,setCitas]=useState([]);
+  const[loadingDB,setLoadingDB]=useState(false);
+  const[metaData,setMetaData]=useState(null);
+  const[loadingMeta,setLoadingMeta]=useState(false);
+  const[metaError,setMetaError]=useState("");
+  const[posSuc,setPosSuc]=useState(null);
+
+  const desde=periodo==="semana"?inicioSemana():inicioMes();
+  const periodoLabel=periodo==="semana"?semanaLabel():mesLabel();
+
+  const cargarDatos=async()=>{
+    setLoadingDB(true);
+    const[{data:tData},{data:cData}]=await Promise.all([
+      supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hoy()).order("created_at",{ascending:false}),
+      supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hoy())
+    ]);
+    if(tData)setTickets(tData);
+    if(cData)setCitas(cData);
+    setLoadingDB(false);
+  };
+  const cargarMeta=async()=>{
+    setLoadingMeta(true);setMetaError("");
+    try{
+      const since=desde,until=hoy(),fields="adset_name,spend,actions,impressions,clicks,reach";
+      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+      const res=await fetch(url);const json=await res.json();
+      if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
+      const rows=json.data||[];
+      const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
+      let tS=0,tM=0,tI=0,tC=0,tA=0;
+      const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
+      setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
+    }catch(e){setMetaError("Error Meta.");}
+    setLoadingMeta(false);
+  };
+  useEffect(()=>{cargarDatos();cargarMeta();},[periodo]);
+
+  // ─── Métricas globales ─────────────────────────────────────────────────────
+  const ventasTotal=tickets.reduce((s,t)=>s+Number(t.total),0);
+  const nuevas=tickets.filter(t=>t.tipo_clienta==="Nueva").length;
+  const recompras=tickets.filter(t=>t.tipo_clienta==="Recompra").length;
+  const sesionesComp=citas.filter(c=>c.estado==="completada").length;
+  const sesionesAg=citas.filter(c=>c.estado==="agendada").length;
+  const ticketProm=tickets.length?ventasTotal/tickets.length:0;
+  const inv=metaData?.spend||0;
+  const msgs=metaData?.mensajes||0;
+  const totalVentas=nuevas+recompras;
+  const cpa=nuevas>0&&inv>0?inv/nuevas:0;
+  const roas=inv>0?ventasTotal/inv:0;
+  const convMsgVenta=msgs>0?((totalVentas/msgs)*100).toFixed(1):"—";
+  const convMsgNueva=msgs>0?((nuevas/msgs)*100).toFixed(1):"—";
+  const recompRatio=totalVentas>0?((recompras/totalVentas)*100).toFixed(0):"0";
+
+  // ─── Por sucursal ──────────────────────────────────────────────────────────
+  const porSuc=SUCURSALES_NAMES.map(n=>{
+    const tks=tickets.filter(t=>t.sucursal_nombre===n);
+    const cts=citas.filter(c=>c.sucursal_nombre===n);
+    const v=tks.reduce((s,t)=>s+Number(t.total),0);
+    const nv=tks.filter(t=>t.tipo_clienta==="Nueva").length;
+    const rc=tks.filter(t=>t.tipo_clienta==="Recompra").length;
+    const sc=cts.filter(c=>c.estado==="completada").length;
+    const sa=cts.filter(c=>c.estado==="agendada").length;
+    const ms=metaData?.porSucursal?.[n]?.mensajes||0;
+    const sp=metaData?.porSucursal?.[n]?.spend||0;
+    const cpaN=nv>0&&sp>0?sp/nv:0;
+    const roasN=sp>0?v/sp:0;
+    const convN=ms>0?((nv/ms)*100).toFixed(1):"—";
+    return{nombre:n,ventas:v,nuevas:nv,recompras:rc,sesComp:sc,sesAg:sa,tickets:tks.length,mensajes:ms,spend:sp,cpa:cpaN,roas:roasN,conv:convN};
+  });
+  const maxV=Math.max(...porSuc.map(s=>s.ventas),1);
+  const maxMs=Math.max(...porSuc.map(s=>s.mensajes),1);
+
+  // ─── Servicios y métodos ───────────────────────────────────────────────────
   const sc={};tickets.forEach(t=>{(t.servicios||[]).forEach(s=>{sc[s]=(sc[s]||0)+1;});});const topS=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,8);const maxSvc=topS[0]?.[1]||1;
   const met={};tickets.forEach(t=>{const m=(t.metodo_pago||"").split(" ")[0];met[m]=(met[m]||0)+Number(t.total);});const topM=Object.entries(met).sort((a,b)=>b[1]-a[1]);
   const vD={};tickets.forEach(t=>{vD[t.fecha]=(vD[t.fecha]||0)+Number(t.total);});const dM=Object.entries(vD).sort((a,b)=>a[0].localeCompare(b[0]));const maxD=Math.max(...dM.map(d=>d[1]),1);
@@ -459,24 +529,152 @@ function Dashboard({onLogout}){
   if(posSuc)return<POS session={posSuc} onSwitchSucursal={()=>setPosSuc(null)} isAdmin={true}/>;
   return(
     <div style={{minHeight:"100vh",background:"#0C0D1A",color:"#fff"}}>
+      {/* Topbar */}
       <div style={{padding:"0 28px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"space-between",height:"64px",background:"rgba(0,0,0,0.4)",backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",gap:"20px"}}><div style={{fontSize:"20px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
-          <div style={{display:"flex"}}>{["resumen","sucursales","servicios","meta","pos"].map(t=><div key={t} className="tab-dash" style={{borderBottomColor:tab===t?"#2721E8":"transparent",color:tab===t?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setTab(t)}>{{resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",pos:"🖥 Ver POS"}[t]}</div>)}</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:"20px"}}>
+          <div style={{fontSize:"20px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div>
+          <div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
+          <div style={{display:"flex"}}>
+            {["resumen","sucursales","servicios","meta","pos"].map(t=><div key={t} className="tab-dash" style={{borderBottomColor:tab===t?"#2721E8":"transparent",color:tab===t?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setTab(t)}>
+              {{resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",pos:"🖥 POS"}[t]}</div>)}
+          </div>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-          {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳ Meta...</div>:metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>:metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
-          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{mesLabel()}</div>
-          <button className="btn-ghost" onClick={()=>{cargarT();cargarMeta();}}>↻</button><button className="btn-ghost" onClick={onLogout}>Salir</button>
+          {/* Periodo toggle */}
+          <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
+            {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
+          </div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>
+          {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳</div>
+            :metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>
+            :metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
+          <button className="btn-ghost" onClick={()=>{cargarDatos();cargarMeta();}}>↻</button>
+          <button className="btn-ghost" onClick={onLogout}>Salir</button>
         </div>
       </div>
+
       <div style={{padding:"24px 28px",maxWidth:"1400px",margin:"0 auto"}}>
+
+        {/* ═══ RESUMEN ═══ */}
         {tab==="resumen"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>{[{l:"VENTAS",v:fmt(vM),s:`${fmtN(tickets.length)} tickets`,c:"hi",cl:"#2721E8"},{l:"NUEVAS",v:nM,s:`${rM} recurrentes`,c:"",cl:"#fff"},{l:"TICKET PROM.",v:fmt(tP),s:"por visita",c:"",cl:"#fff"},{l:"INVERSIÓN",v:fmt(inv),s:cpa>0?`CPA: ${fmt(cpa)}`:"—",c:"orange",cl:"#f97316"}].map(k=><div key={k.l} className={`kpi ${k.c}`}><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.cl}}>{k.v}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{k.s}</div></div>)}</div>
-          {roas>0&&<div className="kpi green"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>ROAS</div><div style={{fontSize:"32px",fontWeight:700,color:"#10b981"}}>{roas.toFixed(1)}x</div></div><div style={{textAlign:"right"}}><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Conv. msg→venta</div><div style={{fontSize:"20px",fontWeight:700,color:parseFloat(conv)>=10?"#10b981":"#f0c040"}}>{conv==="—"?"—":`${conv}%`}</div></div></div></div>}
-          <div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>VENTAS POR DÍA</div><div style={{display:"flex",alignItems:"flex-end",gap:"4px",height:"140px"}}>{dM.map(([f,m])=>{const p=m/maxD;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}><div style={{fontSize:"9px",fontWeight:600,color:"#49B8D3",marginBottom:"4px"}}>{m>=1000?`${(m/1000).toFixed(0)}k`:m}</div><div style={{width:"100%",maxWidth:"28px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#2721E8,#49B8D3)",borderRadius:"4px 4px 0 0"}}/><div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{f.slice(8)}</div></div>;})}</div></div>
+          {/* KPIs fila 1 */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
+            {[
+              {l:"VENTAS TOTALES",v:fmt(ventasTotal),s:`${fmtN(tickets.length)} tickets`,cls:"hi",cl:"#2721E8"},
+              {l:"CLIENTAS NUEVAS",v:nuevas,s:`${nuevas>0?Math.round(nuevas/tickets.length*100):0}% del total`,cls:"green",cl:"#10b981"},
+              {l:"RECOMPRAS",v:recompras,s:`${recompRatio}% recompra`,cls:"",cl:"#49B8D3"},
+              {l:"SESIONES",v:sesionesComp,s:`${sesionesAg} por atender`,cls:"",cl:"#fff"},
+              {l:"TICKET PROMEDIO",v:fmt(ticketProm),s:"por venta",cls:"",cl:"#fff"},
+            ].map(k=><div key={k.l} className={`kpi ${k.cls}`}><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.cl}}>{k.v}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{k.s}</div></div>)}
+          </div>
+          {/* KPIs fila 2 — Meta Ads */}
+          {metaData&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+            {[
+              {l:"INVERSIÓN ADS",v:fmt(inv),s:`${periodoLabel}`,cl:"#f97316",cls:"orange"},
+              {l:"MENSAJES",v:fmtN(msgs),s:`${msgs>0&&totalVentas>0?`1 venta cada ${Math.round(msgs/totalVentas)} msgs`:"—"}`,cl:"#a855f7",cls:""},
+              {l:"CPA (nuevas)",v:cpa>0?fmt(cpa):"—",s:cpa>0&&cpa<40?"Excelente":cpa<60?"Aceptable":cpa>0?"Revisar":"Sin datos",cl:cpa>0&&cpa<40?"#10b981":cpa<60?"#f0c040":"#ff6b6b",cls:""},
+              {l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",s:roas>=3?"Excelente":roas>=1?"Aceptable":"Revisar",cl:"#10b981",cls:"green"},
+            ].map(k=><div key={k.l} className={`kpi ${k.cls}`}><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.cl}}>{k.v}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{k.s}</div></div>)}
+          </div>}
+          {/* Conversión msg→venta */}
+          {metaData&&msgs>0&&<div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>CONVERSIÓN MENSAJE → VENTA</div><div style={{display:"flex",alignItems:"baseline",gap:"16px"}}><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Total (nueva+recompra)</div><div style={{fontSize:"24px",fontWeight:700,color:parseFloat(convMsgVenta)>=10?"#10b981":"#f0c040"}}>{convMsgVenta}%</div></div><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Solo nuevas</div><div style={{fontSize:"24px",fontWeight:700,color:parseFloat(convMsgNueva)>=8?"#10b981":"#f0c040"}}>{convMsgNueva}%</div></div></div></div>
+              <div style={{textAlign:"right"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)"}}>De {fmtN(msgs)} mensajes</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)"}}>{fmtN(totalVentas)} ventas cerradas</div></div>
+            </div>
+          </div>}
+          {/* Gráfica ventas por día */}
+          <div className="glass" style={{padding:"24px"}}>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>VENTAS POR DÍA</div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:"4px",height:"140px"}}>
+              {dM.map(([f,m])=>{const p=m/maxD;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}><div style={{fontSize:"9px",fontWeight:600,color:"#49B8D3",marginBottom:"4px"}}>{m>=1000?`${(m/1000).toFixed(0)}k`:m}</div><div style={{width:"100%",maxWidth:"28px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#2721E8,#49B8D3)",borderRadius:"4px 4px 0 0"}}/><div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div></div>;})}
+            </div>
+          </div>
         </div>}
-        {tab==="sucursales"&&<div className="glass" style={{overflow:"hidden"}}><div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 110px 110px 100px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>{["#","Sucursal","Ventas","Nuevas","Tickets","Total"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)"}}>{h}</div>)}</div>{vSuc.sort((a,b)=>b.ventas-a.ventas).map((s,i)=><div key={s.nombre} className="rank-row"><div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div><div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div><div style={{paddingRight:"20px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${(s.ventas/maxV)*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div></div><div style={{fontSize:"13px",fontWeight:600}}>{s.nuevas}</div><div style={{fontSize:"13px",fontWeight:600}}>{s.tickets}</div><div style={{fontSize:"13px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</div></div>)}</div>}
-        {tab==="servicios"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}><div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>TOP SERVICIOS</div>{topS.map(([svc,cnt],i)=><div key={svc} style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}><div style={{fontSize:"12px",fontWeight:700,color:"rgba(255,255,255,0.3)",width:"20px"}}>{i+1}</div><div style={{flex:1}}><div style={{fontSize:"12px",fontWeight:500,marginBottom:"4px"}}>{svc}</div><div style={{height:"4px",background:"rgba(255,255,255,0.04)",borderRadius:"2px"}}><div style={{width:`${(cnt/maxSvc)*100}%`,height:"100%",background:"#2721E8",borderRadius:"2px"}}/></div></div><div style={{fontSize:"13px",fontWeight:700}}>{cnt}</div></div>)}</div><div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>MÉTODOS DE PAGO</div>{topM.map(([m,v])=><div key={m} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}><div style={{fontSize:"13px",fontWeight:500}}>{m||"—"}</div><div style={{fontSize:"13px",fontWeight:700,color:"#49B8D3"}}>{fmt(v)}</div></div>)}</div></div>}
-        {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>{metaData&&!metaError&&<><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>{[{l:"INVERSIÓN",v:fmt(metaData.spend),c:"#f97316"},{l:"MENSAJES",v:fmtN(metaData.mensajes),c:"#a855f7"},{l:"CPA",v:cpa>0?fmt(cpa):"—",c:cpa>0&&cpa<40?"#10b981":"#f0c040"},{l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",c:"#10b981"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}</div><div className="glass" style={{overflow:"hidden"}}><div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>POR SUCURSAL</div></div><div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 110px 110px 100px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>{["#","Sucursal","Mensajes","Inversión","CPA","Conv%"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}</div>{mSuc.map((s,i)=>{const v=vSuc.find(x=>x.nombre===s.nombre);const pc=s.mensajes>0&&v?((v.nuevas/s.mensajes)*100).toFixed(1):"—";return<div key={s.nombre} className="rank-row"><div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div><div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div><div style={{paddingRight:"20px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${(s.mensajes/maxMs)*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"3px"}}>{fmtN(s.mensajes)} msgs</div></div><div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{fmt(s.spend)}</div><div style={{fontSize:"13px",fontWeight:600,color:s.cpa>0&&s.cpa<40?"#10b981":s.cpa<60?"#f0c040":"#ff6b6b"}}>{s.cpa>0?fmt(s.cpa):"—"}</div><div style={{fontSize:"13px",fontWeight:600,color:parseFloat(pc)>=10?"#10b981":"rgba(255,255,255,0.3)"}}>{pc==="—"?"—":`${pc}%`}</div></div>;})}</div>{metaData.mensajes>0&&<div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO GLOBAL · {mesLabel()}</div><div style={{display:"flex",alignItems:"stretch"}}>{[{label:"Alcance",value:fmtN(metaData.alcance),color:"#2721E8"},{label:"Clics",value:fmtN(metaData.clics),color:"#49B8D3",pct:metaData.alcance>0?((metaData.clics/metaData.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaData.mensajes),color:"#a855f7",pct:metaData.clics>0?((metaData.mensajes/metaData.clics)*100).toFixed(1):0},{label:"Ventas nuevas",value:fmtN(nM),color:"#10b981",pct:metaData.mensajes>0?((nM/metaData.mensajes)*100).toFixed(1):0}].map((e,i)=><div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":i===3?"0 12px 12px 0":"0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}</div></div>}</>}{loadingMeta&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Conectando con Meta...</div>}{!loadingMeta&&metaError&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaError}</div></div>}</div>}
+
+        {/* ═══ SUCURSALES — tabla expandida ═══ */}
+        {tab==="sucursales"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          <div className="glass" style={{overflow:"hidden"}}>
+            <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>RENDIMIENTO POR SUCURSAL · {periodoLabel}</div></div>
+            <div style={{overflowX:"auto"}}>
+              <div style={{display:"grid",gridTemplateColumns:"32px 100px 1fr 80px 80px 80px 80px 80px 80px 90px 80px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",minWidth:"950px"}}>
+                {["#","Sucursal","Ventas","Nuevas","Recomp.","Sesiones","Msgs","Inversión","CPA","ROAS","Conv%"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+              </div>
+              {porSuc.sort((a,b)=>b.ventas-a.ventas).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 100px 1fr 80px 80px 80px 80px 80px 80px 90px 80px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center",minWidth:"950px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
+                <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${(s.ventas/maxV)*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"3px"}}>{fmt(s.ventas)}</div></div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#10b981"}}>{s.nuevas}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#49B8D3"}}>{s.recompras}</div>
+                <div style={{fontSize:"13px"}}><span style={{fontWeight:600}}>{s.sesComp}</span><span style={{color:"rgba(255,255,255,0.3)",fontSize:"10px"}}> +{s.sesAg}</span></div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#a855f7"}}>{s.mensajes>0?fmtN(s.mensajes):"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:s.cpa>0&&s.cpa<40?"#10b981":s.cpa<60?"#f0c040":"#ff6b6b"}}>{s.cpa>0?fmt(s.cpa):"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:s.roas>=3?"#10b981":s.roas>=1?"#f0c040":"rgba(255,255,255,0.3)"}}>{s.roas>0?`${s.roas.toFixed(1)}x`:"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:parseFloat(s.conv)>=10?"#10b981":parseFloat(s.conv)>0?"#f0c040":"rgba(255,255,255,0.3)"}}>{s.conv==="—"?"—":`${s.conv}%`}</div>
+              </div>)}
+            </div>
+            <div style={{padding:"12px 20px",fontSize:"11px",color:"rgba(255,255,255,0.15)",borderTop:"1px solid rgba(255,255,255,0.04)"}}>CPA = inversión ÷ nuevas · ROAS = ventas ÷ inversión · Conv = nuevas ÷ mensajes</div>
+          </div>
+          {/* Cards resumen por sucursal */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
+            {porSuc.sort((a,b)=>b.ventas-a.ventas).map(s=><div key={s.nombre} className="glass" style={{padding:"18px",borderColor:`${COLORES[s.nombre]}33`}}>
+              <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"14px",fontWeight:700}}>{s.nombre}</span></div>
+              <div style={{fontSize:"22px",fontWeight:700,color:COLORES[s.nombre],marginBottom:"8px"}}>{fmt(s.ventas)}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Nuevas</span><span style={{color:"#10b981",fontWeight:600}}>{s.nuevas}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Recompras</span><span style={{color:"#49B8D3",fontWeight:600}}>{s.recompras}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Sesiones</span><span style={{fontWeight:600}}>{s.sesComp}</span></div>
+                {s.mensajes>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Mensajes</span><span style={{color:"#a855f7",fontWeight:600}}>{s.mensajes}</span></div>}
+                {s.cpa>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>CPA</span><span style={{color:s.cpa<40?"#10b981":"#f0c040",fontWeight:600}}>{fmt(s.cpa)}</span></div>}
+              </div>
+            </div>)}
+          </div>
+        </div>}
+
+        {/* ═══ SERVICIOS ═══ */}
+        {tab==="servicios"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
+          <div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>TOP SERVICIOS</div>{topS.map(([svc,cnt],i)=><div key={svc} style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}><div style={{fontSize:"12px",fontWeight:700,color:"rgba(255,255,255,0.3)",width:"20px"}}>{i+1}</div><div style={{flex:1}}><div style={{fontSize:"12px",fontWeight:500,marginBottom:"4px"}}>{svc}</div><div style={{height:"4px",background:"rgba(255,255,255,0.04)",borderRadius:"2px"}}><div style={{width:`${(cnt/maxSvc)*100}%`,height:"100%",background:"#2721E8",borderRadius:"2px"}}/></div></div><div style={{fontSize:"13px",fontWeight:700}}>{cnt}</div></div>)}</div>
+          <div className="glass" style={{padding:"24px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>MÉTODOS DE PAGO</div>{topM.map(([m,v])=><div key={m} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}><div style={{fontSize:"13px",fontWeight:500}}>{m||"—"}</div><div style={{fontSize:"13px",fontWeight:700,color:"#49B8D3"}}>{fmt(v)}</div></div>)}</div>
+        </div>}
+
+        {/* ═══ META ADS ═══ */}
+        {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          {metaData&&!metaError&&<>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+              {[{l:"INVERSIÓN",v:fmt(metaData.spend),c:"#f97316"},{l:"MENSAJES",v:fmtN(metaData.mensajes),c:"#a855f7"},{l:"CPA",v:cpa>0?fmt(cpa):"—",c:cpa>0&&cpa<40?"#10b981":"#f0c040"},{l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",c:"#10b981"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
+            </div>
+            {/* Tabla mensajes por sucursal */}
+            <div className="glass" style={{overflow:"hidden"}}>
+              <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES vs VENTAS POR SUCURSAL</div></div>
+              <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 90px 90px 90px 80px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+                {["#","Sucursal","Mensajes","Inversión","Nuevas","CPA","Conv%"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+              </div>
+              {porSuc.sort((a,b)=>b.mensajes-a.mensajes).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 90px 90px 90px 80px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center"}}>
+                <div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
+                <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${s.mensajes>0?(s.mensajes/maxMs)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"3px"}}>{fmtN(s.mensajes)} msgs</div></div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:"#10b981"}}>{s.nuevas}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:s.cpa>0&&s.cpa<40?"#10b981":s.cpa<60?"#f0c040":"#ff6b6b"}}>{s.cpa>0?fmt(s.cpa):"—"}</div>
+                <div style={{fontSize:"13px",fontWeight:600,color:parseFloat(s.conv)>=10?"#10b981":"rgba(255,255,255,0.3)"}}>{s.conv==="—"?"—":`${s.conv}%`}</div>
+              </div>)}
+            </div>
+            {/* Embudo */}
+            {metaData.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO GLOBAL · {periodoLabel}</div>
+              <div style={{display:"flex",alignItems:"stretch"}}>
+                {[{label:"Alcance",value:fmtN(metaData.alcance),color:"#2721E8"},{label:"Clics",value:fmtN(metaData.clics),color:"#49B8D3",pct:metaData.alcance>0?((metaData.clics/metaData.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaData.mensajes),color:"#a855f7",pct:metaData.clics>0?((metaData.mensajes/metaData.clics)*100).toFixed(1):0},{label:"Ventas",value:fmtN(totalVentas),color:"#10b981",pct:metaData.mensajes>0?((totalVentas/metaData.mensajes)*100).toFixed(1):0}].map((e,i)=>
+                  <div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":i===3?"0 12px 12px 0":"0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}
+              </div>
+            </div>}
+          </>}
+          {loadingMeta&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Conectando con Meta...</div>}
+          {!loadingMeta&&metaError&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaError}</div></div>}
+        </div>}
+
+        {/* ═══ VER POS ═══ */}
         {tab==="pos"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>SELECCIONA SUCURSAL</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>{USUARIOS.filter(u=>u.rol==="sucursal").map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}><div style={{width:"40px",height:"40px",borderRadius:"12px",background:`${s.color}22`,border:`1px solid ${s.color}44`,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px"}}>🖥</div><div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Ver POS →</div></div>)}</div></div>}
       </div>
     </div>
