@@ -203,8 +203,6 @@ const ITEM_FILTRO = (item, filtro) => {
   return true;
 };
 
-const COMO_NOS_CONOCIO = ["Facebook","Instagram","TikTok","Recomendación","Google","Pasé por aquí","Otro"];
-
 // ─── Agenda estilo Google Calendar ───────────────────────────────────────────
 const HORAS = Array.from({length:12},(_,i)=>i+9); // 9am a 8pm
 function AgendaCalendar({ session }) {
@@ -612,124 +610,37 @@ function AgendaCalendar({ session }) {
   );
 }
 
-// ─── Ficha clienta (modal post-ticket) ───────────────────────────────────────
-function ModalFichaClienta({ ticket, onClose, session }) {
-  const [nombre,setNombre]=useState("");
-  const [telefono,setTelefono]=useState("");
-  const [fechaNac,setFechaNac]=useState("");
-  const [comoNos,setComoNos]=useState("");
-  const [saving,setSaving]=useState(false);
-  const [saved,setSaved]=useState(false);
-
-  const guardar=async()=>{
-    if(!nombre)return;setSaving(true);
-    try{
-      // Crear clienta
-      const{data:clienta}=await supabase.from("clientas").insert([{
-        nombre,telefono,fecha_nacimiento:fechaNac||null,
-        como_nos_conocio:comoNos,
-        sucursal_id:session.id,sucursal_nombre:session.nombre,
-      }]).select();
-      // Crear paquetes vinculados a la clienta
-      if(clienta&&clienta[0]){
-        for(const svc of ticket.servicios||[]){
-          if(svc.includes("ses")){
-            const m=svc.match(/(\d+)\s*ses/);
-            const tot=m?parseInt(m[1]):8;
-            await supabase.from("paquetes").insert([{
-              clienta_id:clienta[0].id,clienta_nombre:nombre,
-              sucursal_id:session.id,sucursal_nombre:session.nombre,
-              servicio:svc,total_sesiones:tot,sesiones_usadas:0,
-              precio:0,ticket_id:ticket.id,fecha_compra:hoy(),activo:true,
-            }]);
-          }
-        }
-        // Actualizar paquetes sin clienta de este ticket
-        await supabase.from("paquetes").update({clienta_id:clienta[0].id,clienta_nombre:nombre}).eq("ticket_id",ticket.id);
-      }
-      setSaved(true);
-      setTimeout(()=>onClose(),1500);
-    }catch(e){console.error(e);}
-    setSaving(false);
-  };
-
-  if(saved) return(
-    <div className="overlay" style={{zIndex:300}}>
-      <div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}>
-        <div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div>
-        <div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ficha creada!</div>
-        <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Perfil de {nombre} guardado correctamente</div>
-      </div>
-    </div>
-  );
-
-  return(
-    <div className="overlay" style={{zIndex:300}}>
-      <div className="glass" style={{width:460,padding:"28px",borderColor:"rgba(39,33,232,0.3)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}}>
-          <div>
-            <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>NUEVA CLIENTA</div>
-            <div style={{fontSize:"18px",fontWeight:700}}>Crear ficha de perfil</div>
-            <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",marginTop:"4px"}}>
-              {(ticket.servicios||[]).join(", ")} · {fmt(ticket.total)}
-            </div>
-          </div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button>
-        </div>
-
-        <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}>
-          <div>
-            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NOMBRE COMPLETO *</div>
-            <input className="inp" placeholder="Nombre y apellido" value={nombre} onChange={e=>setNombre(e.target.value)}/>
-          </div>
-          <div>
-            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>TELÉFONO / WHATSAPP</div>
-            <input className="inp" placeholder="55 1234 5678" value={telefono} onChange={e=>setTelefono(e.target.value)}/>
-          </div>
-          <div>
-            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA DE NACIMIENTO</div>
-            <input type="date" className="inp" value={fechaNac} onChange={e=>setFechaNac(e.target.value)} style={{colorScheme:"dark"}}/>
-          </div>
-          <div>
-            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>¿CÓMO NOS CONOCIÓ?</div>
-            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-              {COMO_NOS_CONOCIO.map(c=>(
-                <button key={c} className="btn-ghost" style={{borderColor:comoNos===c?"#2721E8":"rgba(255,255,255,0.1)",color:comoNos===c?"#fff":"rgba(255,255,255,0.4)",padding:"6px 12px",fontSize:"11px"}} onClick={()=>setComoNos(c)}>{c}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div style={{display:"flex",gap:"8px"}}>
-          <button className="btn-ghost" style={{flex:1}} onClick={onClose}>Omitir por ahora</button>
-          <button className="btn-blue" style={{flex:2,padding:"13px"}} disabled={!nombre||saving} onClick={guardar}>
-            {saving?"Guardando...":"✓ Crear ficha"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 // ══════════════════════════════════════════════════════════════════════════════
-// POS COMPONENT — grid de tarjetas + ficha clienta
+// POS COMPONENT — Nuevo flujo: Paquete → Datos clienta → Agendar → Cobrar
 // ══════════════════════════════════════════════════════════════════════════════
+const COMO_OPTIONS = ["Facebook","Instagram","TikTok","Recomendación","Google","Pasé por aquí","Otro"];
+
 function POS({ session, onSwitchSucursal, isAdmin }) {
   useCSSInjection();
   const [view,setView]             = useState("pos");
-  const [carrito,setCarrito]       = useState([]);
+  const [carrito,setCarrito]       = useState([]); // max 1 item, qty siempre 1
   const [filtro,setFiltro]         = useState("Todos");
   const [busq,setBusq]             = useState("");
+  // Datos clienta (sidebar)
+  const [nombreCli,setNombreCli]   = useState("");
+  const [telCli,setTelCli]         = useState("");
+  const [fechaNacCli,setFechaNacCli]=useState("");
+  const [comoNos,setComoNos]       = useState("");
+  const [depiAntes,setDepiAntes]   = useState(null); // true/false/null
+  // Agenda (sidebar)
+  const [fechaCita,setFechaCita]   = useState("");
+  const [horaCita,setHoraCita]     = useState("");
+  // Cobro modal
   const [metodo,setMetodo]         = useState("");
   const [msiSel,setMsiSel]         = useState(0);
   const [descuento,setDescuento]   = useState(0);
-  const [tipoClienta,setTipoClienta]=useState("Nueva");
   const [showConfirm,setShowConfirm]=useState(false);
   const [saving,setSaving]         = useState(false);
+  // Éxito
+  const [showExito,setShowExito]   = useState(false);
+  // Historial
   const [tickets,setTickets]       = useState([]);
   const [loadingT,setLoadingT]     = useState(false);
-  const [ticketNuevo,setTicketNuevo]=useState(null); // para mostrar ficha
 
   const todosItems = CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFiltrados = todosItems.filter(i=>{
@@ -738,41 +649,101 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
     return matchFiltro && matchBusq;
   });
 
-  const agregar=(item)=>setCarrito(c=>{const ex=c.find(x=>x.nombre===item.nombre);return ex?c.map(x=>x.nombre===item.nombre?{...x,qty:x.qty+1}:x):[...c,{...item,qty:1}];});
-  const quitar=(nombre)=>setCarrito(c=>c.map(x=>x.nombre===nombre?{...x,qty:x.qty-1}:x).filter(x=>x.qty>0));
-  const total=carrito.reduce((s,i)=>s+i.precio*i.qty,0);
+  // Solo 1 paquete a la vez, sin +/-
+  const seleccionar=(item)=>{
+    const yaEsta=carrito.find(x=>x.nombre===item.nombre);
+    if(yaEsta){
+      setCarrito([]);
+    } else {
+      setCarrito([{...item,qty:1}]);
+    }
+  };
+  const quitarPaquete=()=>setCarrito([]);
+
+  const total=carrito.length>0?carrito[0].precio:0;
   const totalConDesc=Math.round(total*(1-descuento/100));
-  const msiDisponibles=[...new Set(carrito.flatMap(i=>i.msi||[]))].sort((a,b)=>a-b);
+  const msiDisponibles=carrito.length>0?(carrito[0].msi||[]):[];
+
+  // Detectar tipo servicio para la cita
+  const detectarTipoSvc=(nombre)=>{
+    const n=(nombre||"").toLowerCase();
+    if(n.includes("baby"))return TIPOS_SVC[1];
+    if(n.includes("fullface")||n.includes("facial"))return TIPOS_SVC[2];
+    if(n.includes("hifu"))return TIPOS_SVC[4];
+    if(n.includes("post"))return TIPOS_SVC[5];
+    if(n.includes("moldeo")||n.includes("corporal")||n.includes("anticel"))return TIPOS_SVC[3];
+    return TIPOS_SVC[0]; // láser default
+  };
+
+  // Validaciones por paso
+  const paqueteOk=carrito.length>0;
+  const datosOk=nombreCli.trim().length>0;
+  const agendaOk=fechaCita&&horaCita;
+  const todoListo=paqueteOk&&datosOk&&agendaOk;
+
+  // Calcular hora fin
+  const calcHoraFin=()=>{
+    if(!horaCita||carrito.length===0)return"";
+    const tipoSvc=detectarTipoSvc(carrito[0].nombre);
+    const [h,m]=horaCita.split(":").map(Number);
+    const dur=tipoSvc.duracion;
+    const hf=Math.floor((h*60+m+dur)/60),mf=(h*60+m+dur)%60;
+    return`${String(hf).padStart(2,"0")}:${String(mf).padStart(2,"0")}`;
+  };
+
+  const limpiarTodo=()=>{
+    setCarrito([]);setNombreCli("");setTelCli("");setFechaNacCli("");setComoNos("");setDepiAntes(null);
+    setFechaCita("");setHoraCita("");setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);
+  };
 
   const cerrarTicket=async()=>{
     setSaving(true);
     try{
-      const{data}=await supabase.from("tickets").insert([{
+      const item=carrito[0];
+      // 1. Crear clienta
+      const{data:clientaData}=await supabase.from("clientas").insert([{
+        nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacCli||null,
+        como_nos_conocio:comoNos,
         sucursal_id:session.id,sucursal_nombre:session.nombre,
-        servicios:carrito.map(i=>i.nombre),
-        total:totalConDesc,metodo_pago:metodo+(msiSel>0?` ${msiSel}MSI`:""),
-        descuento,tipo_clienta:tipoClienta,fecha:hoy(),
       }]).select();
-      if(data&&data[0]){
-        const ticketId=data[0].id;
-        for(const item of carrito){
-          if(item.nombre.includes("ses")){
-            const m=item.nombre.match(/(\d+)\s*ses/);
-            const tot=m?parseInt(m[1]):8;
-            for(let q=0;q<item.qty;q++){
-              await supabase.from("paquetes").insert([{
-                clienta_id:null,clienta_nombre:"—",
-                sucursal_id:session.id,sucursal_nombre:session.nombre,
-                servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,
-                precio:item.precio,ticket_id:ticketId,fecha_compra:hoy(),activo:true,
-              }]);
-            }
-          }
-        }
-        // Si es nueva clienta → mostrar ficha
-        if(tipoClienta==="Nueva") setTicketNuevo({...data[0], servicios: carrito.map(i=>i.nombre)});
+      const clienta=clientaData?.[0];
+
+      // 2. Crear ticket
+      const{data:ticketData}=await supabase.from("tickets").insert([{
+        sucursal_id:session.id,sucursal_nombre:session.nombre,
+        servicios:[item.nombre],
+        total:totalConDesc,metodo_pago:metodo+(msiSel>0?` ${msiSel}MSI`:""),
+        descuento,tipo_clienta:"Nueva",fecha:hoy(),
+      }]).select();
+      const ticketId=ticketData?.[0]?.id;
+
+      // 3. Crear paquete vinculado
+      if(item.nombre.includes("ses")){
+        const mSes=item.nombre.match(/(\d+)\s*ses/);
+        const tot=mSes?parseInt(mSes[1]):8;
+        await supabase.from("paquetes").insert([{
+          clienta_id:clienta?.id||null,clienta_nombre:nombreCli,
+          sucursal_id:session.id,sucursal_nombre:session.nombre,
+          servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,
+          precio:item.precio,ticket_id:ticketId,fecha_compra:hoy(),activo:true,
+        }]);
       }
-      setCarrito([]);setMetodo("");setMsiSel(0);setDescuento(0);setTipoClienta("Nueva");setShowConfirm(false);
+
+      // 4. Crear cita agendada
+      const tipoSvc=detectarTipoSvc(item.nombre);
+      const horaFin=calcHoraFin();
+      await supabase.from("citas").insert([{
+        clienta_id:clienta?.id||null,clienta_nombre:nombreCli,
+        paquete_id:null,sucursal_id:session.id,sucursal_nombre:session.nombre,
+        servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,
+        fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin,
+        sesion_numero:1,es_cobro:true,estado:"agendada",
+        notas:`Ticket #${ticketId||""}`,
+      }]);
+
+      setShowConfirm(false);
+      setShowExito(true);
+      setTimeout(()=>{setShowExito(false);limpiarTodo();},2200);
     }catch(e){console.error(e);}
     setSaving(false);
   };
@@ -784,6 +755,11 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
   };
 
   const totalHoy=tickets.reduce((s,t)=>s+Number(t.total),0);
+
+  // ── Día de la semana helpers ──
+  const dowCita=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1;
+  const esDomingo=dowCita===0;
+  const horarioCita=dowCita>=0?HORARIOS[dowCita]:null;
 
   return(
     <div style={{height:"100vh",display:"flex",flexDirection:"column",background:"#0C0D1A",color:"#fff"}}>
@@ -827,7 +803,7 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
               <div key={t.id} className="glass" style={{padding:"16px 20px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div>
-                    <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})} · <span style={{color:t.tipo_clienta==="Nueva"?"#2721E8":"#49B8D3"}}>{t.tipo_clienta}</span></div>
+                    <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})} · <span style={{color:"#2721E8"}}>{t.tipo_clienta}</span></div>
                     <div style={{fontSize:"13px",fontWeight:500}}>{(t.servicios||[]).join(", ")}</div>
                     <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{t.metodo_pago}{t.descuento>0?` · ${t.descuento}% desc`:""}</div>
                   </div>
@@ -838,17 +814,17 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
           </div>
           {tickets.length>0&&(
             <div style={{marginTop:"16px",padding:"16px 20px",background:"rgba(39,33,232,0.08)",border:"1px solid rgba(39,33,232,0.2)",borderRadius:"12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:"13px",color:"rgba(255,255,255,0.5)"}}>{tickets.length} tickets · {tickets.filter(t=>t.tipo_clienta==="Nueva").length} nuevas</div>
+              <div style={{fontSize:"13px",color:"rgba(255,255,255,0.5)"}}>{tickets.length} tickets</div>
               <div style={{fontSize:"20px",fontWeight:700}}>{fmt(totalHoy)}</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Vista POS — GRID DE TARJETAS */}
+      {/* Vista POS — GRID DE TARJETAS + SIDEBAR NUEVO FLUJO */}
       {view==="pos"&&(
-        <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 340px",overflow:"hidden"}}>
-          {/* Catálogo */}
+        <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 380px",overflow:"hidden"}}>
+          {/* Catálogo izquierdo */}
           <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
             {/* Filtros + búsqueda */}
             <div style={{padding:"12px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
@@ -873,17 +849,17 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
                   const catLabel=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");
                   return(
                     <div key={item.nombre}
-                      onClick={()=>agregar(item)}
+                      onClick={()=>seleccionar(item)}
                       style={{background:enCarrito?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${enCarrito?"rgba(39,33,232,0.5)":"rgba(255,255,255,0.08)"}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative"}}
                       onMouseEnter={e=>{if(!enCarrito)e.currentTarget.style.background="rgba(255,255,255,0.06)";}}
-                      onMouseLeave={e=>{if(!enCarrito)e.currentTarget.style.background="rgba(255,255,255,0.03)";}}>
+                      onMouseLeave={e=>{if(!enCarrito)e.currentTarget.style.background=enCarrito?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)";}}>
                       <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{catLabel}</div>
                       <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
                       <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(item.precio)}</div>
                       {item.msi?.length>0&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
                       {enCarrito&&(
-                        <div style={{position:"absolute",top:"8px",right:"8px",width:"20px",height:"20px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:700}}>
-                          {enCarrito.qty}
+                        <div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700}}>
+                          ✓
                         </div>
                       )}
                     </div>
@@ -893,48 +869,107 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
             </div>
           </div>
 
-          {/* Panel derecho — NUEVO TICKET */}
-          <div style={{borderLeft:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",background:"rgba(0,0,0,0.2)"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"12px"}}>NUEVO TICKET</div>
-              {/* Tipo clienta */}
-              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>DATOS DE CLIENTA</div>
-              <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-                {["Nueva","Recurrente"].map(t=>(
-                  <button key={t} onClick={()=>setTipoClienta(t)}
-                    style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",transition:"all 0.15s",
-                      background:tipoClienta===t?"#2721E8":"transparent",
-                      borderColor:tipoClienta===t?"#2721E8":"rgba(255,255,255,0.12)",
-                      color:tipoClienta===t?"#fff":"rgba(255,255,255,0.4)"}}>
-                    {t==="Nueva"?"⭐ Nueva":"↩ Recurrente"}
-                  </button>
-                ))}
-              </div>
+          {/* ═══ PANEL DERECHO — NUEVO TICKET (flujo lineal) ═══ */}
+          <div style={{borderLeft:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",background:"rgba(0,0,0,0.2)",overflowY:"auto"}}>
+            <div style={{padding:"16px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>NUEVO TICKET</div>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,0.15)"}}>Paquete → Datos → Agendar → Cobrar</div>
             </div>
 
-            {/* Servicios seleccionados */}
-            <div style={{flex:1,overflowY:"auto",padding:"12px 18px"}}>
-              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",letterSpacing:"1px"}}>SERVICIOS</div>
-              {carrito.length===0&&<div style={{color:"rgba(255,255,255,0.12)",textAlign:"center",paddingTop:"30px",fontSize:"12px"}}>Selecciona del menú</div>}
-              {carrito.map(item=>(
-                <div key={item.nombre} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
-                  <div style={{flex:1,marginRight:"8px"}}>
-                    <div style={{fontSize:"12px",fontWeight:500,lineHeight:1.3}}>{item.nombre}</div>
-                    <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"1px"}}>{fmt(item.precio)}</div>
+            <div style={{flex:1,overflowY:"auto",padding:"14px 18px",display:"flex",flexDirection:"column",gap:"16px"}}>
+
+              {/* ── PASO 1: Paquete seleccionado ── */}
+              <div>
+                <div style={{fontSize:"10px",letterSpacing:"1px",color:paqueteOk?"#10b981":"rgba(255,255,255,0.3)",marginBottom:"8px",display:"flex",alignItems:"center",gap:"6px"}}>
+                  <div style={{width:"18px",height:"18px",borderRadius:"50%",background:paqueteOk?"#10b981":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:700,color:paqueteOk?"#fff":"rgba(255,255,255,0.3)",flexShrink:0}}>1</div>
+                  PAQUETE
+                </div>
+                {carrito.length===0?(
+                  <div style={{color:"rgba(255,255,255,0.12)",fontSize:"12px",padding:"12px",textAlign:"center",border:"1px dashed rgba(255,255,255,0.08)",borderRadius:"10px"}}>← Selecciona un paquete del menú</div>
+                ):(
+                  <div style={{padding:"12px",background:"rgba(39,33,232,0.1)",border:"1px solid rgba(39,33,232,0.3)",borderRadius:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:"13px",fontWeight:600}}>{carrito[0].nombre}</div>
+                      <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3",marginTop:"2px"}}>{fmt(carrito[0].precio)}</div>
+                    </div>
+                    <button onClick={quitarPaquete} style={{background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontWeight:600}}>✕</button>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
-                    <button onClick={()=>quitar(item.nombre)} style={{width:"22px",height:"22px",borderRadius:"6px",background:"rgba(255,255,255,0.06)",border:"none",color:"#fff",cursor:"pointer",fontSize:"14px"}}>−</button>
-                    <span style={{fontSize:"12px",fontWeight:600,minWidth:"14px",textAlign:"center"}}>{item.qty}</span>
-                    <button onClick={()=>agregar(item)} style={{width:"22px",height:"22px",borderRadius:"6px",background:"rgba(255,255,255,0.06)",border:"none",color:"#fff",cursor:"pointer",fontSize:"14px"}}>+</button>
-                    <span style={{fontSize:"12px",fontWeight:600,color:"#49B8D3",minWidth:"60px",textAlign:"right"}}>{fmt(item.precio*item.qty)}</span>
+                )}
+              </div>
+
+              {/* ── PASO 2: Datos de clienta ── */}
+              {paqueteOk&&(
+                <div>
+                  <div style={{fontSize:"10px",letterSpacing:"1px",color:datosOk?"#10b981":"rgba(255,255,255,0.3)",marginBottom:"8px",display:"flex",alignItems:"center",gap:"6px"}}>
+                    <div style={{width:"18px",height:"18px",borderRadius:"50%",background:datosOk?"#10b981":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:700,color:datosOk?"#fff":"rgba(255,255,255,0.3)",flexShrink:0}}>2</div>
+                    DATOS DE CLIENTA
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                    <input className="inp" placeholder="Nombre completo *" value={nombreCli} onChange={e=>setNombreCli(e.target.value)} style={{fontSize:"12px",padding:"9px 12px"}}/>
+                    <input className="inp" placeholder="Teléfono / WhatsApp" value={telCli} onChange={e=>setTelCli(e.target.value)} style={{fontSize:"12px",padding:"9px 12px"}}/>
+                    <input type="date" className="inp" placeholder="Fecha nacimiento" value={fechaNacCli} onChange={e=>setFechaNacCli(e.target.value)} style={{fontSize:"12px",padding:"9px 12px",colorScheme:"dark"}}/>
+                    <div>
+                      <div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginBottom:"5px",letterSpacing:"1px"}}>¿CÓMO NOS CONOCIÓ?</div>
+                      <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
+                        {COMO_OPTIONS.map(c=>(
+                          <button key={c} onClick={()=>setComoNos(comoNos===c?"":c)}
+                            style={{padding:"4px 10px",borderRadius:"6px",border:"1px solid",fontSize:"10px",cursor:"pointer",transition:"all 0.15s",
+                              background:comoNos===c?"#2721E8":"transparent",
+                              borderColor:comoNos===c?"#2721E8":"rgba(255,255,255,0.1)",
+                              color:comoNos===c?"#fff":"rgba(255,255,255,0.35)"}}>
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginBottom:"5px",letterSpacing:"1px"}}>¿SE HA DEPILADO CON LÁSER ANTES?</div>
+                      <div style={{display:"flex",gap:"6px"}}>
+                        {[{v:true,l:"Sí"},{v:false,l:"No / Primera vez"}].map(o=>(
+                          <button key={String(o.v)} onClick={()=>setDepiAntes(depiAntes===o.v?null:o.v)}
+                            style={{flex:1,padding:"6px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",
+                              background:depiAntes===o.v?"#2721E8":"transparent",
+                              borderColor:depiAntes===o.v?"#2721E8":"rgba(255,255,255,0.1)",
+                              color:depiAntes===o.v?"#fff":"rgba(255,255,255,0.35)"}}>
+                            {o.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* ── PASO 3: Agendar sesión ── */}
+              {paqueteOk&&datosOk&&(
+                <div>
+                  <div style={{fontSize:"10px",letterSpacing:"1px",color:agendaOk?"#10b981":"rgba(255,255,255,0.3)",marginBottom:"8px",display:"flex",alignItems:"center",gap:"6px"}}>
+                    <div style={{width:"18px",height:"18px",borderRadius:"50%",background:agendaOk?"#10b981":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:700,color:agendaOk?"#fff":"rgba(255,255,255,0.3)",flexShrink:0}}>3</div>
+                    AGENDAR 1ª SESIÓN
+                  </div>
+                  <div style={{display:"flex",gap:"8px",marginBottom:"6px"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginBottom:"4px"}}>FECHA</div>
+                      <input type="date" className="inp" value={fechaCita} min={hoy()} onChange={e=>setFechaCita(e.target.value)} style={{fontSize:"12px",padding:"9px 12px",colorScheme:"dark"}}/>
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginBottom:"4px"}}>HORA</div>
+                      <input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"12px",padding:"9px 12px",colorScheme:"dark"}}/>
+                    </div>
+                  </div>
+                  {esDomingo&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
+                  {agendaOk&&!esDomingo&&(
+                    <div style={{padding:"8px 12px",background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px",fontSize:"11px",color:"#10b981"}}>
+                      📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {calcHoraFin()} · {detectarTipoSvc(carrito[0]?.nombre).label} ({detectarTipoSvc(carrito[0]?.nombre).duracion}min)
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Total y cobrar */}
-            {carrito.length>0&&(
-              <div style={{padding:"14px 18px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+            {/* Botón cobrar fijo abajo */}
+            {todoListo&&!esDomingo&&(
+              <div style={{padding:"14px 18px",borderTop:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
                 <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={()=>setShowConfirm(true)}>
                   Cobrar {fmt(total)}
                 </button>
@@ -950,6 +985,12 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
           <div className="glass" style={{width:420,padding:"28px"}}>
             <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>CONFIRMAR COBRO</div>
             <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
+              {/* Resumen */}
+              <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
+                <div style={{fontSize:"12px",fontWeight:600,marginBottom:"6px"}}>{carrito[0]?.nombre}</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"4px"}}>Clienta: {nombreCli}</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {calcHoraFin()}</div>
+              </div>
               <div>
                 <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>MÉTODO DE PAGO</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px"}}>
@@ -979,13 +1020,8 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
                   </button>
                 </div>
               )}
-              <div style={{display:"flex",flexDirection:"column",gap:"8px",padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
-                {carrito.map(i=>(
-                  <div key={i.nombre} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}>
-                    <span style={{color:"rgba(255,255,255,0.5)"}}>{i.nombre}{i.qty>1?` ×${i.qty}`:""}</span>
-                    <span>{fmt(i.precio*i.qty)}</span>
-                  </div>
-                ))}
+              <div style={{display:"flex",flexDirection:"column",gap:"6px",padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.5)"}}>{carrito[0]?.nombre}</span><span>{fmt(total)}</span></div>
                 <div style={{height:"1px",background:"rgba(255,255,255,0.08)"}}/>
                 {descuento>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:"#ff8a65"}}><span>Descuento {descuento}%</span><span>-{fmt(total*descuento/100)}</span></div>}
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",fontWeight:700}}><span>Total</span><span style={{color:"#49B8D3"}}>{fmt(totalConDesc)}</span></div>
@@ -994,19 +1030,21 @@ function POS({ session, onSwitchSucursal, isAdmin }) {
             </div>
             <div style={{display:"flex",gap:"10px"}}>
               <button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button>
-              <button className="btn-blue" onClick={cerrarTicket} disabled={saving||!metodo} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar"}</button>
+              <button className="btn-blue" onClick={cerrarTicket} disabled={saving||!metodo} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal ficha nueva clienta */}
-      {ticketNuevo&&(
-        <ModalFichaClienta
-          ticket={ticketNuevo}
-          session={session}
-          onClose={()=>setTicketNuevo(null)}
-        />
+      {/* Modal éxito */}
+      {showExito&&(
+        <div className="overlay" style={{zIndex:300}}>
+          <div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}>
+            <div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div>
+            <div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ticket creado!</div>
+            <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Ficha de {nombreCli} + cita agendada</div>
+          </div>
+        </div>
       )}
     </div>
   );
