@@ -342,7 +342,13 @@ function POS({session,onSwitchSucursal,isAdmin}){
           </div>
         </div>)}
 
-      {view==="importar"&&<GCalImport session={session}/>}
+      {view==="importar"&&<div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+        <div style={{display:"flex",gap:"12px",marginBottom:"20px"}}>
+          <button className="btn-ghost" style={{borderColor:!fichaId||fichaId==="csv"?"#2721E8":"rgba(255,255,255,0.1)",color:!fichaId||fichaId==="csv"?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setFichaId("csv")}>📊 Ventas (CSV)</button>
+          <button className="btn-ghost" style={{borderColor:fichaId==="ics"?"#2721E8":"rgba(255,255,255,0.1)",color:fichaId==="ics"?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setFichaId("ics")}>📅 Agenda (ICS)</button>
+        </div>
+        {fichaId==="ics"?<GCalImport session={session}/>:<CSVImport session={session}/>}
+      </div>}
 
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>HISTORIAL · {session.nombre}</div>
@@ -623,6 +629,188 @@ function GCalImport({session}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// IMPORTAR CSV DE VENTAS — parsea el formato de Excel de ventas por sucursal
+// ══════════════════════════════════════════════════════════════════════════════
+const MESES_MAP={"enero":"01","febrero":"02","marzo":"03","abril":"04","mayo":"05","junio":"06","julio":"07","agosto":"08","septiembre":"09","octubre":"10","noviembre":"11","diciembre":"12"};
+function parseCSVLine(line){const r=[];let c="",q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===","&&!q){r.push(c.trim());c="";}else c+=line[i];}r.push(c.trim());return r;}
+function parseFechaVenta(f){
+  // "2 de marzo" → "2026-03-02"
+  const m1=f.trim().match(/(\d+)\s+de\s+(\w+)/i);
+  if(m1){const dia=String(parseInt(m1[1])).padStart(2,"0");const mes=MESES_MAP[m1[2].toLowerCase()];if(mes)return`2026-${mes}-${dia}`;}
+  // "5/1/2026" → "2026-01-05" (d/m/yyyy)
+  const m2=f.trim().match(/(\d+)\/(\d+)\/(\d{4})/);
+  if(m2){return`${m2[3]}-${String(parseInt(m2[2])).padStart(2,"0")}-${String(parseInt(m2[1])).padStart(2,"0")}`;}
+  // "5/1" → assume 2026
+  const m3=f.trim().match(/(\d+)\/(\d+)/);
+  if(m3){return`2026-${String(parseInt(m3[2])).padStart(2,"0")}-${String(parseInt(m3[1])).padStart(2,"0")}`;}
+  return null;
+}
+function parseMontoVenta(m){return Number((m||"").replace(/[$,]/g,""))||0;}
+function parseMetodoPago(p){
+  const l=(p||"").toLowerCase();
+  if(l.includes("efectivo"))return"Efectivo";
+  if(l.includes("transferencia"))return"Transferencia";
+  if(l.includes("msi"))return"Crédito"+(l.match(/(\d+)msi/i)?` ${l.match(/(\d+)msi/i)[1]}MSI`:"");
+  if(l.includes("banorte")||l.includes("bbva")||l.includes("banamex")||l.includes("zettle"))return"Débito";
+  if(l.includes("deposito")||l.includes("depósito"))return"Depósito";
+  return p||"Otro";
+}
+function parseTipoClienteCSV(campana){
+  const l=(campana||"").toLowerCase();
+  if(l.includes("recurrente")||l.includes("mantenimiento"))return"Recompra";
+  return"Nueva";
+}
+
+function CSVImport({session}){
+  const[parsed,setParsed]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[importing,setImporting]=useState(false);
+  const[result,setResult]=useState(null);
+  const[step,setStep]=useState(1);
+  const[fileName,setFileName]=useState("");
+  const[dragOver,setDragOver]=useState(false);
+  const[parseErrors,setParseErrors]=useState([]);
+  const fileRef=useRef(null);
+
+  const procesarArchivo=(file)=>{
+    if(!file)return;setFileName(file.name);setLoading(true);
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const text=e.target.result;
+      const lines=text.split(/\r?\n/).filter(l=>l.trim()&&!l.startsWith(",,,"));
+      // Find header row
+      const hdrIdx=lines.findIndex(l=>l.toUpperCase().includes("SERVICIO")&&l.toUpperCase().includes("FECHA"));
+      if(hdrIdx===-1){setParseErrors(["No se encontró la fila de encabezados (SERVICIO, FECHA, MONTO...)"]);setLoading(false);return;}
+      const dataLines=lines.slice(hdrIdx+1);
+      const errs=[];
+      const rows=dataLines.map((l,i)=>{
+        const p=parseCSVLine(l);
+        const servicio=(p[0]||"").trim();
+        const fechaRaw=(p[1]||"").trim();
+        const fecha=parseFechaVenta(fechaRaw);
+        const monto=parseMontoVenta(p[2]);
+        const concepto=(p[3]||"").trim();
+        const metodo=parseMetodoPago(p[4]);
+        const cliente=(p[5]||"").trim();
+        const campana=(p[6]||"").trim();
+        const hora=(p[7]||"").trim();
+        const recibo=(p[8]||"").trim();
+        if(!fecha){errs.push(`Fila ${i+1}: fecha no reconocida "${fechaRaw}"`);return null;}
+        if(!monto){errs.push(`Fila ${i+1}: monto inválido "${p[2]}"`);return null;}
+        const tipoClienta=parseTipoClienteCSV(campana);
+        return{id:`csv-${i}`,servicio,fecha,monto,concepto,metodo,cliente,campana,tipoClienta,hora,recibo,incluir:true};
+      }).filter(Boolean);
+      setParseErrors(errs);setParsed(rows);setStep(2);setLoading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const onDrop=(e)=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)procesarArchivo(f);};
+  const onFileChange=(e)=>{const f=e.target.files[0];if(f)procesarArchivo(f);};
+  const toggleEvento=(id)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,incluir:!p.incluir}:p));
+  const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v})));
+  const editEvento=(id,field,val)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,[field]:val}:p));
+
+  const importar=async()=>{
+    const toImport=parsed.filter(p=>p.incluir);
+    if(toImport.length===0)return;setImporting(true);
+    let ticketsCreados=0,clientasCreadas=0,errores=0;
+    for(const row of toImport){
+      try{
+        // Crear clienta si tiene nombre
+        let clientaId=null;
+        if(row.cliente){
+          const{data:existing}=await supabase.from("clientas").select("id").eq("nombre",row.cliente).eq("sucursal_id",session.id).limit(1);
+          if(existing&&existing.length>0){clientaId=existing[0].id;}
+          else{
+            const{data:nc}=await supabase.from("clientas").insert([{nombre:row.cliente,como_nos_conocio:row.campana,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();
+            clientaId=nc?.[0]?.id;clientasCreadas++;
+          }
+        }
+        // Crear ticket
+        await supabase.from("tickets").insert([{
+          sucursal_id:session.id,sucursal_nombre:session.nombre,
+          servicios:[row.concepto||row.servicio],total:row.monto,
+          metodo_pago:row.metodo,descuento:0,
+          tipo_clienta:row.tipoClienta,fecha:row.fecha
+        }]);
+        ticketsCreados++;
+      }catch(e){console.error(e);errores++;}
+    }
+    setResult({tickets:ticketsCreados,clientas:clientasCreadas,errores});setStep(3);setImporting(false);
+  };
+
+  const totalMonto=parsed.filter(p=>p.incluir).reduce((s,p)=>s+p.monto,0);
+  const nuevas=parsed.filter(p=>p.incluir&&p.tipoClienta==="Nueva").length;
+  const recompras=parsed.filter(p=>p.incluir&&p.tipoClienta==="Recompra").length;
+
+  return(
+    <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
+        <div style={{fontSize:"22px"}}>📊</div>
+        <div><div style={{fontSize:"16px",fontWeight:700}}>Importar ventas desde CSV</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Sube el archivo de ventas de Excel · Sucursal: <span style={{color:"#49B8D3"}}>{session.nombre}</span></div></div>
+      </div>
+      <div style={{display:"flex",gap:"8px",marginBottom:"24px"}}>
+        {[{n:1,l:"Subir archivo"},{n:2,l:"Revisar datos"},{n:3,l:"Listo"}].map((p,i)=>(
+          <div key={p.n} style={{display:"flex",alignItems:"center",gap:"8px",flex:i<2?1:"auto"}}>
+            <div style={{width:"28px",height:"28px",borderRadius:"50%",background:step>=p.n?"#2721E8":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700,color:step>=p.n?"#fff":"rgba(255,255,255,0.2)",flexShrink:0}}>{step>p.n?"✓":p.n}</div>
+            <div style={{fontSize:"12px",color:step===p.n?"#fff":"rgba(255,255,255,0.3)",fontWeight:step===p.n?600:400}}>{p.l}</div>
+            {i<2&&<div style={{flex:1,height:"1px",background:step>p.n?"#2721E8":"rgba(255,255,255,0.06)"}}/>}
+          </div>))}
+      </div>
+
+      {step===1&&<div>
+        <div onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={onDrop} onClick={()=>fileRef.current?.click()}
+          style={{border:`2px dashed ${dragOver?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"16px",padding:"60px 40px",textAlign:"center",cursor:"pointer",background:dragOver?"rgba(39,33,232,0.08)":"rgba(255,255,255,0.02)"}}>
+          <div style={{fontSize:"48px",marginBottom:"16px"}}>{loading?"⏳":"📊"}</div>
+          <div style={{fontSize:"15px",fontWeight:600,marginBottom:"8px"}}>{loading?"Procesando...":"Arrastra tu archivo CSV aquí"}</div>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>Formato esperado: SERVICIO, FECHA, MONTO, CONCEPTO, FORMA DE PAGO, CLIENTE, CAMPAÑA</div>
+          <div className="btn-blue" style={{display:"inline-block",padding:"10px 24px",fontSize:"13px"}}>Seleccionar archivo</div>
+        </div>
+        <input ref={fileRef} type="file" accept=".csv,.txt" onChange={onFileChange} style={{display:"none"}}/>
+      </div>}
+
+      {step===2&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+          <div><div style={{fontSize:"14px",fontWeight:600}}>{parsed.length} ventas en {fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionadas · 🟢 {nuevas} nuevas · 🔄 {recompras} recompras · Total: <span style={{color:"#49B8D3",fontWeight:600}}>{fmt(totalMonto)}</span></div></div>
+          <div style={{display:"flex",gap:"6px"}}><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(true)}>✓ Todos</button><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button></div>
+        </div>
+        {parseErrors.length>0&&<div style={{padding:"8px 12px",background:"rgba(255,80,80,0.08)",border:"1px solid rgba(255,80,80,0.2)",borderRadius:"8px",marginBottom:"8px",fontSize:"11px",color:"#ff6b6b"}}>{parseErrors.length} errores al parsear: {parseErrors.slice(0,3).join("; ")}{parseErrors.length>3?"...":""}</div>}
+        <div style={{maxHeight:"420px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"32px 76px 72px 1fr 1fr 100px 76px",padding:"8px 10px",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,background:"#0C0D1A",zIndex:2}}>
+            {["","Fecha","Monto","Concepto","Cliente","Método","Tipo"].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+          </div>
+          {parsed.map(p=><div key={p.id} style={{display:"grid",gridTemplateColumns:"32px 76px 72px 1fr 1fr 100px 76px",padding:"5px 10px",borderBottom:"1px solid rgba(255,255,255,0.03)",opacity:p.incluir?1:0.25,alignItems:"center"}}>
+            <input type="checkbox" checked={p.incluir} onChange={()=>toggleEvento(p.id)} style={{width:"14px",height:"14px",cursor:"pointer",accentColor:"#2721E8"}}/>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>{new Date(p.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</div>
+            <div style={{fontSize:"12px",fontWeight:600,color:"#49B8D3"}}>{fmt(p.monto)}</div>
+            <input value={p.concepto} onChange={e=>editEvento(p.id,"concepto",e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontSize:"11px",outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
+            <input value={p.cliente} onChange={e=>editEvento(p.id,"cliente",e.target.value)} style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.5)",fontSize:"11px",outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>{p.metodo}</div>
+            <div style={{fontSize:"10px",fontWeight:600,color:p.tipoClienta==="Nueva"?"#10b981":"#49B8D3"}}>{p.tipoClienta==="Nueva"?"🆕 Nueva":"🔄 Recomp."}</div>
+          </div>)}
+        </div>
+        <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>{setStep(1);setParsed([]);setFileName("");setParseErrors([]);}}>← Otro archivo</button>
+          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||parsed.filter(p=>p.incluir).length===0}>{importing?"Importando...":"✓ Importar "+parsed.filter(p=>p.incluir).length+" ventas → "+session.nombre}</button>
+        </div>
+      </div>}
+
+      {step===3&&result&&<div style={{textAlign:"center",padding:"40px 20px"}}>
+        <div style={{fontSize:"48px",marginBottom:"16px"}}>🎉</div>
+        <div style={{fontSize:"18px",fontWeight:700,marginBottom:"8px"}}>¡Ventas importadas!</div>
+        <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"24px"}}>{fileName} → {session.nombre}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"14px",maxWidth:"400px",margin:"0 auto 24px"}}>
+          {[{l:"Tickets creados",v:result.tickets,c:"#2721E8"},{l:"Clientas nuevas",v:result.clientas,c:"#10b981"}].map(k=><div key={k.l} className="glass" style={{padding:"16px",textAlign:"center"}}><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{k.l}</div></div>)}
+        </div>
+        {result.errores>0&&<div style={{fontSize:"12px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ {result.errores} errores</div>}
+        <button className="btn-ghost" onClick={()=>{setStep(1);setParsed([]);setFileName("");setResult(null);}}>Importar otro archivo</button>
+      </div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD — Vista ejecutiva para dueño de negocio
 // ══════════════════════════════════════════════════════════════════════════════
 const inicioSemana=()=>{const d=new Date(),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
@@ -641,6 +829,7 @@ function Dashboard({onLogout}){
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
   const[posSuc,setPosSuc]=useState(null);
+  const[importType,setImportType]=useState(null); // "csv" | "ics"
 
   const desde=periodo==="semana"?inicioSemana():inicioMes();
   const periodoLabel=periodo==="semana"?semanaLabel():mesLabel();
@@ -902,18 +1091,36 @@ function Dashboard({onLogout}){
           {!loadingMeta&&metaError&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaError}</div></div>}
         </div>}
 
-        {/* ═══ IMPORTAR GOOGLE CALENDAR ═══ */}
+        {/* ═══ IMPORTAR ═══ */}
         {tab==="importar"&&<div>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>IMPORTAR DESDE GOOGLE CALENDAR</div>
-          {!posSuc?<div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
-            {USUARIOS.filter(u=>u.rol==="sucursal").map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}>
-              <div style={{fontSize:"24px",marginBottom:"8px"}}>📅</div>
-              <div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div>
-              <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importar calendario →</div>
-            </div>)}
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>IMPORTAR DATOS</div>
+          {!posSuc?<div>
+            <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"16px"}}>Selecciona la sucursal para importar:</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
+              {USUARIOS.filter(u=>u.rol==="sucursal").map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}>
+                <div style={{fontSize:"24px",marginBottom:"8px"}}>📥</div>
+                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importar datos →</div>
+              </div>)}
+            </div>
           </div>:<div>
-            <div style={{display:"flex",gap:"10px",alignItems:"center",marginBottom:"16px"}}><button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setPosSuc(null)}>← Otra sucursal</button><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Importando para: <span style={{color:posSuc.color,fontWeight:600}}>{posSuc.nombre}</span></div></div>
-            <GCalImport session={posSuc}/>
+            <div style={{display:"flex",gap:"10px",alignItems:"center",marginBottom:"16px"}}>
+              <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>{setPosSuc(null);setImportType(null);}}>← Otra sucursal</button>
+              <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sucursal: <span style={{color:posSuc.color,fontWeight:600}}>{posSuc.nombre}</span></div>
+            </div>
+            {!importType?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",maxWidth:"600px"}}>
+              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center"}} onClick={()=>setImportType("csv")} onMouseEnter={e=>e.currentTarget.style.borderColor="#2721E8"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>
+                <div style={{fontSize:"36px",marginBottom:"12px"}}>📊</div>
+                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Ventas (CSV)</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importa el archivo de ventas de Excel con tickets, montos y clientas</div>
+              </div>
+              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center"}} onClick={()=>setImportType("ics")} onMouseEnter={e=>e.currentTarget.style.borderColor="#2721E8"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>
+                <div style={{fontSize:"36px",marginBottom:"12px"}}>📅</div>
+                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Agenda (ICS)</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importa citas desde Google Calendar con historial de sesiones</div>
+              </div>
+            </div>:importType==="csv"?<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><CSVImport session={posSuc}/></div>
+            :<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><GCalImport session={posSuc}/></div>}
           </div>}
         </div>}
 
