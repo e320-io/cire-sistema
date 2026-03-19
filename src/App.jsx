@@ -636,6 +636,8 @@ function Dashboard({onLogout}){
   const[citas,setCitas]=useState([]);
   const[loadingDB,setLoadingDB]=useState(false);
   const[metaData,setMetaData]=useState(null);
+  const[metaDiario,setMetaDiario]=useState([]); // [{fecha,sucursal,mensajes,spend}]
+  const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
   const[posSuc,setPosSuc]=useState(null);
@@ -657,8 +659,12 @@ function Dashboard({onLogout}){
     setLoadingMeta(true);setMetaError("");
     try{
       const since=desde,until=hoy(),fields="adset_name,spend,actions,impressions,clicks,reach";
+      // Fetch agregado
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const res=await fetch(url);const json=await res.json();
+      // Fetch diario
+      const urlDiario=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
+      const[res,resDiario]=await Promise.all([fetch(url),fetch(urlDiario)]);
+      const json=await res.json();const jsonDiario=await resDiario.json();
       if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
       const rows=json.data||[];
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
@@ -666,6 +672,13 @@ function Dashboard({onLogout}){
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
       rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
       setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
+      // Procesar datos diarios
+      const diario=[];
+      (jsonDiario.data||[]).forEach(r=>{
+        const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();
+        SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});
+      });
+      setMetaDiario(diario);
     }catch(e){setMetaError("Error Meta.");}
     setLoadingMeta(false);
   };
@@ -776,6 +789,36 @@ function Dashboard({onLogout}){
               {dM.map(([f,m])=>{const p=m/maxD;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}><div style={{fontSize:"9px",fontWeight:600,color:"#49B8D3",marginBottom:"4px"}}>{m>=1000?`${(m/1000).toFixed(0)}k`:m}</div><div style={{width:"100%",maxWidth:"28px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#2721E8,#49B8D3)",borderRadius:"4px 4px 0 0"}}/><div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div></div>;})}
             </div>
           </div>
+          {/* Gráfica mensajes recibidos por día */}
+          {metaDiario.length>0&&(()=>{
+            const filtrado=msgSucFiltro==="Todas"?metaDiario:metaDiario.filter(d=>d.sucursal===msgSucFiltro);
+            const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
+            const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
+            const maxMsg=Math.max(...dias.map(d=>d[1]),1);
+            const totalMsgFilt=dias.reduce((s,d)=>s+d[1],0);
+            return<div className="glass" style={{padding:"24px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+                <div>
+                  <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES RECIBIDOS POR DÍA</div>
+                  <div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mensajes · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div>
+                </div>
+                <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+                  <option value="Todas" style={{background:"#1a1b2e"}}>Todas las sucursales</option>
+                  {SUCURSALES_NAMES.map(s=><option key={s} value={s} style={{background:"#1a1b2e"}}>{s}</option>)}
+                </select>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"160px"}}>
+                {dias.map(([f,m])=>{const p=m/maxMsg;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
+                  <div style={{fontSize:"9px",fontWeight:600,color:"#a855f7",marginBottom:"4px"}}>{m}</div>
+                  <div style={{width:"100%",maxWidth:"32px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#a855f7,#7c3aed)",borderRadius:"4px 4px 0 0",transition:"height 0.3s"}}/>
+                  <div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div>
+                </div>;})}
+              </div>
+              {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
+                {SUCURSALES_NAMES.map(s=>{const t=metaDiario.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
+              </div>}
+            </div>;
+          })()}
         </div>}
 
         {/* ═══ SUCURSALES — tabla expandida ═══ */}
