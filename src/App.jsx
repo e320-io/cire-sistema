@@ -727,28 +727,35 @@ function CSVImport({session}){
     const toImport=parsed.filter(p=>p.incluir);
     if(toImport.length===0)return;setImporting(true);
     let ticketsCreados=0,clientasCreadas=0,errores=0;
-    for(const row of toImport){
-      try{
-        // Crear clienta si tiene nombre
-        let clientaId=null;
-        if(row.cliente){
-          const{data:existing}=await supabase.from("clientas").select("id").eq("nombre",row.cliente).eq("sucursal_id",session.id).limit(1);
-          if(existing&&existing.length>0){clientaId=existing[0].id;}
-          else{
-            const{data:nc}=await supabase.from("clientas").insert([{nombre:row.cliente,como_nos_conocio:row.campana,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();
-            clientaId=nc?.[0]?.id;clientasCreadas++;
-          }
-        }
-        // Crear ticket
-        await supabase.from("tickets").insert([{
-          sucursal_id:session.id,sucursal_nombre:session.nombre,
-          servicios:[row.concepto||row.servicio],total:row.monto,
-          metodo_pago:row.metodo,descuento:0,
-          tipo_clienta:row.tipoClienta,fecha:row.fecha
-        }]);
-        ticketsCreados++;
-      }catch(e){console.error(e);errores++;}
-    }
+    try{
+      // 1. Get unique client names and batch-check which exist
+      const uniqueNames=[...new Set(toImport.map(r=>r.cliente).filter(Boolean))];
+      const{data:existingCli}=await supabase.from("clientas").select("id,nombre").eq("sucursal_id",session.id).in("nombre",uniqueNames);
+      const cliMap={};(existingCli||[]).forEach(c=>{cliMap[c.nombre]=c.id;});
+      // 2. Batch insert new clientas
+      const newClis=uniqueNames.filter(n=>!cliMap[n]).map(n=>{
+        const row=toImport.find(r=>r.cliente===n);
+        return{nombre:n,como_nos_conocio:row?.campana||"",sucursal_id:session.id,sucursal_nombre:session.nombre};
+      });
+      if(newClis.length>0){
+        const{data:inserted}=await supabase.from("clientas").insert(newClis).select("id,nombre");
+        (inserted||[]).forEach(c=>{cliMap[c.nombre]=c.id;});
+        clientasCreadas=newClis.length;
+      }
+      // 3. Batch insert all tickets
+      const ticketRows=toImport.map(row=>({
+        sucursal_id:session.id,sucursal_nombre:session.nombre,
+        servicios:[row.concepto||row.servicio],total:row.monto,
+        metodo_pago:row.metodo,descuento:0,
+        tipo_clienta:row.tipoClienta,fecha:row.fecha
+      }));
+      // Insert in chunks of 50 to avoid payload limits
+      for(let i=0;i<ticketRows.length;i+=50){
+        const chunk=ticketRows.slice(i,i+50);
+        const{error}=await supabase.from("tickets").insert(chunk);
+        if(error)errores++;else ticketsCreados+=chunk.length;
+      }
+    }catch(e){console.error(e);errores++;}
     setResult({tickets:ticketsCreados,clientas:clientasCreadas,errores});setStep(3);setImporting(false);
   };
 
@@ -1121,7 +1128,7 @@ function Dashboard({onLogout}){
               <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>{setPosSuc(null);setImportType(null);}}>← Otra sucursal</button>
               <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sucursal: <span style={{color:posSuc.color,fontWeight:600}}>{posSuc.nombre}</span></div>
             </div>
-            {!importType?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",maxWidth:"600px"}}>
+            {!importType?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"16px",maxWidth:"900px"}}>
               <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center"}} onClick={()=>setImportType("csv")} onMouseEnter={e=>e.currentTarget.style.borderColor="#2721E8"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>
                 <div style={{fontSize:"36px",marginBottom:"12px"}}>📊</div>
                 <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Ventas (CSV)</div>
@@ -1132,7 +1139,13 @@ function Dashboard({onLogout}){
                 <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Agenda (ICS)</div>
                 <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importa citas desde Google Calendar con historial de sesiones</div>
               </div>
-            </div>:importType==="csv"?<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><CSVImport session={posSuc}/></div>
+              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center",borderColor:"rgba(255,80,80,0.15)"}} onClick={()=>setImportType("purge")} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,80,80,0.4)"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,80,80,0.15)"}>
+                <div style={{fontSize:"36px",marginBottom:"12px"}}>🗑</div>
+                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px",color:"#ff6b6b"}}>Borrar datos</div>
+                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Elimina tickets, citas, paquetes y clientas de prueba de esta sucursal</div>
+              </div>
+            </div>:importType==="purge"?<PurgeSucursal session={posSuc} onDone={()=>setImportType(null)}/>
+            :importType==="csv"?<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><CSVImport session={posSuc}/></div>
             :<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><GCalImport session={posSuc}/></div>}
           </div>}
         </div>}
