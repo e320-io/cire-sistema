@@ -634,6 +634,9 @@ function GCalImport({session}){
 const MESES_MAP={"enero":"01","febrero":"02","marzo":"03","abril":"04","mayo":"05","junio":"06","julio":"07","agosto":"08","septiembre":"09","octubre":"10","noviembre":"11","diciembre":"12"};
 function parseCSVLine(line){const r=[];let c="",q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===","&&!q){r.push(c.trim());c="";}else c+=line[i];}r.push(c.trim());return r;}
 function parseFechaVenta(f){
+  // "2026-03-02" → as-is (ISO)
+  const m0=f.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m0)return f.trim();
   // "2 de marzo" → "2026-03-02"
   const m1=f.trim().match(/(\d+)\s+de\s+(\w+)/i);
   if(m1){const dia=String(parseInt(m1[1])).padStart(2,"0");const mes=MESES_MAP[m1[2].toLowerCase()];if(mes)return`2026-${mes}-${dia}`;}
@@ -681,23 +684,32 @@ function CSVImport({session}){
       // Find header row
       const hdrIdx=lines.findIndex(l=>l.toUpperCase().includes("SERVICIO")&&l.toUpperCase().includes("FECHA"));
       if(hdrIdx===-1){setParseErrors(["No se encontró la fila de encabezados (SERVICIO, FECHA, MONTO...)"]);setLoading(false);return;}
+      const hdrLine=parseCSVLine(lines[hdrIdx]);
       const dataLines=lines.slice(hdrIdx+1);
       const errs=[];
       const rows=dataLines.map((l,i)=>{
         const p=parseCSVLine(l);
-        const servicio=(p[0]||"").trim();
-        const fechaRaw=(p[1]||"").trim();
+        // Detect format: new consolidated (FECHA,SERVICIO,CONCEPTO,MONTO,FORMA_DE_PAGO,CLIENTE,TIPO_CLIENTA,...) 
+        // or old format (SERVICIO,FECHA,MONTO,CONCEPTO,FORMA_DE_PAGO,CLIENTE,CAMPAÑA,...)
+        const hdrFirst=(hdrLine[0]||"").toUpperCase();
+        let servicio,fechaRaw,monto,concepto,metodo,cliente,tipoClienta;
+        if(hdrFirst.includes("FECHA")){
+          // New consolidated format: FECHA,SERVICIO,CONCEPTO,MONTO,FORMA_DE_PAGO,CLIENTE,TIPO_CLIENTA
+          fechaRaw=(p[0]||"").trim();servicio=(p[1]||"").trim();concepto=(p[2]||"").trim();
+          monto=parseMontoVenta(p[3]);metodo=(p[4]||"").trim();cliente=(p[5]||"").trim();
+          tipoClienta=(p[6]||"").trim();
+          if(!["Nueva","Recompra","Recomendada"].includes(tipoClienta))tipoClienta=parseTipoClienteCSV(p[7]||"");
+        }else{
+          // Old format: SERVICIO,FECHA,MONTO,CONCEPTO,FORMA_DE_PAGO,CLIENTE,CAMPAÑA
+          servicio=(p[0]||"").trim();fechaRaw=(p[1]||"").trim();monto=parseMontoVenta(p[2]);
+          concepto=(p[3]||"").trim();metodo=parseMetodoPago(p[4]);cliente=(p[5]||"").trim();
+          tipoClienta=parseTipoClienteCSV(p[6]||"");
+        }
         const fecha=parseFechaVenta(fechaRaw);
-        const monto=parseMontoVenta(p[2]);
-        const concepto=(p[3]||"").trim();
-        const metodo=parseMetodoPago(p[4]);
-        const cliente=(p[5]||"").trim();
-        const campana=(p[6]||"").trim();
-        const hora=(p[7]||"").trim();
-        const recibo=(p[8]||"").trim();
         if(!fecha){errs.push(`Fila ${i+1}: fecha no reconocida "${fechaRaw}"`);return null;}
         if(!monto)return null; // Skip rows without amount silently
-        const tipoClienta=parseTipoClienteCSV(campana);
+        const hora=(hdrFirst.includes("FECHA")?p[8]:p[7]||"").trim();
+        const recibo=(hdrFirst.includes("FECHA")?p[9]:p[8]||"").trim();
         return{id:`csv-${i}`,servicio,fecha,monto,concepto,metodo,cliente,campana,tipoClienta,hora,recibo,incluir:true};
       }).filter(Boolean);
       setParseErrors(errs);setParsed(rows);setStep(2);setLoading(false);
@@ -743,6 +755,7 @@ function CSVImport({session}){
   const totalMonto=parsed.filter(p=>p.incluir).reduce((s,p)=>s+p.monto,0);
   const nuevas=parsed.filter(p=>p.incluir&&p.tipoClienta==="Nueva").length;
   const recompras=parsed.filter(p=>p.incluir&&p.tipoClienta==="Recompra").length;
+  const recomendadas=parsed.filter(p=>p.incluir&&p.tipoClienta==="Recomendada").length;
 
   return(
     <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
@@ -772,7 +785,7 @@ function CSVImport({session}){
 
       {step===2&&<div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
-          <div><div style={{fontSize:"14px",fontWeight:600}}>{parsed.length} ventas en {fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionadas · 🟢 {nuevas} nuevas · 🔄 {recompras} recompras · Total: <span style={{color:"#49B8D3",fontWeight:600}}>{fmt(totalMonto)}</span></div></div>
+          <div><div style={{fontSize:"14px",fontWeight:600}}>{parsed.length} ventas en {fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionadas · 🆕 {nuevas} nuevas · 🔄 {recompras} recompras · 🗣 {recomendadas} recomendadas · Total: <span style={{color:"#49B8D3",fontWeight:600}}>{fmt(totalMonto)}</span></div></div>
           <div style={{display:"flex",gap:"6px"}}><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(true)}>✓ Todos</button><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button></div>
         </div>
         {parseErrors.length>0&&<div style={{padding:"8px 12px",background:"rgba(255,80,80,0.08)",border:"1px solid rgba(255,80,80,0.2)",borderRadius:"8px",marginBottom:"8px",fontSize:"11px",color:"#ff6b6b"}}>{parseErrors.length} errores al parsear: {parseErrors.slice(0,3).join("; ")}{parseErrors.length>3?"...":""}</div>}
@@ -787,7 +800,7 @@ function CSVImport({session}){
             <input value={p.concepto} onChange={e=>editEvento(p.id,"concepto",e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontSize:"11px",outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
             <input value={p.cliente} onChange={e=>editEvento(p.id,"cliente",e.target.value)} style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.5)",fontSize:"11px",outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
             <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>{p.metodo}</div>
-            <div style={{fontSize:"10px",fontWeight:600,color:p.tipoClienta==="Nueva"?"#10b981":"#49B8D3"}}>{p.tipoClienta==="Nueva"?"🆕 Nueva":"🔄 Recomp."}</div>
+            <div style={{fontSize:"10px",fontWeight:600,color:p.tipoClienta==="Nueva"?"#10b981":p.tipoClienta==="Recomendada"?"#a855f7":"#49B8D3"}}>{p.tipoClienta==="Nueva"?"🆕 Nueva":p.tipoClienta==="Recomendada"?"🗣 Recom.":"🔄 Recomp."}</div>
           </div>)}
         </div>
         <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
