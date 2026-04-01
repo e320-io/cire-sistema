@@ -5,6 +5,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
 const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
+const CLAUDE_KEY   = import.meta.env.VITE_CLAUDE_KEY;
 const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const CSS = `
@@ -50,14 +51,28 @@ const USUARIOS=[
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
+  {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
+  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"]},
+  {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"]},
+  {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"]},
+  {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
 ];
 const SUCURSALES_NAMES=["Coapa","Valle","Oriente","Polanco","Metepec"];
 const COLORES={Coapa:"#2721E8",Valle:"#49B8D3",Oriente:"#a855f7",Polanco:"#f97316",Metepec:"#10b981"};
+const TERMINALES_DEFAULT=[
+  {nombre:"Zettle",comision:2.29,activa:true},
+  {nombre:"BBVA",comision:2.75,activa:true},
+  {nombre:"Banorte",comision:2.50,activa:true},
+  {nombre:"Mercado Pago",comision:3.29,activa:true},
+];
+const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
 const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
 const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
 const hoy=()=>new Date().toISOString().slice(0,10);
+const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(data?.[0]?.ticket_num||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
 const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+const defaultMes=()=>{const d=new Date();if(d.getDate()<=5){const p=new Date(d.getFullYear(),d.getMonth()-1,1);return`${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}`;}return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
 
 const CATALOGO=[
   {categoria:"Combos Láser",items:[{nombre:"Full Body (8 ses)",precio:10000,msi:[3,6,9]},{nombre:"Combo Rostro (8 ses)",precio:9000,msi:[3,6,9]},{nombre:"Combo Sexy (8 ses)",precio:8000,msi:[3,6,9]},{nombre:"Combo Playa (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Piernas (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Bikini (8 ses)",precio:5500,msi:[3,6]},{nombre:"Combo Axilas (8 ses)",precio:5500,msi:[3,6]}]},
@@ -74,12 +89,19 @@ const DIAS_L=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const HORAS=Array.from({length:12},(_,i)=>i+9);
 const PX_POR_MIN=64/60;
 const colorT=(t)=>TIPOS_SVC.find(x=>x.id===t)?.color||"#2721E8";
+// Colores estilo Google Calendar: índigo=HIFU/facial, rojo=nueva(ses.1), azul=sesión contratada
+const colorCita=(c)=>{
+  if(["hifu","facial_baby","facial_full"].includes(c.tipo_servicio))return"#3F51B5";
+  if(c.sesion_numero===1)return"#D50000";
+  return"#039BE5";
+};
 const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];return TIPOS_SVC[0];};
 const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);const f=hh*60+mm+dur;return`${String(Math.floor(f/60)).padStart(2,"0")}:${String(f%60).padStart(2,"0")}`;};
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
 const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","Corporales"];
 const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();if(f==="Combos")return n.includes("combo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","línea abdomen","glúteos","zona interg"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","medias piernas"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french","sexy bikini"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("baby clean")||n.includes("fullface")||n.includes("hifu");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog"].some(k=>n.includes(k));return true;};
 const MESES_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const ZONAS_EQUIPO=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","General"];
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MINI AGENDA — vista inline del día para sidebar POS
@@ -109,7 +131,7 @@ function MiniAgendaDia({session,fecha,onSelectHora,horaSeleccionada,duracion}){
                   {sel&&<span style={{fontSize:"9px",color:"#49B8D3",fontWeight:600}}>{slot}</span>}
                 </div>);
               })}
-              {citasHr.map(c=>{const[,cm]=c.hora_inicio.split(":").map(Number);const top=cm<30?1:23;const hPx=Math.max(c.duracion_min*(44/60)-2,14);const col=colorT(c.tipo_servicio);
+              {citasHr.map(c=>{const[,cm]=c.hora_inicio.split(":").map(Number);const top=cm<30?1:23;const hPx=Math.max(c.duracion_min*(44/60)-2,14);const col=colorCita(c);
                 return(<div key={c.id} style={{position:"absolute",left:"28px",right:"2px",top:`${top}px`,height:`${hPx}px`,background:`${col}22`,border:`1px solid ${col}55`,borderRadius:"4px",padding:"1px 4px",pointerEvents:"none",overflow:"hidden",zIndex:2}}>
                   <div style={{fontSize:"8px",fontWeight:600,color:col,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.hora_inicio} {c.clienta_nombre}</div>
                 </div>);
@@ -163,12 +185,44 @@ function FichaClienta({clientaId,session,onClose}){
         </div>)}
         {paquetes.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.15)"}}>Sin paquetes</div>}
       </div>
+      {paquetes.map(paq=>{
+        const citasPaq=citasH.filter(c=>c.paquete_id===paq.id&&c.parametros_equipo?.length>0);
+        if(!citasPaq.length)return null;
+        const sesiones=[...new Set(citasPaq.map(c=>c.sesion_numero))].sort((a,b)=>a-b);
+        const zonas=[...new Set(citasPaq.flatMap(c=>(c.parametros_equipo||[]).map(p=>p.zona)))];
+        const lkp={};citasPaq.forEach(c=>{lkp[c.sesion_numero]={};(c.parametros_equipo||[]).forEach(p=>{lkp[c.sesion_numero][p.zona]=p.valores;});});
+        return(<div key={paq.id} style={{marginBottom:"20px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>PARÁMETROS DE EQUIPO — {paq.servicio}</div>
+          <div style={{overflowX:"auto",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.07)"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:"11px",minWidth:"300px"}}>
+              <thead>
+                <tr style={{background:"rgba(0,0,0,0.4)"}}>
+                  <th style={{padding:"8px 12px",textAlign:"left",color:"rgba(255,255,255,0.35)",fontWeight:500,borderBottom:"1px solid rgba(255,255,255,0.08)",whiteSpace:"nowrap",minWidth:"120px",position:"sticky",left:0,background:"rgba(15,15,30,0.95)"}}>Zona</th>
+                  {sesiones.map(s=><th key={s} style={{padding:"8px 12px",textAlign:"center",color:"rgba(255,255,255,0.35)",fontWeight:500,borderBottom:"1px solid rgba(255,255,255,0.08)",whiteSpace:"nowrap",minWidth:"72px"}}>Ses. {s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {zonas.map((zona,zi)=>(
+                  <tr key={zona} style={{background:zi%2===0?"rgba(255,255,255,0.02)":"transparent"}}>
+                    <td style={{padding:"7px 12px",color:"rgba(255,255,255,0.65)",fontWeight:500,borderBottom:"1px solid rgba(255,255,255,0.04)",whiteSpace:"nowrap",position:"sticky",left:0,background:zi%2===0?"rgba(12,13,28,0.97)":"rgba(12,13,26,0.97)"}}>{zona}</td>
+                    {sesiones.map(s=><td key={s} style={{padding:"7px 12px",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.04)",fontFamily:"monospace",letterSpacing:"0.5px"}}>
+                      {lkp[s]?.[zona]?<span style={{color:"#49B8D3",fontWeight:700}}>{lkp[s][zona]}</span>:<span style={{color:"rgba(255,255,255,0.1)"}}>—</span>}
+                    </td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>);
+      })}
       <div>
         <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>HISTORIAL ({citasH.filter(c=>c.estado==="completada").length} completadas)</div>
-        {citasH.map(c=><div key={c.id} style={{display:"flex",gap:"10px",alignItems:"flex-start",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:c.estado==="completada"?"#10b981":c.estado==="agendada"?colorT(c.tipo_servicio):"rgba(255,255,255,0.15)",marginTop:"6px",flexShrink:0}}/>
-          <div style={{flex:1}}><div style={{fontSize:"12px",fontWeight:500}}>{c.servicio} <span style={{color:"rgba(255,255,255,0.3)"}}>· S{c.sesion_numero}</span></div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} · {c.hora_inicio}</div></div>
-          <div style={{fontSize:"10px",fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?"#49B8D3":"rgba(255,255,255,0.2)"}}>{c.estado==="completada"?"✓":c.estado==="agendada"?"Próx.":"✕"}</div>
+        {citasH.map(c=><div key={c.id} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+          <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
+            <div style={{width:"6px",height:"6px",borderRadius:"50%",background:c.estado==="completada"?"#10b981":c.estado==="agendada"?colorCita(c):"rgba(255,255,255,0.15)",marginTop:"6px",flexShrink:0}}/>
+            <div style={{flex:1}}><div style={{fontSize:"12px",fontWeight:500}}>{c.servicio} <span style={{color:"rgba(255,255,255,0.3)"}}>· S{c.sesion_numero}</span></div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} · {c.hora_inicio}</div></div>
+            <div style={{fontSize:"10px",fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?"#49B8D3":"rgba(255,255,255,0.2)"}}>{c.estado==="completada"?"✓":c.estado==="agendada"?"Próx.":"✕"}</div>
+          </div>
         </div>)}
         {citasH.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.15)"}}>Sin sesiones</div>}
       </div>
@@ -182,9 +236,15 @@ function FichaClienta({clientaId,session,onClose}){
 function AgendaCalendar({session,onVerFicha}){
   const[semana,setSemana]=useState(semanaD(hoy()));const[citas,setCitas]=useState([]);const[detalle,setDetalle]=useState(null);const[saving,setSaving]=useState(false);
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
+  const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
+  const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});
+  const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);
   const mRef=useRef(true);useEffect(()=>{mRef.current=true;return()=>{mRef.current=false;};},[]);
   const cargar=async()=>{const{data}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).gte("fecha",semana[0]).lte("fecha",semana[5]).order("hora_inicio");if(data)setCitas(data);};
   useEffect(()=>{cargar();},[semana,session]);
+  useEffect(()=>{(async()=>{try{const{data,error}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");if(!error&&data?.length>0)setTerminalesAg(data);else setTerminalesAg(TERMINALES_DEFAULT);}catch(e){setTerminalesAg(TERMINALES_DEFAULT);}})();},[session.id]);
+  useEffect(()=>{if(detalle){setParametrosEdit(detalle.parametros_equipo||[]);setZonaNew("");setValNew("");}else{setParametrosEdit([]);setHistorialParams([]);}}, [detalle?.id]);
+  useEffect(()=>{if(!detalle?.clienta_id||!detalle?.paquete_id)return;(async()=>{const{data}=await supabase.from("citas").select("sesion_numero,fecha,parametros_equipo").eq("clienta_id",detalle.clienta_id).eq("paquete_id",detalle.paquete_id).not("parametros_equipo","is",null).neq("id",detalle.id).order("sesion_numero",{ascending:false}).limit(5);setHistorialParams((data||[]).filter(c=>c.parametros_equipo?.length>0));})();},[detalle?.id]);
   const completar=async(cita)=>{
     await supabase.from("citas").update({estado:"completada"}).eq("id",cita.id);setDetalle(null);
     if(cita.paquete_id&&mRef.current){
@@ -201,6 +261,35 @@ function AgendaCalendar({session,onVerFicha}){
     setModalSig(false);setCitaComp(null);cargar();
   }catch(e){console.error(e);}setSaving(false);};
   const cancelar=async(id,pId,sU)=>{await supabase.from("citas").update({estado:"cancelada"}).eq("id",id);if(pId)await supabase.from("paquetes").update({sesiones_usadas:Math.max(0,sU-1),activo:true}).eq("id",pId);setDetalle(null);cargar();};
+  const guardarParametros=async()=>{if(!detalle)return;setSavingParams(true);try{await supabase.from("citas").update({parametros_equipo:parametrosEdit}).eq("id",detalle.id);setDetalle({...detalle,parametros_equipo:parametrosEdit});cargar();}catch(e){console.error(e);}setSavingParams(false);};
+
+  // Intercepta "Completada" — si hay anticipo pendiente o cita sin anticipo, abre modal de cobro primero
+  const abrirCobro=async(cita)=>{
+    const mAnticipo=cita.notas?.match(/Anticipo \$(\d+)/);
+    const sinAnt=cita.notas?.includes("Sin anticipo");
+    if((mAnticipo||sinAnt)&&!cita.es_cobro&&cita.paquete_id){
+      const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
+      const{data:paq}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
+      const paqPrecio=paq?.precio||0;
+      const restante=paqPrecio-anticoMonto;
+      setCitaCobro({cita,paqPrecio,anticoMonto,restante,paq});
+      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);
+      setShowCobro(true);
+    }else{completar(cita);}
+  };
+
+  const cobrarYCompletar=async()=>{
+    if(!citaCobro)return;setSavingCobro(true);
+    try{
+      const{cita,anticoMonto,restante}=citaCobro;
+      const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
+      const totalFinal=pagosAg.length===1?Math.round(restante*(1-descuentoAg/100)):pagosAg.reduce((s,p)=>s+p.monto,0);
+      const tNum=await nextTicketNum();
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:hoy()}]);
+      setShowCobro(false);setCitaCobro(null);
+      await completar(cita);
+    }catch(e){console.error(e);}setSavingCobro(false);
+  };
   const semAnt=()=>{const d=new Date(semana[0]+"T12:00:00");d.setDate(d.getDate()-7);setSemana(semanaD(d.toISOString().slice(0,10)));};
   const semSig=()=>{const d=new Date(semana[0]+"T12:00:00");d.setDate(d.getDate()+7);setSemana(semanaD(d.toISOString().slice(0,10)));};
   const cdDia=(f)=>citas.filter(c=>c.fecha===f&&c.estado!=="cancelada");
@@ -229,27 +318,103 @@ function AgendaCalendar({session,onVerFicha}){
           {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f);return(
             <div key={f} style={{borderLeft:"1px solid rgba(255,255,255,0.05)",position:"relative",opacity:a?1:0.3}}>
               {HORAS.map(h=><div key={h} style={{height:"64px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}/>)}
-              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorT(c.tipo_servicio);return(
-                <div key={c.id} onClick={e=>{e.stopPropagation();setDetalle(c);}} style={{position:"absolute",left:"2px",right:"2px",top:`${top}px`,height:`${height}px`,background:`${col}22`,border:`1px solid ${col}66`,borderLeft:`3px solid ${c.es_cobro?"#f0c040":col}`,borderRadius:"6px",padding:"3px 6px",cursor:"pointer",overflow:"hidden",zIndex:5}} onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                  <div style={{fontSize:"10px",fontWeight:700,color:col,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.hora_inicio} {c.clienta_nombre}</div>
+              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro;return(
+                <div key={c.id} onClick={e=>{e.stopPropagation();setDetalle(c);}} style={{position:"absolute",left:"2px",right:"2px",top:`${top}px`,height:`${height}px`,background:`${col}28`,border:`1px solid ${col}70`,borderLeft:`3px solid ${sinAnt?"#f97316":col}`,borderRadius:"6px",padding:"3px 6px",cursor:"pointer",overflow:"hidden",zIndex:5}} onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                  <div style={{fontSize:"10px",fontWeight:700,color:col,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sinAnt?"⚠⚠ ":aparto?"💰💰 ":liquido?"✅✅ ":""}{c.hora_inicio} {c.clienta_nombre}</div>
                   {height>30&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.5)",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.servicio}</div>}
                 </div>);})}
               {f===hoy()&&(()=>{const n=new Date(),m=(n.getHours()-9)*60+n.getMinutes();if(m<0||m>720)return null;return<div style={{position:"absolute",left:0,right:0,top:`${m*PX_POR_MIN}px`,height:"2px",background:"#ff4444",zIndex:6,pointerEvents:"none"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#ff4444",position:"absolute",left:"-4px",top:"-3px"}}/></div>;})()}
             </div>);})}
         </div>
       </div>
-      {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorT(detalle.tipo_servicio)}44`}} onClick={e=>e.stopPropagation()}>
+      {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorCita(detalle)}44`}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:"16px"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"3px"}}>CITA</div><div style={{fontSize:"18px",fontWeight:700}}>{detalle.clienta_nombre}</div></div><button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button></div>
-        <div style={{display:"flex",flexDirection:"column",gap:"9px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",padding:"14px",marginBottom:"16px"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:"9px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",padding:"14px",marginBottom:"12px"}}>
           {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`],["Sesión",`${detalle.sesion_numero}`]].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500}}>{v}</span></div>)}
         </div>
+        <div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
+          <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>PARÁMETROS DE EQUIPO</span>
+            {parametrosEdit.length>0&&<button className="btn-ghost" onClick={guardarParametros} disabled={savingParams} style={{padding:"3px 10px",fontSize:"10px",borderColor:"rgba(39,33,232,0.4)",color:savingParams?"rgba(255,255,255,0.3)":"#49B8D3"}}>{savingParams?"Guardando...":"Guardar"}</button>}
+          </div>
+          {parametrosEdit.map((p,i)=>(
+            <div key={i} style={{display:"flex",gap:"5px",alignItems:"center",marginBottom:"5px"}}>
+              <div style={{flex:1,fontSize:"11px",color:"rgba(255,255,255,0.7)",background:"rgba(255,255,255,0.04)",borderRadius:"6px",padding:"5px 8px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.zona}</div>
+              <input className="inp" value={p.valores} onChange={e=>{const n=[...parametrosEdit];n[i]={...n[i],valores:e.target.value};setParametrosEdit(n);}} style={{width:"82px",fontSize:"11px",padding:"5px 8px",textAlign:"center"}} placeholder="000/000"/>
+              <button onClick={()=>setParametrosEdit(parametrosEdit.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.5)",cursor:"pointer",fontSize:"15px",padding:"0 4px",lineHeight:1}}>×</button>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:"5px",alignItems:"center",marginTop:parametrosEdit.length>0?"6px":"0"}}>
+            <select className="inp" value={zonaNew} onChange={e=>setZonaNew(e.target.value)} style={{flex:1,fontSize:"11px",padding:"5px 8px"}}>
+              <option value="">Zona...</option>
+              {ZONAS_EQUIPO.filter(z=>!parametrosEdit.find(p=>p.zona===z)).map(z=><option key={z} value={z}>{z}</option>)}
+            </select>
+            <input className="inp" value={valNew} onChange={e=>setValNew(e.target.value)} style={{width:"82px",fontSize:"11px",padding:"5px 8px",textAlign:"center"}} placeholder="000/000"/>
+            <button onClick={()=>{if(!zonaNew||!valNew.trim())return;setParametrosEdit([...parametrosEdit,{zona:zonaNew,valores:valNew.trim()}]);setZonaNew("");setValNew("");}} style={{background:"rgba(39,33,232,0.3)",border:"1px solid rgba(39,33,232,0.5)",borderRadius:"6px",color:"#fff",cursor:"pointer",fontSize:"18px",padding:"1px 8px",lineHeight:1,flexShrink:0}}>+</button>
+          </div>
+          {historialParams.length>0&&<div style={{marginTop:"10px",borderTop:"1px solid rgba(255,255,255,0.05)",paddingTop:"8px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(255,255,255,0.2)",marginBottom:"5px"}}>SESIONES ANTERIORES</div>
+            {historialParams.map(h=>(
+              <div key={h.sesion_numero} style={{marginBottom:"5px"}}>
+                <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"2px"}}>Ses. {h.sesion_numero} · {new Date(h.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</div>
+                {h.parametros_equipo.map((p,pi)=>(
+                  <div key={pi} style={{display:"flex",justifyContent:"space-between",fontSize:"10px",color:"rgba(255,255,255,0.45)",padding:"1px 0"}}>
+                    <span>{p.zona}</span><span style={{color:"rgba(255,255,255,0.65)",fontWeight:600}}>{p.valores}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>}
+        </div>
+        {detalle.notas?.match(/Anticipo \$(\d+)/)&&!detalle.es_cobro&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>💰 {detalle.notas.match(/Anticipo \$\d+ \w+/)?.[0]} pagado · <span style={{fontWeight:700}}>pendiente de liquidar</span></div>}
+        {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}
         <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
-          {detalle.estado==="agendada"&&<><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button><button className="btn-blue" style={{flex:2}} onClick={()=>completar(detalle)}>✓ Completada</button></>}
+          {detalle.estado==="agendada"&&<><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button><button className="btn-blue" style={{flex:2}} onClick={()=>abrirCobro(detalle)}>✓ Completada</button></>}
           {detalle.estado==="completada"&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"#10b981",fontWeight:600}}>✓ Completada</div>}
           {detalle.estado==="cancelada"&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"rgba(255,255,255,0.3)"}}>Cancelada</div>}
         </div>
         {detalle.clienta_id&&<button className="btn-ghost" style={{width:"100%",fontSize:"11px"}} onClick={()=>{setDetalle(null);onVerFicha&&onVerFicha(detalle.clienta_id);}}>Ver ficha de {detalle.clienta_nombre}</button>}
       </div></div>}
+      {showCobro&&citaCobro&&(()=>{
+        const{cita,paqPrecio,anticoMonto,restante}=citaCobro;
+        const msiOpts=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.msi||[];
+        const totalFinalAg=pagosAg.length===1?Math.round(restante*(1-descuentoAg/100)):pagosAg.reduce((s,p)=>s+p.monto,0);
+        const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===restante);
+        return(<div className="overlay"><div className="glass" style={{width:460,padding:"28px",borderColor:"rgba(249,115,22,0.3)"}}>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>LIQUIDACIÓN DE PAQUETE</div>
+          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px"}}>
+            <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"6px"}}>{cita.servicio}</div>
+            <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"8px 0"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>Precio paquete</span><span>{fmt(paqPrecio)}</span></div>
+            {anticoMonto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#f97316",marginBottom:"4px"}}><span>Anticipo pagado</span><span>− {fmt(anticoMonto)}</span></div>}
+            <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"6px 0"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"16px",fontWeight:700}}><span>A cobrar hoy</span><span style={{color:"#49B8D3"}}>{fmt(descuentoAg>0&&pagosAg.length===1?totalFinalAg:restante)}</span></div>
+            {descuentoAg>0&&pagosAg.length===1&&<div style={{fontSize:"11px",color:"#10b981",textAlign:"right",marginTop:"2px"}}>Desc. 5% efectivo aplicado</div>}
+          </div>
+          <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>FORMA DE PAGO</span>
+            {pagosAg.length>1&&(()=>{const rest=restante-pagosAg.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}
+          </div>
+          {pagosAg.map((p,i)=>(
+            <div key={i} style={{marginBottom:"8px",padding:"10px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+              {pagosAg.length>1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}><span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>Pago {i+1}</span><button onClick={()=>setPagosAg(pagosAg.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.55)",cursor:"pointer",fontSize:"14px",lineHeight:1,padding:"0 2px"}}>✕</button></div>}
+              <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:pagosAg.length>1?"8px":"0"}}>
+                {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
+                  <button key={m} onClick={()=>{const n=[...pagosAg];n[i]={...n[i],metodo:m};if(m!=="Crédito")setMsiSelAg(0);setPagosAg(n);}} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:p.metodo===m?"#2721E8":"transparent",borderColor:p.metodo===m?"#2721E8":"rgba(255,255,255,0.1)",color:p.metodo===m?"#fff":"rgba(255,255,255,0.4)"}}>{m}</button>
+                ))}
+              </div>
+              {pagosAg.length>1&&<input type="number" className="inp" value={p.monto||""} onChange={e=>{const n=[...pagosAg];n[i]={...n[i],monto:Number(e.target.value)||0};setPagosAg(n);}} style={{fontSize:"12px",padding:"6px 10px",marginTop:"6px"}} placeholder="Monto $"/>}
+              {p.metodo==="Crédito"&&msiOpts.length>0&&pagosAg.length===1&&<div style={{marginTop:"8px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>MSI</div><div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}><button className="btn-ghost" style={{borderColor:msiSelAg===0?"#2721E8":"rgba(255,255,255,0.1)",color:msiSelAg===0?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSelAg(0)}>Sin MSI</button>{msiOpts.map(m=><button key={m} className="btn-ghost" style={{borderColor:msiSelAg===m?"#2721E8":"rgba(255,255,255,0.1)",color:msiSelAg===m?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSelAg(m)}>{m} MSI</button>)}</div></div>}
+              {["Débito","Crédito"].includes(p.metodo)&&terminalesAg.length>0&&<div style={{marginTop:"8px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>TERMINAL</div><div style={{display:"flex",gap:"5px",flexWrap:"wrap",marginBottom:"6px"}}>{terminalesAg.map(t=><button key={t.nombre} onClick={()=>setTermSelAg({...termSelAg,[i]:t.nombre})} style={{padding:"6px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:termSelAg[i]===t.nombre?"rgba(73,184,211,0.15)":"transparent",borderColor:termSelAg[i]===t.nombre?"#49B8D3":"rgba(255,255,255,0.1)",color:termSelAg[i]===t.nombre?"#49B8D3":"rgba(255,255,255,0.4)"}}>{t.nombre}<br/><span style={{fontSize:"9px"}}>{t.comision}%+IVA</span></button>)}</div>{termSelAg[i]&&(()=>{const t=terminalesAg.find(x=>x.nombre===termSelAg[i]);const base=pagosAg.length===1?Math.round(restante*(1-descuentoAg/100)):p.monto||restante;if(!t||!base)return null;const neto=netoTarjeta(base,t.comision);return<div style={{padding:"6px 10px",background:"rgba(73,184,211,0.06)",border:"1px solid rgba(73,184,211,0.15)",borderRadius:"6px",fontSize:"10px",display:"flex",justifyContent:"space-between"}}><span style={{color:"rgba(255,255,255,0.4)"}}>Comisión {t.nombre}: −{fmt(base-neto)}</span><span style={{color:"#49B8D3",fontWeight:600}}>Neto: {fmt(neto)}</span></div>;})()}</div>}
+              {p.metodo==="Efectivo"&&pagosAg.length===1&&<div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",marginTop:"8px",background:"rgba(16,185,129,0.06)",borderRadius:"8px",border:"1px solid rgba(16,185,129,0.2)"}}><span style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Desc. 5%</span><button className="btn-ghost" style={{borderColor:descuentoAg===5?"#10b981":"rgba(255,255,255,0.1)",color:descuentoAg===5?"#10b981":"rgba(255,255,255,0.4)",padding:"5px 12px",fontSize:"11px"}} onClick={()=>setDescuentoAg(descuentoAg===5?0:5)}>{descuentoAg===5?"✓ Aplicado":"Aplicar"}</button></div>}
+            </div>
+          ))}
+          {pagosAg[pagosAg.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagosAg.length===1?0:pagosAg.reduce((s,p)=>s+p.monto,0);setPagosAg(pagosAg.length===1?[{...pagosAg[0],monto:Math.round(restante/2)},{metodo:"",monto:restante-Math.round(restante/2)}]:[...pagosAg,{metodo:"",monto:Math.max(0,restante-suma)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px",marginBottom:"12px"}}>+ Agregar otro método de pago</button>}
+          <div style={{display:"flex",gap:"10px",marginTop:"8px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
+        </div></div>);
+      })()}
+
       {modalSig&&citaComp&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(16,185,129,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>📅</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>¡Sesión completada!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>¿Agendar siguiente sesión de {citaComp.clienta_nombre}?</div><div style={{fontSize:"12px",color:"#10b981",marginTop:"6px"}}>Sesión {citaComp.paquete.sesiones_usadas+1} de {citaComp.paquete.total_sesiones}</div></div>
         <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSig} min={hoy()} onChange={e=>{setFechaSig(e.target.value);setHoraSig("");}} style={{colorScheme:"dark"}}/></div>
@@ -262,6 +427,75 @@ function AgendaCalendar({session,onVerFicha}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// AJUSTES TERMINALES POS — comisión + IVA por sucursal
+// ══════════════════════════════════════════════════════════════════════════════
+function AjustesTerminales({session}){
+  const[terminales,setTerminales]=useState([]);
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState("");
+  const cargar=async()=>{
+    try{
+      const{data,error}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).order("nombre");
+      if(!error&&data?.length>0)setTerminales(data);
+      else setTerminales(TERMINALES_DEFAULT.map(t=>({...t,sucursal_id:session.id,id:null})));
+    }catch(e){setTerminales(TERMINALES_DEFAULT.map(t=>({...t,sucursal_id:session.id,id:null})));}
+  };
+  useEffect(()=>{cargar();},[session.id]);
+  const act=(idx,campo,valor)=>{const n=[...terminales];n[idx]={...n[idx],[campo]:valor};setTerminales(n);};
+  const guardar=async()=>{
+    setSaving(true);setMsg("");
+    try{
+      for(const t of terminales){
+        if(t.id){await supabase.from("terminales").update({nombre:t.nombre,comision:Number(t.comision),activa:t.activa}).eq("id",t.id);}
+        else{await supabase.from("terminales").insert([{sucursal_id:session.id,nombre:t.nombre,comision:Number(t.comision),activa:t.activa}]);}
+      }
+      setMsg("✓ Guardado");cargar();
+    }catch(e){setMsg("Error al guardar");}
+    setSaving(false);setTimeout(()=>setMsg(""),2500);
+  };
+  return(
+    <div style={{flex:1,overflowY:"auto",padding:"24px"}}>
+      <div style={{maxWidth:"640px"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>TERMINALES POS — {session.nombre}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}}>
+          {terminales.map((t,i)=>(
+            <div key={i} className="glass-dark" style={{padding:"16px",display:"grid",gridTemplateColumns:"1fr 130px 90px 44px",gap:"10px",alignItems:"center"}}>
+              <input className="inp" value={t.nombre} onChange={e=>act(i,"nombre",e.target.value)} placeholder="Nombre terminal" style={{fontSize:"13px"}}/>
+              <div style={{position:"relative"}}>
+                <input type="number" className="inp" value={t.comision} onChange={e=>act(i,"comision",e.target.value)} step="0.01" min="0" max="20" style={{fontSize:"13px",paddingRight:"28px"}}/>
+                <span style={{position:"absolute",right:"10px",top:"50%",transform:"translateY(-50%)",fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>%</span>
+              </div>
+              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",textAlign:"center",lineHeight:"1.4"}}>
+                <div>c/IVA:</div>
+                <div style={{color:"#f97316",fontWeight:600}}>{(Number(t.comision)*1.16).toFixed(2)}%</div>
+              </div>
+              <button onClick={()=>act(i,"activa",!t.activa)} style={{width:"36px",height:"36px",borderRadius:"8px",border:"1px solid",cursor:"pointer",background:t.activa?"rgba(16,185,129,0.15)":"rgba(255,255,255,0.05)",borderColor:t.activa?"rgba(16,185,129,0.4)":"rgba(255,255,255,0.1)",fontSize:"14px",color:t.activa?"#10b981":"rgba(255,255,255,0.3)"}}>{t.activa?"✓":"✕"}</button>
+            </div>
+          ))}
+        </div>
+        <div className="glass-dark" style={{padding:"14px",marginBottom:"20px"}}>
+          <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"10px",letterSpacing:"1px"}}>NETO EN CUENTA por cada $1,000 cobrados con tarjeta</div>
+          <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+            {terminales.filter(t=>t.activa&&t.nombre).map(t=>{const neto=netoTarjeta(1000,Number(t.comision));const comis=1000-neto;return(
+              <div key={t.nombre} style={{padding:"10px 14px",background:"rgba(0,0,0,0.3)",borderRadius:"8px",textAlign:"center",minWidth:"110px"}}>
+                <div style={{fontSize:"12px",fontWeight:600,marginBottom:"4px"}}>{t.nombre}</div>
+                <div style={{fontSize:"15px",color:"#49B8D3",fontWeight:700}}>{fmt(neto)}</div>
+                <div style={{fontSize:"10px",color:"rgba(255,100,100,0.7)",marginTop:"2px"}}>−{fmt(comis)} comisión</div>
+              </div>
+            );})}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+          <button className="btn-ghost" onClick={()=>setTerminales([...terminales,{sucursal_id:session.id,nombre:"",comision:0,activa:true,id:null}])} style={{fontSize:"12px"}}>+ Agregar terminal</button>
+          <button className="btn-blue" onClick={guardar} disabled={saving} style={{fontSize:"13px",padding:"10px 24px"}}>{saving?"Guardando...":"Guardar cambios"}</button>
+          {msg&&<span style={{fontSize:"12px",color:msg.startsWith("✓")?"#10b981":"#ff6b6b"}}>{msg}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // POS — Paquete → Datos → Agendar (con vista de agenda) → Cobrar
 // ══════════════════════════════════════════════════════════════════════════════
 function POS({session,onSwitchSucursal,isAdmin}){
@@ -271,9 +505,14 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const[clientaSel,setClientaSel]=useState(null);const[busqCli,setBusqCli]=useState("");const[cliResults,setCliResults]=useState([]);
   const[nombreCli,setNombreCli]=useState("");const[telCli,setTelCli]=useState("");const[nacDia,setNacDia]=useState("");const[nacMes,setNacMes]=useState("");const[nacAnio,setNacAnio]=useState("");const[comoNos,setComoNos]=useState("");const[depiAntes,setDepiAntes]=useState(null);
   const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);
-  const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);
+  const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");
+  const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo"
+  const[pagos,setPagos]=useState([{metodo:"",monto:0}]); // multi-pago en modal cobro
+  const[termSel,setTermSel]=useState({}); // {pagoIdx: terminalNombre}
+  const[terminalesPOS,setTerminalesPOS]=useState([]);
   const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);
 
+  const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
   const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito([]):setCarrito([{...item,qty:1}]);};
@@ -286,24 +525,62 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setPagos([{metodo:"",monto:0}]);setTermSel({});setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");};
 
-  const cerrar=async()=>{setSaving(true);try{
+  const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
+
+  const cerrar=async()=>{setSaving(true);setErrGuardar("");try{
     const item=carrito[0];
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
-    else{const{data:cD}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();cliId=cD?.[0]?.id||null;}
-    const{data:tD}=await supabase.from("tickets").insert([{sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:totalCD,metodo_pago:metodo+(msiSel>0?` ${msiSel}MSI`:""),descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:hoy()}]).select();
+    else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
+    const mpago=pagos.length===1?(pagos[0].metodo+(msiSel>0?` ${msiSel}MSI`:"")+( ["Débito","Crédito"].includes(pagos[0].metodo)&&termSel[0]?` · ${termSel[0]}`:"")):pagos.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSel[i]?` · ${termSel[i]}`:""} ${fmt(p.monto)}`).join(" + ");
+    const tNum=await nextTicketNum();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:hoy()}]).select();
+    if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     let pId=null;
     if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
-      const{data:pD}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();pId=pD?.[0]?.id||null;}
-    await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
-    setShowConfirm(false);setShowExito(true);setTimeout(()=>{setShowExito(false);limpiar();},2200);
-  }catch(e){console.error(e);}setSaving(false);};
+      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
+    if(eCi)throw new Error("Cita: "+eCi.message);
+    setShowConfirm(false);setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+  }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
+
+  const cerrarAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
+    const item=carrito[0];
+    let cliId=null;
+    if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
+    else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
+    const mpAnticipo=anticoOpt==="transferencia"?"Transferencia":"Efectivo";
+    const tNum=await nextTicketNum();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:hoy()}]).select();
+    if(eT)throw new Error("Ticket: "+eT.message);
+    const tId=tD?.[0]?.id;
+    let pId=null;
+    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
+      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`}]);
+    if(eCi)throw new Error("Cita: "+eCi.message);
+    setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+  }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
+
+  const agendarSinAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
+    const item=carrito[0];
+    let cliId=null;
+    if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
+    else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
+    let pId=null;
+    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
+      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
+    if(eCi)throw new Error("Cita: "+eCi.message);
+    setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+  }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
   const cargarT=async(sid)=>{setLoadingT(true);const{data}=await supabase.from("tickets").select("*").eq("sucursal_id",sid).eq("fecha",hoy()).order("created_at",{ascending:false});if(data)setTickets(data);setLoadingT(false);};
   const cargarCli=async(q)=>{setLoadingCli(true);let qr=supabase.from("clientas").select("*").eq("sucursal_id",session.id).order("created_at",{ascending:false}).limit(50);if(q)qr=qr.ilike("nombre",`%${q}%`);const{data}=await qr;setClientas(data||[]);setLoadingCli(false);};
+  useEffect(()=>{(async()=>{try{const{data,error}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");if(!error&&data?.length>0)setTerminalesPOS(data);else setTerminalesPOS(TERMINALES_DEFAULT);}catch(e){setTerminalesPOS(TERMINALES_DEFAULT);}})();},[session.id]);
   const totalHoy=tickets.reduce((s,t)=>s+Number(t.total),0);
   const anios=Array.from({length:73},(_,i)=>String(2012-i));const dias=Array.from({length:31},(_,i)=>String(i+1).padStart(2,"0"));
 
@@ -314,9 +591,9 @@ function POS({session,onSwitchSucursal,isAdmin}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)",fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","clientas","historial","importar"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)"}}
+            {["pos","agenda","clientas","historial","importar","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)"}}
               onClick={()=>{setView(v);setFichaId(null);if(v==="historial")cargarT(session.id);if(v==="clientas")cargarCli("");}}>
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="clientas"?"👤 Clientas":v==="importar"?"📥 Importar":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="clientas"?"👤 Clientas":v==="importar"?"📥 Importar":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -350,6 +627,8 @@ function POS({session,onSwitchSucursal,isAdmin}){
         {fichaId==="ics"?<GCalImport session={session}/>:<CSVImport session={session}/>}
       </div>}
 
+      {view==="ajustes"&&<AjustesTerminales session={session}/>}
+
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>HISTORIAL · {session.nombre}</div>
         {loadingT&&<div style={{color:"rgba(255,255,255,0.3)",textAlign:"center",padding:"40px"}}>Cargando...</div>}
@@ -369,7 +648,23 @@ function POS({session,onSwitchSucursal,isAdmin}){
             <div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{FILTROS.map(f=><button key={f} onClick={()=>setFiltro(f)} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",background:filtro===f?"#2721E8":"transparent",borderColor:filtro===f?"#2721E8":"rgba(255,255,255,0.12)",color:filtro===f?"#fff":"rgba(255,255,255,0.45)"}}>{f}</button>)}</div>
             <input className="inp" placeholder="Buscar servicio..." value={busq} onChange={e=>setBusq(e.target.value)} style={{padding:"8px 14px",fontSize:"12px"}}/>
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
+          <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+            <div style={{marginBottom:"12px"}}>
+              {!showMantForm?<div onClick={()=>{if(carrito.length>0)setCarrito([]);setShowMantForm(true);}} style={{padding:"12px 16px",background:"rgba(249,115,22,0.07)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"12px",cursor:"pointer",display:"flex",alignItems:"center",gap:"10px",transition:"all 0.15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(249,115,22,0.6)"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(249,115,22,0.3)"}><div style={{fontSize:"18px"}}>🔧</div><div><div style={{fontSize:"12px",fontWeight:600,color:"#f97316"}}>Sesiones de Mantenimiento</div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.35)"}}>Láser · precio y sesiones manuales</div></div><div style={{marginLeft:"auto",fontSize:"10px",color:"rgba(249,115,22,0.5)",fontWeight:600}}>MANUAL →</div></div>:
+              <div style={{padding:"14px 16px",background:"rgba(249,115,22,0.06)",border:"1px solid rgba(249,115,22,0.4)",borderRadius:"12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}><div style={{fontSize:"10px",fontWeight:700,color:"#f97316",letterSpacing:"1.5px"}}>🔧 SESIONES DE MANTENIMIENTO</div><button onClick={()=>setShowMantForm(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:"18px",lineHeight:1}}>×</button></div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  <div><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>ZONA / DESCRIPCIÓN</div><input className="inp" placeholder="Ej. Piernas Completas, Bikini Brazilian..." value={mantZona} onChange={e=>setMantZona(e.target.value)} style={{fontSize:"12px",padding:"8px 12px"}}/></div>
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <div style={{flex:"0 0 90px"}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>SESIONES</div><input type="number" className="inp" placeholder="Nº" value={mantSesiones} onChange={e=>setMantSesiones(e.target.value)} min="1" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
+                    <div style={{flex:1}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>PRECIO $</div><input type="number" className="inp" placeholder="0" value={mantPrecio} onChange={e=>setMantPrecio(e.target.value)} min="0" style={{fontSize:"12px",padding:"8px 12px"}}/></div>
+                  </div>
+                  {mantZona&&mantSesiones&&mantPrecio&&<div style={{padding:"7px 10px",background:"rgba(249,115,22,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Mant. {mantZona.trim()} ({mantSesiones} ses)» — {fmt(Number(mantPrecio))}</div>}
+                  <button onClick={agregarMantenimiento} disabled={!mantZona.trim()||!mantSesiones||!mantPrecio} className="btn-blue" style={{background:!mantZona.trim()||!mantSesiones||!mantPrecio?"rgba(249,115,22,0.2)":"#f97316",border:"none",width:"100%",padding:"9px",fontSize:"12px",fontWeight:700,cursor:!mantZona.trim()||!mantSesiones||!mantPrecio?"default":"pointer"}}>✓ Agregar mantenimiento al ticket</button>
+                </div>
+              </div>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
             {itemsFilt.map(item=>{const ec=carrito.find(x=>x.nombre===item.nombre);const cat=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");return(
               <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${ec?"rgba(39,33,232,0.5)":"rgba(255,255,255,0.08)"}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background="rgba(255,255,255,0.06)";}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)";}}>
                 <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
@@ -423,21 +718,54 @@ function POS({session,onSwitchSucursal,isAdmin}){
               </div>}
               {esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
             </div>}
+            {/* 4 Anticipo */}
+            {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:anticoOpt!=="no"?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>4</div>ANTICIPO</div>
+              <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
+                {[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"}].map(o=>(
+                  <button key={o.v} onClick={()=>setAnticoOpt(o.v)} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.05)":"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.18)":"#10b981":"rgba(255,255,255,0.08)",color:anticoOpt===o.v?"#fff":"rgba(255,255,255,0.35)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?"rgba(255,255,255,0.4)":"#10b981"}}>✓</span>}
+                  </button>))}
+              </div>
+            </div>}
           </div>
-          {todo&&!esDom&&<div style={{padding:"12px 18px",borderTop:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={()=>setShowConfirm(true)}>Cobrar {fmt(total)}</button></div>}
+          {todo&&!esDom&&<div style={{padding:"12px 18px",borderTop:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
+            {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"10px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
+            {anticoOpt!=="no"
+              ?<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":"✓ Registrar anticipo $250 + cita"}</button>
+              :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>
+                <button className="btn-ghost" style={{width:"100%",padding:"10px",fontSize:"12px",color:"rgba(255,255,255,0.45)"}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(total)} ahora</button>
+              </div>}
+          </div>}
         </div>
       </div>}
 
-      {showConfirm&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px"}}>
+      {showConfirm&&<div className="overlay"><div className="glass" style={{width:460,padding:"28px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>CONFIRMAR COBRO</div>
         <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{fontSize:"12px",fontWeight:600,marginBottom:"4px"}}>{carrito[0]?.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,tipoSvc.duracion)}</div></div>
-          <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>MÉTODO DE PAGO</div><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px"}}>{["Efectivo","Débito","Crédito","Transferencia","Depósito"].map(m=><button key={m} className="btn-ghost" style={{borderColor:metodo===m?"#2721E8":"rgba(255,255,255,0.1)",color:metodo===m?"#fff":"rgba(255,255,255,0.4)",padding:"8px",fontSize:"11px"}} onClick={()=>{setMetodo(m);if(m!=="Crédito")setMsiSel(0);}}>{m}</button>)}</div></div>
-          {metodo==="Crédito"&&msiD.length>0&&<div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>MSI</div><div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}><button className="btn-ghost" style={{borderColor:msiSel===0?"#2721E8":"rgba(255,255,255,0.1)",color:msiSel===0?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSel(0)}>Sin MSI</button>{msiD.map(m=><button key={m} className="btn-ghost" style={{borderColor:msiSel===m?"#2721E8":"rgba(255,255,255,0.1)",color:msiSel===m?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSel(m)}>{m} MSI</button>)}</div></div>}
-          {metodo==="Efectivo"&&<div style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px",background:"rgba(16,185,129,0.06)",borderRadius:"8px",border:"1px solid rgba(16,185,129,0.2)"}}><span style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Desc. 5%</span><button className="btn-ghost" style={{borderColor:descuento===5?"#10b981":"rgba(255,255,255,0.1)",color:descuento===5?"#10b981":"rgba(255,255,255,0.4)",padding:"5px 12px",fontSize:"11px"}} onClick={()=>setDescuento(descuento===5?0:5)}>{descuento===5?"✓ Aplicado":"Aplicar"}</button></div>}
+          {/* Multi-pago */}
+          <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
+            {pagos.map((p,i)=>(
+              <div key={i} style={{marginBottom:"8px",padding:"10px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+                {pagos.length>1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}><span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>Pago {i+1}</span><button onClick={()=>setPagos(pagos.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.55)",cursor:"pointer",fontSize:"14px",lineHeight:1,padding:"0 2px"}}>✕</button></div>}
+                <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:pagos.length>1?"8px":"0"}}>
+                  {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
+                    <button key={m} onClick={()=>{const n=[...pagos];n[i]={...n[i],metodo:m};if(m!=="Crédito")setMsiSel(0);setPagos(n);}} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:p.metodo===m?"#2721E8":"transparent",borderColor:p.metodo===m?"#2721E8":"rgba(255,255,255,0.1)",color:p.metodo===m?"#fff":"rgba(255,255,255,0.4)"}}>{m}</button>
+                  ))}
+                </div>
+                {pagos.length>1&&<input type="number" className="inp" value={p.monto||""} onChange={e=>{const n=[...pagos];n[i]={...n[i],monto:Number(e.target.value)||0};setPagos(n);}} style={{fontSize:"12px",padding:"6px 10px"}} placeholder="Monto $"/>}
+                {p.metodo==="Crédito"&&msiD.length>0&&pagos.length===1&&<div style={{marginTop:"8px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>MSI</div><div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}><button className="btn-ghost" style={{borderColor:msiSel===0?"#2721E8":"rgba(255,255,255,0.1)",color:msiSel===0?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSel(0)}>Sin MSI</button>{msiD.map(m=><button key={m} className="btn-ghost" style={{borderColor:msiSel===m?"#2721E8":"rgba(255,255,255,0.1)",color:msiSel===m?"#fff":"rgba(255,255,255,0.4)",padding:"7px 12px",fontSize:"11px"}} onClick={()=>setMsiSel(m)}>{m} MSI</button>)}</div></div>}
+                {["Débito","Crédito"].includes(p.metodo)&&terminalesPOS.length>0&&<div style={{marginTop:"8px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>TERMINAL</div><div style={{display:"flex",gap:"5px",flexWrap:"wrap",marginBottom:"6px"}}>{terminalesPOS.map(t=><button key={t.nombre} onClick={()=>setTermSel({...termSel,[i]:t.nombre})} style={{padding:"6px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:termSel[i]===t.nombre?"rgba(73,184,211,0.15)":"transparent",borderColor:termSel[i]===t.nombre?"#49B8D3":"rgba(255,255,255,0.1)",color:termSel[i]===t.nombre?"#49B8D3":"rgba(255,255,255,0.4)"}}>{t.nombre}<br/><span style={{fontSize:"9px"}}>{t.comision}%+IVA</span></button>)}</div>{termSel[i]&&(()=>{const t=terminalesPOS.find(x=>x.nombre===termSel[i]);const base=pagos.length===1?totalCD:p.monto||totalCD;if(!t||!base)return null;const neto=netoTarjeta(base,t.comision);return<div style={{padding:"6px 10px",background:"rgba(73,184,211,0.06)",border:"1px solid rgba(73,184,211,0.15)",borderRadius:"6px",fontSize:"10px",display:"flex",justifyContent:"space-between"}}><span style={{color:"rgba(255,255,255,0.4)"}}>Comisión {t.nombre}: −{fmt(base-neto)}</span><span style={{color:"#49B8D3",fontWeight:600}}>Neto: {fmt(neto)}</span></div>;})()}</div>}
+                {p.metodo==="Efectivo"&&pagos.length===1&&<div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",marginTop:"8px",background:"rgba(16,185,129,0.06)",borderRadius:"8px",border:"1px solid rgba(16,185,129,0.2)"}}><span style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Desc. 5%</span><button className="btn-ghost" style={{borderColor:descuento===5?"#10b981":"rgba(255,255,255,0.1)",color:descuento===5?"#10b981":"rgba(255,255,255,0.4)",padding:"5px 12px",fontSize:"11px"}} onClick={()=>setDescuento(descuento===5?0:5)}>{descuento===5?"✓ Aplicado":"Aplicar"}</button></div>}
+              </div>
+            ))}
+            {pagos[pagos.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagos.length===1?0:pagos.reduce((s,p)=>s+p.monto,0);const resto=totalCD-suma;setPagos(pagos.length===1?[{...pagos[0],monto:Math.round(totalCD/2)},{metodo:"",monto:totalCD-Math.round(totalCD/2)}]:[...pagos,{metodo:"",monto:Math.max(0,resto)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px"}}>+ Agregar otro método de pago</button>}
+          </div>
           <div style={{padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",marginBottom:"6px"}}><span style={{color:"rgba(255,255,255,0.5)"}}>{carrito[0]?.nombre}</span><span>{fmt(total)}</span></div><div style={{height:"1px",background:"rgba(255,255,255,0.08)",marginBottom:"6px"}}/>{descuento>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:"#ff8a65",marginBottom:"6px"}}><span>Desc. {descuento}%</span><span>-{fmt(total*descuento/100)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",fontWeight:700}}><span>Total</span><span style={{color:"#49B8D3"}}>{fmt(totalCD)}</span></div>{msiSel>0&&<div style={{fontSize:"12px",color:"#49B8D3",textAlign:"right",marginTop:"4px"}}>{fmt(totalCD/msiSel)}/mes × {msiSel}</div>}</div>
         </div>
-        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!metodo} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
+        {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"12px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
+        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
       </div></div>}
 
       {showExito&&<div className="overlay" style={{zIndex:300}}><div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div><div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ticket creado!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>{tipoTicket==="recompra"?"Recompra":"Ficha"} de {nombreFinal} + cita agendada</div></div></div>}
@@ -831,15 +1159,275 @@ function CSVImport({session}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ESTADO FINANCIERO — P&L mensual por sucursal con análisis IA
+// ══════════════════════════════════════════════════════════════════════════════
+function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=false}){
+  const sucVisible=sucursalesFiltro||SUCURSALES_NAMES;
+  const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
+  const puedeMV=!esSocia;
+
+  const antYM=(ym)=>{const[y,m]=ym.split("-").map(Number);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,"0")}`;};
+  const rango=(ym)=>{const[y,m]=ym.split("-").map(Number);return{desde:`${ym}-01`,hasta:new Date(y,m,0).toISOString().slice(0,10)};};
+  const etiq=(ym)=>new Date(`${ym}-15`).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+  const hoyYM=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
+  const listaMeses=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
+
+  const[periodo,setPeriodo]=useState(hoyYM());
+  const[vista,setVista]=useState("individual");
+  const[sucSel,setSucSel]=useState(sucVisible[0]);
+  const[sucMulti,setSucMulti]=useState(sucursalesPropias||sucVisible.slice(0,2));
+  const[ventas,setVentas]=useState({});
+  const[ventasAnt,setVentasAnt]=useState({});
+  const[metaGs,setMetaGs]=useState({});
+  const[gastos,setGastos]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[saving,setSaving]=useState(false);
+  const[aiTxt,setAiTxt]=useState("");
+  const[aiLoad,setAiLoad]=useState(false);
+  const[fSuc,setFSuc]=useState(sucVisible[0]);
+  const[fCat,setFCat]=useState("renta");
+  const[fConc,setFConc]=useState("");
+  const[fMonto,setFMonto]=useState("");
+  const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
+
+  const cargar=async()=>{
+    setLoading(true);
+    const{desde,hasta}=rango(periodo);
+    const{desde:dA,hasta:hA}=rango(antYM(periodo));
+    const[{data:tks},{data:tksA},{data:g}]=await Promise.all([
+      supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",desde).lte("fecha",hasta),
+      supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",dA).lte("fecha",hA),
+      supabase.from("gastos_operativos").select("*").eq("periodo",periodo),
+    ]);
+    const toMap=(arr)=>{const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});(arr||[]).forEach(t=>{if(m[t.sucursal_nombre]!==undefined)m[t.sucursal_nombre]+=Number(t.total);});return m;};
+    setVentas(toMap(tks));setVentasAnt(toMap(tksA));setGastos(g||[]);
+    if(META_TOKEN&&META_ACCOUNT){
+      try{
+        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+        const json=await(await fetch(url)).json();
+        const ms={};SUCURSALES_NAMES.forEach(s=>{ms[s]=0;});
+        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=Number(r.spend||0);});});
+        setMetaGs(ms);
+      }catch{}
+    }
+    setLoading(false);
+  };
+
+  useEffect(()=>{cargar();setAiTxt("");},[periodo]);
+
+  const pl=(suc)=>{
+    const ing=ventas[suc]||0;
+    const g=gastos.filter(x=>x.sucursal_id===suc);
+    const cont=3100;const meta=metaGs[suc]||0;
+    const nom=g.filter(x=>x.categoria==="nomina").reduce((s,x)=>s+Number(x.monto),0);
+    const ren=g.filter(x=>x.categoria==="renta").reduce((s,x)=>s+Number(x.monto),0);
+    const svc=g.filter(x=>x.categoria==="servicios").reduce((s,x)=>s+Number(x.monto),0);
+    const otr=g.filter(x=>x.categoria==="otro").reduce((s,x)=>s+Number(x.monto),0);
+    const egr=cont+meta+nom+ren+svc+otr;
+    const util=ing-egr;
+    return{ing,cont,meta,nom,ren,svc,otr,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina")};
+  };
+
+  const plC=(sucs)=>{
+    const ps=sucs.map(s=>pl(s));const sm=k=>ps.reduce((a,p)=>a+p[k],0);
+    const ing=sm("ing"),egr=sm("egr"),util=ing-egr;
+    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr")};
+  };
+
+  const guardar=async()=>{
+    setSaving(true);
+    if(fCat==="nomina"){
+      const validas=nomRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
+      await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria","nomina");
+      if(validas.length)await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto)})));
+    }else{
+      if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
+      if(fCat==="renta"||fCat==="servicios")await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",fCat);
+      await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto)}]);
+    }
+    setFMonto("");setFConc("");setSaving(false);await cargar();
+  };
+
+  const borrarGasto=async(id)=>{await supabase.from("gastos_operativos").delete().eq("id",id);await cargar();};
+
+  const analizarIA=async()=>{
+    if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
+    setAiLoad(true);setAiTxt("");
+    const sucs=vista==="individual"?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
+    const data=sucs.map(s=>{
+      const p=pl(s);const vA=ventasAnt[s]||0;const delta=vA>0?((p.ing-vA)/vA*100):null;
+      return{sucursal:s,ventas:p.ing,contenido_digital:p.cont,meta_ads:p.meta,nominas:p.nom,renta:p.ren,servicios:p.svc,otros:p.otr,total_gastos:p.egr,utilidad:p.util,margen_pct:p.mg?.toFixed(1),cambio_vs_mes_anterior:delta?.toFixed(1)};
+    });
+    const prompt=`Eres asesor financiero de CIRE, salones de depilación láser en México. Analiza el período ${etiq(periodo)} e interpreta los resultados para las dueñas y gerentes del negocio de forma clara, directa y sin tecnicismos.\n\nDatos:\n${JSON.stringify(data,null,2)}\n\nResponde en español con:\n**Resumen del mes** (2-3 oraciones simples sobre cómo le fue al negocio)\n\n**Puntos clave** (3 bullets: qué salió bien, qué hay que atender, qué es urgente si aplica)\n\n**Recomendación concreta** (1 acción específica para el próximo mes)\n\nSé honesta y usa los nombres de las sucursales. Los montos son en pesos mexicanos.`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","content-type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:900,messages:[{role:"user",content:prompt}]})});
+      const json=await res.json();
+      setAiTxt(json.content?.[0]?.text||"Sin respuesta de la IA.");
+    }catch{setAiTxt("Error al conectar con la IA. Verifica tu VITE_CLAUDE_KEY en .env.local");}
+    setAiLoad(false);
+  };
+
+  const FilaGL=({l,v,c,neg=false,bold=false,indent=false})=>(
+    <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+      <span style={{fontSize:"13px",color:bold?"#fff":indent?"rgba(255,255,255,0.45)":"rgba(255,255,255,0.65)",fontWeight:bold?700:400,paddingLeft:indent?"14px":"0"}}>{l}</span>
+      <span style={{fontSize:"13px",fontWeight:bold?700:500,color:c||(neg?"#f97316":"rgba(255,255,255,0.7)")}}>{fmt(v)}</span>
+    </div>
+  );
+
+  const TarjetaPL=({suc,compact=false,showDelta=false})=>{
+    const p=pl(suc);const color=COLORES[suc]||"#2721E8";
+    const vA=ventasAnt[suc]||0;const delta=vA>0?((p.ing-vA)/vA*100):null;const pos=p.util>=0;
+    return(
+      <div className="glass" style={{padding:compact?"16px":"24px",borderLeft:`3px solid ${color}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
+          <span style={{fontSize:compact?14:16,fontWeight:700}}>{suc}</span>
+          {showDelta&&delta!==null&&<span style={{fontSize:"11px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:delta>=0?"rgba(16,185,129,0.15)":"rgba(255,80,80,0.15)",color:delta>=0?"#10b981":"#ff6b6b"}}>{delta>=0?"↑":"↓"}{Math.abs(delta).toFixed(1)}% vs mes ant.</span>}
+          {!showDelta&&<span style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{etiq(periodo)}</span>}
+        </div>
+        <FilaGL l={`Ventas`} v={p.ing} c="#10b981" bold/>
+        <div style={{height:"8px"}}/>
+        <FilaGL l="Contenido digital" v={p.cont} neg indent/>
+        <FilaGL l="Meta Ads" v={p.meta} neg indent/>
+        <FilaGL l="Nóminas" v={p.nom} neg indent/>
+        {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent/>}
+        {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent/>}
+        {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent/>}
+        <FilaGL l="Total gastos" v={p.egr} neg bold/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"10px",borderTop:"2px solid rgba(255,255,255,0.1)",marginTop:"4px"}}>
+          <span style={{fontSize:compact?14:16,fontWeight:700}}>{pos?"Utilidad":"Pérdida neta"}</span>
+          <span style={{fontSize:compact?20:26,fontWeight:800,color:pos?"#10b981":"#ff6b6b"}}>{fmt(Math.abs(p.util))}</span>
+        </div>
+        {p.mg!==null&&<div style={{textAlign:"right",fontSize:"12px",color:"rgba(255,255,255,0.35)",marginTop:"2px"}}>Margen {p.mg.toFixed(1)}%</div>}
+        {!compact&&p.nomItems.length>0&&<div style={{marginTop:"14px",paddingTop:"12px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.25)",marginBottom:"6px"}}>NÓMINA REGISTRADA</div>
+          {p.nomItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"rgba(255,255,255,0.45)",padding:"4px 0"}}>
+            <span>{n.concepto}</span>
+            <div style={{display:"flex",gap:"8px",alignItems:"center"}}><span>{fmt(n.monto)}</span><button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button></div>
+          </div>)}
+        </div>}
+      </div>
+    );
+  };
+
+  const actSucMulti=sucMulti.filter(s=>sucVisible.includes(s));
+  const pc=actSucMulti.length>0?plC(actSucMulti):null;
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+    {/* Controles */}
+    <div style={{display:"flex",alignItems:"flex-end",gap:"16px",flexWrap:"wrap"}}>
+      <div>
+        <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>PERÍODO</div>
+        <select className="inp" style={{width:"160px"}} value={periodo} onChange={e=>setPeriodo(e.target.value)}>
+          {listaMeses.map(m=><option key={m} value={m}>{etiq(m)}</option>)}
+        </select>
+      </div>
+      {puedeMV&&<div>
+        <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>VISTA</div>
+        <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
+          {[["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"]].map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
+        </div>
+      </div>}
+      {(vista==="individual"||esSocia)&&<div>
+        <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SUCURSAL</div>
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+          {sucVisible.map(s=><button key={s} onClick={()=>{setSucSel(s);setAiTxt("");}} style={{padding:"6px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${sucSel===s?COLORES[s]:"rgba(255,255,255,0.1)"}`,borderRadius:"8px",background:sucSel===s?`${COLORES[s]}22`:"transparent",color:sucSel===s?"#fff":"rgba(255,255,255,0.4)",fontFamily:"'Albert Sans',sans-serif",transition:"all 0.15s"}}>{s}</button>)}
+        </div>
+      </div>}
+      {vista==="consolidado"&&<div>
+        <div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SELECCIONAR SUCURSALES</div>
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+          {sucVisible.map(s=>{const on=sucMulti.includes(s);return<button key={s} onClick={()=>setSucMulti(on?sucMulti.filter(x=>x!==s):[...sucMulti,s])} style={{padding:"6px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${on?COLORES[s]:"rgba(255,255,255,0.1)"}`,borderRadius:"8px",background:on?`${COLORES[s]}22`:"transparent",color:on?"#fff":"rgba(255,255,255,0.4)",fontFamily:"'Albert Sans',sans-serif",transition:"all 0.15s"}}>{s}</button>;})}
+        </div>
+      </div>}
+      <button className="btn-ghost" onClick={cargar} style={{marginLeft:"auto"}} disabled={loading}>↻</button>
+      {loading&&<span style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Cargando...</span>}
+    </div>
+
+    {/* Vista individual */}
+    {(vista==="individual"||esSocia)&&<TarjetaPL suc={sucSel}/>}
+
+    {/* Vista consolidada */}
+    {vista==="consolidado"&&pc&&<>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+        {[{l:"INGRESOS",v:fmt(pc.ing),c:"#10b981"},{l:"GASTOS",v:fmt(pc.egr),c:"#f97316"},{l:pc.util>=0?"UTILIDAD":"PÉRDIDA",v:fmt(Math.abs(pc.util)),c:pc.util>=0?"#10b981":"#ff6b6b"},{l:"MARGEN",v:pc.mg!==null?`${pc.mg.toFixed(1)}%`:"—",c:pc.mg>=20?"#10b981":pc.mg>=0?"#f0c040":"#ff6b6b"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"8px"}}>{k.l}</div><div style={{fontSize:"26px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${actSucMulti.length},1fr)`,gap:"14px"}}>
+        {actSucMulti.map(s=><TarjetaPL key={s} suc={s} compact/>)}
+      </div>
+    </>}
+
+    {/* Vista comparativa */}
+    {vista==="comparativa"&&<>
+      <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>{etiq(periodo).toUpperCase()} VS {etiq(antYM(periodo)).toUpperCase()}</div>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(sucVisible.length,5)},1fr)`,gap:"14px"}}>
+        {sucVisible.map(s=><TarjetaPL key={s} suc={s} compact showDelta/>)}
+      </div>
+    </>}
+
+    {/* Formulario gastos */}
+    <div className="glass" style={{padding:"22px"}}>
+      <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>REGISTRAR GASTO DEL MES</div>
+      <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Sucursal</div>
+          <select className="inp" style={{width:"140px"}} value={fSuc} onChange={e=>setFSuc(e.target.value)}>
+            {sucVisible.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Categoría</div>
+          <select className="inp" style={{width:"190px"}} value={fCat} onChange={e=>setFCat(e.target.value)}>
+            <option value="renta">Renta</option>
+            <option value="servicios">Servicios (agua/luz/internet)</option>
+            <option value="nomina">Nómina</option>
+            <option value="otro">Otro gasto</option>
+          </select>
+        </div>
+        {fCat!=="nomina"&&<><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Concepto</div>
+          <input className="inp" style={{width:"180px"}} placeholder="Descripción (opcional)" value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
+          <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Monto</div>
+          <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
+          <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?"...":"Guardar"}</button>
+        </>}
+      </div>
+      {fCat==="nomina"&&<div style={{marginTop:"14px"}}>
+        <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"8px"}}>Colaboradoras de {fSuc} · {etiq(periodo)} <span style={{color:"rgba(255,255,255,0.2)"}}>(reemplaza lo anterior)</span></div>
+        {nomRows.map((n,i)=><div key={i} style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
+          <input className="inp" style={{flex:2}} placeholder="Nombre" value={n.nombre} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],nombre:e.target.value};return c;})}/>
+          <input className="inp" style={{width:"130px"}} type="number" placeholder="$ Monto" value={n.monto} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],monto:e.target.value};return c;})}/>
+          {nomRows.length>1&&<button className="btn-ghost" style={{padding:"8px 12px"}} onClick={()=>setNomRows(r=>r.filter((_,j)=>j!==i))}>×</button>}
+        </div>)}
+        <div style={{display:"flex",gap:"8px",marginTop:"6px"}}>
+          <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setNomRows(r=>[...r,{nombre:"",monto:""}])}>+ Agregar</button>
+          <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar nóminas"}</button>
+        </div>
+      </div>}
+    </div>
+
+    {/* Bloque IA */}
+    <div className="glass" style={{padding:"22px",borderColor:aiTxt?"rgba(39,33,232,0.4)":"rgba(255,255,255,0.08)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:aiTxt||aiLoad?"16px":"0"}}>
+        <div>
+          <div style={{fontSize:"14px",fontWeight:700,marginBottom:"2px"}}>Análisis con IA</div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Claude interpreta tus resultados en lenguaje claro, sin tecnicismos</div>
+        </div>
+        <button className="btn-blue" onClick={analizarIA} disabled={aiLoad} style={{padding:"10px 22px",fontSize:"12px"}}>{aiLoad?"Analizando...":"✦ Analizar"}</button>
+      </div>
+      {aiLoad&&<div style={{color:"rgba(255,255,255,0.35)",fontSize:"13px",fontStyle:"italic"}}>Analizando resultados de {etiq(periodo)}...</div>}
+      {aiTxt&&<div style={{fontSize:"14px",color:"rgba(255,255,255,0.82)",lineHeight:"1.75",whiteSpace:"pre-wrap"}}>{aiTxt}</div>}
+    </div>
+  </div>);}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD — Vista ejecutiva para dueño de negocio
 // ══════════════════════════════════════════════════════════════════════════════
 const inicioSemana=()=>{const d=new Date(),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
-function Dashboard({onLogout}){
+function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   useCSSInjection();
   const[tab,setTab]=useState("resumen");
-  const[periodo,setPeriodo]=useState("semana"); // "semana" | "mes"
+  const[periodo,setPeriodo]=useState("mes"); // "semana" | "mes"
   const[tickets,setTickets]=useState([]);
   const[citas,setCitas]=useState([]);
   const[loadingDB,setLoadingDB]=useState(false);
@@ -848,17 +1436,36 @@ function Dashboard({onLogout}){
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
+  const[metaMesSel,setMetaMesSel]=useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
+  const[metaDataMes,setMetaDataMes]=useState(null);
+  const[metaDiarioMes,setMetaDiarioMes]=useState([]);
+  const[loadingMetaMes,setLoadingMetaMes]=useState(false);
+  const[metaErrorMes,setMetaErrorMes]=useState("");
+  const[metaHistorial,setMetaHistorial]=useState([]);
+  const[loadingHist,setLoadingHist]=useState(false);
+  const[metaHistSucFiltro,setMetaHistSucFiltro]=useState("Todas");
+  const[metaChartMetrica,setMetaChartMetrica]=useState("inversion");
+  const[expandedSucSem,setExpandedSucSem]=useState(null);
   const[posSuc,setPosSuc]=useState(null);
   const[importType,setImportType]=useState(null); // "csv" | "ics"
+  const[soloMias,setSoloMias]=useState(false);
+  const[mesSel,setMesSel]=useState(()=>defaultMes());
 
-  const desde=periodo==="semana"?inicioSemana():inicioMes();
-  const periodoLabel=periodo==="semana"?semanaLabel():mesLabel();
+  const[mesY,mesM]=mesSel.split("-").map(Number);
+  const curYM=(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;})();
+  const mesDesde=`${mesSel}-01`;
+  const mesHasta=mesSel<curYM?`${mesSel}-${new Date(mesY,mesM,0).getDate()}`:hoy();
+  const desde=periodo==="semana"?inicioSemana():mesDesde;
+  const hasta=periodo==="semana"?hoy():mesHasta;
+  const mesSelLabel=new Date(mesY,mesM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+  const periodoLabel=periodo==="semana"?semanaLabel():mesSelLabel;
+  const mesesOpciones=Array.from({length:13},(_,i)=>{const d=new Date(new Date().getFullYear(),new Date().getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});
 
   const cargarDatos=async()=>{
     setLoadingDB(true);
     const[{data:tData},{data:cData}]=await Promise.all([
-      supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hoy()).order("created_at",{ascending:false}),
-      supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hoy())
+      supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta).order("created_at",{ascending:false}),
+      supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hasta)
     ]);
     if(tData)setTickets(tData);
     if(cData)setCitas(cData);
@@ -867,13 +1474,13 @@ function Dashboard({onLogout}){
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
     try{
-      const since=desde,until=hoy(),fields="adset_name,spend,actions,impressions,clicks,reach";
+      const since=desde,until=hasta,fields="adset_name,spend,actions,impressions,clicks,reach";
       // Fetch agregado
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
       // Fetch diario
       const urlDiario=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
       const[res,resDiario]=await Promise.all([fetch(url),fetch(urlDiario)]);
-      const json=await res.json();const jsonDiario=await resDiario.json();
+      const json=await res.json();let jsonDiario=await resDiario.json();
       if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
       const rows=json.data||[];
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
@@ -881,9 +1488,12 @@ function Dashboard({onLogout}){
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
       rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
       setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
-      // Procesar datos diarios
+      // Procesar datos diarios con paginación completa
+      let allDiarioData=[...(jsonDiario.data||[])];
+      let nextUrl=jsonDiario.paging?.next;
+      while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
       const diario=[];
-      (jsonDiario.data||[]).forEach(r=>{
+      allDiarioData.forEach(r=>{
         const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();
         SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});
       });
@@ -891,17 +1501,114 @@ function Dashboard({onLogout}){
     }catch(e){setMetaError("Error Meta.");}
     setLoadingMeta(false);
   };
-  useEffect(()=>{cargarDatos();cargarMeta();},[periodo]);
+  const getMetaM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
+  const cargarMetaMes=async(ym,force=false)=>{
+    setLoadingMetaMes(true);setMetaErrorMes("");
+    try{
+      const ahora=new Date();
+      const curYM=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
+      const isPast=ym<curYM;
+      // Para meses anteriores: intentar caché de Supabase primero
+      if(!force&&isPast){
+        const{data:cached}=await supabase.from("meta_mensual").select("*").eq("mes",ym);
+        if(cached&&cached.some(r=>r.sucursal==="Todas")){
+          const todas=cached.find(r=>r.sucursal==="Todas");
+          const pS={};SUCURSALES_NAMES.forEach(s=>{const r=cached.find(c=>c.sucursal===s);pS[s]={spend:Number(r?.spend||0),mensajes:Number(r?.mensajes||0)};});
+          setMetaDataMes({spend:Number(todas.spend),mensajes:Number(todas.mensajes),impresiones:Number(todas.impresiones),clics:Number(todas.clics),alcance:Number(todas.alcance),porSucursal:pS});
+          setMetaDiarioMes([]);setLoadingMetaMes(false);return;
+        }
+      }
+      // Fetch desde Meta API
+      const[y,m]=ym.split("-").map(Number);
+      const since=`${ym}-01`;
+      const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
+      const fields="adset_name,spend,actions,impressions,clicks,reach";
+      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+      const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
+      const[res,resD]=await Promise.all([fetch(url),fetch(urlD)]);
+      const json=await res.json();const jsonD=await resD.json();
+      if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
+      const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
+      const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=Number(r.impressions||0);tC+=Number(r.clicks||0);tA+=Number(r.reach||0);SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
+      setMetaDataMes({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
+      // Guardar en caché
+      const now=new Date().toISOString();
+      supabase.from("meta_mensual").upsert([
+        {mes:ym,sucursal:"Todas",spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,updated_at:now},
+        ...SUCURSALES_NAMES.map(s=>({mes:ym,sucursal:s,spend:pS[s].spend,mensajes:pS[s].mensajes,impresiones:0,clics:0,alcance:0,updated_at:now}))
+      ],{onConflict:"mes,sucursal"});
+      // Datos diarios
+      let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
+      while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
+      const diario=[];
+      allD.forEach(r=>{const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});});
+      setMetaDiarioMes(diario);
+    }catch(e){setMetaErrorMes("Error Meta.");}
+    setLoadingMetaMes(false);
+  };
+  const cargarMetaHistorial=async()=>{
+    setLoadingHist(true);
+    try{
+      const ahora=new Date();
+      const curYM=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
+      const meses=Array.from({length:6},(_,i)=>{const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);const y=d.getFullYear(),m=d.getMonth()+1;const ym=`${y}-${String(m).padStart(2,"0")}`;return{ym,since:`${ym}-01`,until:ym<curYM?`${ym}-${new Date(y,m,0).getDate()}`:hoy(),label:d.toLocaleDateString("es-MX",{month:"short",year:"2-digit"})};}).reverse();
+      // Cargar todo de Supabase en una sola query
+      const{data:allCached}=await supabase.from("meta_mensual").select("*").in("mes",meses.map(x=>x.ym));
+      const results=await Promise.all(meses.map(async({ym,since,until,label})=>{
+        const isPast=ym<curYM;
+        const mesRows=(allCached||[]).filter(r=>r.mes===ym);
+        // Usar caché si es mes pasado y tenemos el row "Todas"
+        if(isPast&&mesRows.some(r=>r.sucursal==="Todas")){
+          const todas=mesRows.find(r=>r.sucursal==="Todas");
+          const pS={};SUCURSALES_NAMES.forEach(s=>{const r=mesRows.find(c=>c.sucursal===s);pS[s]={spend:Number(r?.spend||0),mensajes:Number(r?.mensajes||0)};});
+          return{ym,label,spend:Number(todas.spend),mensajes:Number(todas.mensajes),porSucursal:pS};
+        }
+        // Fetch desde Meta API (mes actual o caché faltante)
+        try{
+          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=adset_name,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+          const res=await fetch(url);const json=await res.json();
+          if(json.error)return{ym,label,spend:0,mensajes:0,porSucursal:{}};
+          const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+          let tS=0,tM=0;
+          (json.data||[]).forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
+          // Guardar en caché
+          const now=new Date().toISOString();
+          supabase.from("meta_mensual").upsert([
+            {mes:ym,sucursal:"Todas",spend:tS,mensajes:tM,impresiones:0,clics:0,alcance:0,updated_at:now},
+            ...SUCURSALES_NAMES.map(s=>({mes:ym,sucursal:s,spend:pS[s].spend,mensajes:pS[s].mensajes,impresiones:0,clics:0,alcance:0,updated_at:now}))
+          ],{onConflict:"mes,sucursal"});
+          return{ym,label,spend:tS,mensajes:tM,porSucursal:pS};
+        }catch{return{ym,label,spend:0,mensajes:0,porSucursal:{}};}
+      }));
+      setMetaHistorial(results);
+    }catch(e){}
+    setLoadingHist(false);
+  };
+  useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel]);
+  useEffect(()=>{cargarMetaMes(metaMesSel);},[metaMesSel]);
+  useEffect(()=>{cargarMetaHistorial();},[]);
+
+  // ─── Filtrado por rol ──────────────────────────────────────────────────────
+  const filtro=sucursalesFiltro||(soloMias?sucursalesPropias:null);
+  const sucNames=filtro?SUCURSALES_NAMES.filter(s=>filtro.includes(s)):SUCURSALES_NAMES;
+  const tksF=filtro?tickets.filter(t=>filtro.includes(t.sucursal_nombre)):tickets;
+  const ctsF=filtro?citas.filter(c=>filtro.includes(c.sucursal_nombre)):citas;
+  const metaDiarioF=filtro?metaDiario.filter(d=>filtro.includes(d.sucursal)):metaDiario;
+  const metaDiarioMesF=filtro?metaDiarioMes.filter(d=>filtro.includes(d.sucursal)):metaDiarioMes;
+  const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
+  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:["resumen","sucursales","servicios","meta","importar","pos","finanzas"];
+  const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
-  const ventasTotal=tickets.reduce((s,t)=>s+Number(t.total),0);
-  const nuevas=tickets.filter(t=>t.tipo_clienta==="Nueva").length;
-  const recompras=tickets.filter(t=>t.tipo_clienta==="Recompra").length;
-  const sesionesComp=citas.filter(c=>c.estado==="completada").length;
-  const sesionesAg=citas.filter(c=>c.estado==="agendada").length;
-  const ticketProm=tickets.length?ventasTotal/tickets.length:0;
-  const inv=metaData?.spend||0;
-  const msgs=metaData?.mensajes||0;
+  const ventasTotal=tksF.reduce((s,t)=>s+Number(t.total),0);
+  const nuevas=tksF.filter(t=>t.tipo_clienta==="Nueva").length;
+  const recompras=tksF.filter(t=>t.tipo_clienta==="Recompra").length;
+  const sesionesComp=ctsF.filter(c=>c.estado==="completada").length;
+  const sesionesAg=ctsF.filter(c=>c.estado==="agendada").length;
+  const ticketProm=tksF.length?ventasTotal/tksF.length:0;
+  const inv=(filtro&&metaData)?filtro.reduce((s,n)=>s+(metaData.porSucursal?.[n]?.spend||0),0):(metaData?.spend||0);
+  const msgs=(filtro&&metaData)?filtro.reduce((s,n)=>s+(metaData.porSucursal?.[n]?.mensajes||0),0):(metaData?.mensajes||0);
   const totalVentas=nuevas+recompras;
   const cpa=nuevas>0&&inv>0?inv/nuevas:0;
   const roas=inv>0?ventasTotal/inv:0;
@@ -910,9 +1617,9 @@ function Dashboard({onLogout}){
   const recompRatio=totalVentas>0?((recompras/totalVentas)*100).toFixed(0):"0";
 
   // ─── Por sucursal ──────────────────────────────────────────────────────────
-  const porSuc=SUCURSALES_NAMES.map(n=>{
-    const tks=tickets.filter(t=>t.sucursal_nombre===n);
-    const cts=citas.filter(c=>c.sucursal_nombre===n);
+  const porSuc=sucNames.map(n=>{
+    const tks=tksF.filter(t=>t.sucursal_nombre===n);
+    const cts=ctsF.filter(c=>c.sucursal_nombre===n);
     const v=tks.reduce((s,t)=>s+Number(t.total),0);
     const nv=tks.filter(t=>t.tipo_clienta==="Nueva").length;
     const rc=tks.filter(t=>t.tipo_clienta==="Recompra").length;
@@ -929,11 +1636,25 @@ function Dashboard({onLogout}){
   const maxMs=Math.max(...porSuc.map(s=>s.mensajes),1);
 
   // ─── Servicios y métodos ───────────────────────────────────────────────────
-  const sc={};tickets.forEach(t=>{(t.servicios||[]).forEach(s=>{sc[s]=(sc[s]||0)+1;});});const topS=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,8);const maxSvc=topS[0]?.[1]||1;
-  const met={};tickets.forEach(t=>{const m=(t.metodo_pago||"").split(" ")[0];met[m]=(met[m]||0)+Number(t.total);});const topM=Object.entries(met).sort((a,b)=>b[1]-a[1]);
-  const vD={};tickets.forEach(t=>{vD[t.fecha]=(vD[t.fecha]||0)+Number(t.total);});const dM=Object.entries(vD).sort((a,b)=>a[0].localeCompare(b[0]));const maxD=Math.max(...dM.map(d=>d[1]),1);
+  const sc={};tksF.forEach(t=>{(t.servicios||[]).forEach(s=>{sc[s]=(sc[s]||0)+1;});});const topS=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,8);const maxSvc=topS[0]?.[1]||1;
+  const met={};tksF.forEach(t=>{const m=(t.metodo_pago||"").split(" ")[0];met[m]=(met[m]||0)+Number(t.total);});const topM=Object.entries(met).sort((a,b)=>b[1]-a[1]);
+  const vD={};tksF.forEach(t=>{vD[t.fecha]=(vD[t.fecha]||0)+Number(t.total);});const dM=Object.entries(vD).sort((a,b)=>a[0].localeCompare(b[0]));const maxD=Math.max(...dM.map(d=>d[1]),1);
 
-  if(posSuc)return<POS session={posSuc} onSwitchSucursal={()=>setPosSuc(null)} isAdmin={true}/>;
+  // ─── Esta semana (siempre semana actual, independiente del periodo) ─────────
+  const semInicio=inicioSemana();
+  const ticketsSem=tksF.filter(t=>t.fecha>=semInicio);
+  const diasSem=(()=>{const arr=[];let d=new Date(semInicio+"T12:00:00");const h=hoy();while(d.toISOString().slice(0,10)<=h){const f=d.toISOString().slice(0,10);const tks=ticketsSem.filter(t=>t.fecha===f);arr.push({fecha:f,total:tks.reduce((s,t)=>s+Number(t.total),0),count:tks.length});d.setDate(d.getDate()+1);}return arr;})();
+  const semMaxD=Math.max(...diasSem.map(d=>d.total),1);
+  const totalSemana=diasSem.reduce((s,d)=>s+d.total,0);
+  const porSucSemana=sucNames.map(n=>{const tks=ticketsSem.filter(t=>t.sucursal_nombre===n);const total=tks.reduce((s,t)=>s+Number(t.total),0);const dias=diasSem.map(d=>{const dt=tks.filter(t=>t.fecha===d.fecha);return{fecha:d.fecha,total:dt.reduce((s,t)=>s+Number(t.total),0),count:dt.length};});return{nombre:n,total,dias};});
+  const maxVSem=Math.max(...porSucSemana.map(s=>s.total),1);
+
+  // ─── Métodos de pago con parseo de multi-pago ──────────────────────────────
+  const metCobro={};tksF.forEach(t=>{const mp=(t.metodo_pago||"").replace(/^Liquidación /i,"").replace(/^Anticipo /i,"");if(mp.includes(" + ")){mp.split(" + ").forEach(parte=>{const mm=parte.match(/^([\w][\w\s]*?)\s+\$([\d,]+)$/);if(mm){const k=mm[1].trim();const v=Number(mm[2].replace(/,/g,""));metCobro[k]=(metCobro[k]||0)+v;}else{const k=parte.split(" ")[0]||"—";metCobro[k]=(metCobro[k]||0)+Number(t.total);}});}else{const k=mp.split(" ")[0]||"—";metCobro[k]=(metCobro[k]||0)+Number(t.total);}});
+  const topMet=Object.entries(metCobro).filter(([k])=>k&&k!=="—").sort((a,b)=>b[1]-a[1]);
+  const maxMet=topMet[0]?.[1]||1;
+
+  if(posSuc)return<POS session={posSuc} onSwitchSucursal={()=>{setPosSuc(null);cargarDatos();}} isAdmin={true}/>;
   return(
     <div style={{minHeight:"100vh",background:"#0C0D1A",color:"#fff"}}>
       {/* Topbar */}
@@ -943,8 +1664,8 @@ function Dashboard({onLogout}){
           <div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
           <div style={{display:"flex"}}>
-            {["resumen","sucursales","servicios","meta","importar","pos"].map(t=><div key={t} className="tab-dash" style={{borderBottomColor:tab===t?"#2721E8":"transparent",color:tab===t?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setTab(t)}>
-              {{resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",importar:"📥 Importar",pos:"🖥 POS"}[t]}</div>)}
+            {TABS_DASH.map(t=><div key={t} className="tab-dash" style={{borderBottomColor:tab===t?"#2721E8":"transparent",color:tab===t?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setTab(t)}>
+              {{resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",importar:"📥 Importar",pos:"🖥 POS",finanzas:"Finanzas"}[t]}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
@@ -952,11 +1673,15 @@ function Dashboard({onLogout}){
           <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
             {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
           </div>
-          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>
+          {periodo==="mes"&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
+            {mesesOpciones.map(o=><option key={o.v} value={o.v} style={{background:"#0C0D1A",textTransform:"capitalize"}}>{o.l}</option>)}
+          </select>}
+          {periodo==="semana"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>}
           {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳</div>
             :metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>
             :metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
           <button className="btn-ghost" onClick={()=>{cargarDatos();cargarMeta();}}>↻</button>
+          {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ Solo ${sucursalesPropias.join(" & ")}`:`Solo mis sucursales`}</button>}
           <button className="btn-ghost" onClick={onLogout}>Salir</button>
         </div>
       </div>
@@ -991,16 +1716,88 @@ function Dashboard({onLogout}){
               <div style={{textAlign:"right"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)"}}>De {fmtN(msgs)} mensajes</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)"}}>{fmtN(totalVentas)} ventas cerradas</div></div>
             </div>
           </div>}
-          {/* Gráfica ventas por día */}
-          <div className="glass" style={{padding:"24px"}}>
-            <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>VENTAS POR DÍA</div>
-            <div style={{display:"flex",alignItems:"flex-end",gap:"4px",height:"140px"}}>
-              {dM.map(([f,m])=>{const p=m/maxD;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}><div style={{fontSize:"9px",fontWeight:600,color:"#49B8D3",marginBottom:"4px"}}>{m>=1000?`${(m/1000).toFixed(0)}k`:m}</div><div style={{width:"100%",maxWidth:"28px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#2721E8,#49B8D3)",borderRadius:"4px 4px 0 0"}}/><div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div></div>;})}
+          {/* ── Esta semana + Por sucursal ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
+            {/* Esta semana por sucursal (con desglose por día al hacer clic) */}
+            <div className="glass" style={{padding:"22px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"14px"}}>
+                <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>VENTAS ESTA SEMANA</div>
+                <div style={{fontSize:"15px",fontWeight:700,color:"#49B8D3"}}>{fmt(totalSemana)}</div>
+              </div>
+              {porSucSemana.slice().sort((a,b)=>b.total-a.total).map(s=>{const pct=maxVSem>0?s.total/maxVSem:0;const isOpen=expandedSucSem===s.nombre;const maxDiaSuc=Math.max(...s.dias.map(d=>d.total),1);return(
+                <div key={s.nombre} style={{marginBottom:"10px"}}>
+                  <div onClick={()=>setExpandedSucSem(isOpen?null:s.nombre)} style={{display:"grid",gridTemplateColumns:"auto 1fr 90px",gap:"8px",alignItems:"center",marginBottom:"5px",padding:"7px 10px",borderRadius:"8px",background:isOpen?"rgba(39,33,232,0.12)":"transparent",border:`1px solid ${isOpen?"rgba(39,33,232,0.3)":"transparent"}`,cursor:"pointer"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"7px",height:"7px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600,color:isOpen?"#fff":"rgba(255,255,255,0.8)"}}>{s.nombre}</span><span style={{fontSize:"9px",color:"rgba(255,255,255,0.2)"}}>{isOpen?"▲":"▼"}</span></div>
+                    <div style={{height:"4px",background:"rgba(255,255,255,0.06)",borderRadius:"2px"}}><div style={{width:`${pct*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"2px",transition:"width 0.3s"}}/></div>
+                    <div style={{fontSize:"13px",fontWeight:700,color:COLORES[s.nombre],textAlign:"right"}}>{s.total>0?fmt(s.total):"—"}</div>
+                  </div>
+                  {isOpen&&s.dias.map(d=>{const esHoy=d.fecha===hoy();const pctD=maxDiaSuc>0?d.total/maxDiaSuc:0;const dow=new Date(d.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short"});const dayNum=d.fecha.slice(8);return(
+                    <div key={d.fecha} style={{display:"grid",gridTemplateColumns:"52px 1fr 80px 22px",gap:"6px",alignItems:"center",marginBottom:"4px",padding:"6px 10px 6px 22px",borderRadius:"6px",background:esHoy?"rgba(39,33,232,0.08)":"rgba(255,255,255,0.02)"}}>
+                      <div style={{fontSize:"11px",fontWeight:esHoy?700:400,color:esHoy?"#fff":"rgba(255,255,255,0.4)",textTransform:"capitalize"}}>{dow} {dayNum}</div>
+                      <div style={{height:"3px",background:"rgba(255,255,255,0.05)",borderRadius:"2px"}}><div style={{width:`${pctD*100}%`,height:"100%",background:esHoy?COLORES[s.nombre]:`${COLORES[s.nombre]}66`,borderRadius:"2px",transition:"width 0.3s"}}/></div>
+                      <div style={{fontSize:"12px",fontWeight:esHoy?700:400,color:esHoy?COLORES[s.nombre]:"rgba(255,255,255,0.45)",textAlign:"right"}}>{d.total>0?fmt(d.total):"—"}</div>
+                      <div style={{fontSize:"10px",color:"rgba(255,255,255,0.2)",textAlign:"right"}}>{d.count>0?d.count:""}</div>
+                    </div>);})}
+                </div>);})}
+            </div>
+            {/* Por sucursal */}
+            <div className="glass" style={{padding:"22px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"14px"}}>POR SUCURSAL · {periodoLabel.toUpperCase()}</div>
+              {porSuc.slice().sort((a,b)=>b.ventas-a.ventas).map(s=>(
+                <div key={s.nombre} style={{marginBottom:"12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
+                    <div style={{display:"flex",gap:"12px",alignItems:"baseline"}}>
+                      <span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}><span style={{color:"#10b981"}}>{s.nuevas}</span> nv · <span style={{color:"#49B8D3"}}>{s.recompras}</span> rc</span>
+                      <span style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</span>
+                    </div>
+                  </div>
+                  <div style={{height:"4px",background:"rgba(255,255,255,0.06)",borderRadius:"2px"}}><div style={{width:`${maxV>0?(s.ventas/maxV)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"2px"}}/></div>
+                </div>))}
+              <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:"10px",display:"flex",justifyContent:"space-between",fontSize:"12px"}}>
+                <span style={{color:"rgba(255,255,255,0.35)"}}>Total {periodoLabel}</span>
+                <span style={{fontWeight:700,color:"#49B8D3"}}>{fmt(ventasTotal)}</span>
+              </div>
             </div>
           </div>
+
+          {/* ── Métodos de pago + Top servicios ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
+            {/* Métodos de pago */}
+            <div className="glass" style={{padding:"22px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"14px"}}>MÉTODOS DE PAGO · {periodoLabel.toUpperCase()}</div>
+              {topMet.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"16px"}}>Sin datos</div>}
+              {topMet.map(([m,v])=>(
+                <div key={m} style={{marginBottom:"10px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"4px"}}>
+                    <span style={{fontSize:"13px",fontWeight:500}}>{m}</span>
+                    <div style={{display:"flex",gap:"10px",alignItems:"baseline"}}>
+                      <span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>{ventasTotal>0?Math.round(v/ventasTotal*100):0}%</span>
+                      <span style={{fontSize:"14px",fontWeight:700,color:"#49B8D3"}}>{fmt(v)}</span>
+                    </div>
+                  </div>
+                  <div style={{height:"4px",background:"rgba(255,255,255,0.06)",borderRadius:"2px"}}><div style={{width:`${(v/maxMet)*100}%`,height:"100%",background:"linear-gradient(90deg,#2721E8,#49B8D3)",borderRadius:"2px"}}/></div>
+                </div>))}
+            </div>
+            {/* Top servicios */}
+            <div className="glass" style={{padding:"22px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"14px"}}>TOP SERVICIOS · {periodoLabel.toUpperCase()}</div>
+              {topS.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"16px"}}>Sin datos</div>}
+              {topS.map(([svc,cnt],i)=>(
+                <div key={svc} style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
+                  <div style={{fontSize:"11px",fontWeight:700,color:"rgba(255,255,255,0.2)",width:"16px",flexShrink:0}}>{i+1}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"12px",fontWeight:500,marginBottom:"3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{svc}</div>
+                    <div style={{height:"3px",background:"rgba(255,255,255,0.06)",borderRadius:"2px"}}><div style={{width:`${(cnt/maxSvc)*100}%`,height:"100%",background:"#2721E8",borderRadius:"2px"}}/></div>
+                  </div>
+                  <div style={{fontSize:"14px",fontWeight:700,color:"rgba(255,255,255,0.7)",flexShrink:0}}>{cnt}</div>
+                </div>))}
+            </div>
+          </div>
+
           {/* Gráfica mensajes recibidos por día */}
-          {metaDiario.length>0&&(()=>{
-            const filtrado=msgSucFiltro==="Todas"?metaDiario:metaDiario.filter(d=>d.sucursal===msgSucFiltro);
+          {metaDiarioF.length>0&&(()=>{
+            const filtrado=msgSucFiltro==="Todas"?metaDiarioF:metaDiarioF.filter(d=>d.sucursal===msgSucFiltro);
             const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
             const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
             const maxMsg=Math.max(...dias.map(d=>d[1]),1);
@@ -1013,7 +1810,7 @@ function Dashboard({onLogout}){
                 </div>
                 <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
                   <option value="Todas" style={{background:"#1a1b2e"}}>Todas las sucursales</option>
-                  {SUCURSALES_NAMES.map(s=><option key={s} value={s} style={{background:"#1a1b2e"}}>{s}</option>)}
+                  {sucNames.map(s=><option key={s} value={s} style={{background:"#1a1b2e"}}>{s}</option>)}
                 </select>
               </div>
               <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"160px"}}>
@@ -1024,7 +1821,7 @@ function Dashboard({onLogout}){
                 </div>;})}
               </div>
               {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
-                {SUCURSALES_NAMES.map(s=>{const t=metaDiario.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
+                {sucNames.map(s=>{const t=metaDiarioF.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
               </div>}
             </div>;
           })()}
@@ -1078,37 +1875,136 @@ function Dashboard({onLogout}){
 
         {/* ═══ META ADS ═══ */}
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-          {metaData&&!metaError&&<>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-              {[{l:"INVERSIÓN",v:fmt(metaData.spend),c:"#f97316"},{l:"MENSAJES",v:fmtN(metaData.mensajes),c:"#a855f7"},{l:"CPA",v:cpa>0?fmt(cpa):"—",c:cpa>0&&cpa<40?"#10b981":"#f0c040"},{l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",c:"#10b981"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
-            </div>
-            {/* Tabla mensajes por sucursal */}
-            <div className="glass" style={{overflow:"hidden"}}>
-              <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES vs VENTAS POR SUCURSAL</div></div>
-              <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 90px 90px 90px 80px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-                {["#","Sucursal","Mensajes","Inversión","Nuevas","CPA","Conv%"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+          {/* Selector de mes */}
+          {(()=>{const selSt={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"};
+          const ahora=new Date();const opts=Array.from({length:12},(_,i)=>{const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);const y=d.getFullYear(),m=d.getMonth()+1;const ym=`${y}-${String(m).padStart(2,"0")}`;const lbl=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return<option key={ym} value={ym} style={{background:"#1a1b2e"}}>{lbl.charAt(0).toUpperCase()+lbl.slice(1)}</option>;});
+          return<div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>PERÍODO</div>
+            <select value={metaMesSel} onChange={e=>setMetaMesSel(e.target.value)} style={selSt}>{opts}</select>
+            {loadingMetaMes?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳ cargando...</div>
+            :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>cargarMetaMes(metaMesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
+          </div>;})()}
+          {/* Datos del mes seleccionado */}
+          {metaDataMes&&!metaErrorMes&&(()=>{
+            const[mY,mM]=metaMesSel.split("-").map(Number);
+            const mesSelLabel=new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+            const porSucMes=sucNames.map(n=>{const ms=metaDataMes.porSucursal?.[n]?.mensajes||0;const sp=metaDataMes.porSucursal?.[n]?.spend||0;return{nombre:n,mensajes:ms,spend:sp};});
+            const maxMsMes=Math.max(...porSucMes.map(s=>s.mensajes),1);
+            const invMes=filtro?filtro.reduce((s,n)=>s+(metaDataMes.porSucursal?.[n]?.spend||0),0):metaDataMes.spend;
+            const msgsMes=filtro?filtro.reduce((s,n)=>s+(metaDataMes.porSucursal?.[n]?.mensajes||0),0):metaDataMes.mensajes;
+            return<>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+                {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDataMes.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDataMes.alcance),c:"#2721E8"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
               </div>
-              {porSuc.sort((a,b)=>b.mensajes-a.mensajes).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 90px 90px 90px 80px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center"}}>
-                <div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div>
-                <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
-                <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${s.mensajes>0?(s.mensajes/maxMs)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"3px"}}>{fmtN(s.mensajes)} msgs</div></div>
-                <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
-                <div style={{fontSize:"13px",fontWeight:600,color:"#10b981"}}>{s.nuevas}</div>
-                <div style={{fontSize:"13px",fontWeight:600,color:s.cpa>0&&s.cpa<40?"#10b981":s.cpa<60?"#f0c040":"#ff6b6b"}}>{s.cpa>0?fmt(s.cpa):"—"}</div>
-                <div style={{fontSize:"13px",fontWeight:600,color:parseFloat(s.conv)>=10?"#10b981":"rgba(255,255,255,0.3)"}}>{s.conv==="—"?"—":`${s.conv}%`}</div>
-              </div>)}
-            </div>
-            {/* Embudo */}
-            {metaData.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
-              <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO GLOBAL · {periodoLabel}</div>
-              <div style={{display:"flex",alignItems:"stretch"}}>
-                {[{label:"Alcance",value:fmtN(metaData.alcance),color:"#2721E8"},{label:"Clics",value:fmtN(metaData.clics),color:"#49B8D3",pct:metaData.alcance>0?((metaData.clics/metaData.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaData.mensajes),color:"#a855f7",pct:metaData.clics>0?((metaData.mensajes/metaData.clics)*100).toFixed(1):0},{label:"Ventas",value:fmtN(totalVentas),color:"#10b981",pct:metaData.mensajes>0?((totalVentas/metaData.mensajes)*100).toFixed(1):0}].map((e,i)=>
-                  <div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":i===3?"0 12px 12px 0":"0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}
+              <div className="glass" style={{overflow:"hidden"}}>
+                <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES E INVERSIÓN POR SUCURSAL · {mesSelLabel.toUpperCase()}</div></div>
+                <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 100px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+                  {["#","Sucursal","Mensajes","Inversión"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+                </div>
+                {porSucMes.sort((a,b)=>b.mensajes-a.mensajes).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 100px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center"}}>
+                  <div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
+                  <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${s.mensajes>0?(s.mensajes/maxMsMes)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"3px"}}>{fmtN(s.mensajes)} msgs</div></div>
+                  <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
+                </div>)}
               </div>
-            </div>}
-          </>}
-          {loadingMeta&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Conectando con Meta...</div>}
-          {!loadingMeta&&metaError&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaError}</div></div>}
+              {/* Gráfica diaria del mes */}
+              {metaDiarioMesF.length>0&&(()=>{
+                const selSt2={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"};
+                const filtrado=msgSucFiltro==="Todas"?metaDiarioMesF:metaDiarioMesF.filter(d=>d.sucursal===msgSucFiltro);
+                const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
+                const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
+                const maxMsg=Math.max(...dias.map(d=>d[1]),1);
+                const totalMsgFilt=dias.reduce((s,d)=>s+d[1],0);
+                return<div className="glass" style={{padding:"24px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+                    <div><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES POR DÍA · {mesSelLabel.toUpperCase()}</div><div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:"rgba(255,255,255,0.3)"}}>msgs · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div></div>
+                    <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={selSt2}>
+                      <option value="Todas" style={{background:"#1a1b2e"}}>Todas las sucursales</option>
+                      {sucNames.map(s=><option key={s} value={s} style={{background:"#1a1b2e"}}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"120px"}}>
+                    {dias.map(([f,m])=>{const p=m/maxMsg;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
+                      <div style={{fontSize:"9px",fontWeight:600,color:"#a855f7",marginBottom:"4px"}}>{m}</div>
+                      <div style={{width:"100%",maxWidth:"32px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#a855f7,#7c3aed)",borderRadius:"4px 4px 0 0"}}/>
+                      <div style={{fontSize:"8px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>{new Date(f+"T12:00:00").getDate()}</div>
+                    </div>;})}
+                  </div>
+                  {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
+                    {sucNames.map(s=>{const t=metaDiarioMesF.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
+                  </div>}
+                </div>;
+              })()}
+              {/* Embudo */}
+              {metaDataMes.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
+                <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO · {mesSelLabel.toUpperCase()}</div>
+                <div style={{display:"flex",alignItems:"stretch"}}>
+                  {[{label:"Alcance",value:fmtN(metaDataMes.alcance),color:"#2721E8"},{label:"Clics",value:fmtN(metaDataMes.clics),color:"#49B8D3",pct:metaDataMes.alcance>0?((metaDataMes.clics/metaDataMes.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaDataMes.mensajes),color:"#a855f7",pct:metaDataMes.clics>0?((metaDataMes.mensajes/metaDataMes.clics)*100).toFixed(1):0}].map((e,i)=>
+                    <div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":"0 12px 12px 0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}
+                </div>
+              </div>}
+            </>;
+          })()}
+          {/* Gráfica tendencia mensual */}
+          <div className="glass" style={{padding:"24px"}}>
+            {/* Header: título + toggle + dropdown */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px",gap:"12px",flexWrap:"wrap"}}>
+              <div><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>TENDENCIA MENSUAL</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginTop:"4px"}}>Últimos 6 meses · clic en barra para ver detalle</div></div>
+              <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+                {/* Toggle */}
+                <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:"8px",padding:"3px",border:"1px solid rgba(255,255,255,0.08)"}}>
+                  {[{k:"inversion",l:"Inversión",c:"#f97316"},{k:"mensajes",l:"Mensajes",c:"#a855f7"}].map(o=><button key={o.k} onClick={()=>setMetaChartMetrica(o.k)} style={{padding:"6px 14px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"'Albert Sans',sans-serif",transition:"all 0.2s",background:metaChartMetrica===o.k?o.c:"transparent",color:metaChartMetrica===o.k?"#fff":"rgba(255,255,255,0.4)"}}>{o.l}</button>)}
+                </div>
+                {/* Dropdown sucursal */}
+                <select value={metaHistSucFiltro} onChange={e=>setMetaHistSucFiltro(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+                  <option value="Todas" style={{background:"#1a1b2e"}}>Todas las sucursales</option>
+                  {sucNames.map(s=><option key={s} value={s} style={{background:"#1a1b2e"}}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            {loadingHist?<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Cargando historial...</div>:metaHistorial.length>0?(()=>{
+              const isInv=metaChartMetrica==="inversion";
+              const color=isInv?"#f97316":"#a855f7";
+              const colorAlpha=isInv?"rgba(249,115,22,0.35)":"rgba(168,85,247,0.35)";
+              const datos=metaHistorial.map(m=>{const v=metaHistSucFiltro==="Todas"?(isInv?m.spend:m.mensajes):(isInv?(m.porSucursal?.[metaHistSucFiltro]?.spend||0):(m.porSucursal?.[metaHistSucFiltro]?.mensajes||0));return{...m,val:v};});
+              const rawMax=Math.max(...datos.map(d=>d.val),1);
+              // Calcular "nice" max para el eje Y
+              const exp=Math.floor(Math.log10(rawMax));const base=Math.pow(10,exp);const norm=rawMax/base;
+              const niceMult=norm<=1?1:norm<=2?2:norm<=5?5:10;const niceMaxV=niceMult*base;
+              const ticks=[0,niceMaxV*0.25,niceMaxV*0.5,niceMaxV*0.75,niceMaxV];
+              const CHART_H=160;
+              const fmtTick=v=>isInv?(v>=1000?`$${Math.round(v/1000)}k`:`$${Math.round(v)}`):`${fmtN(Math.round(v))}`;
+              return<div style={{display:"flex",gap:"0"}}>
+                {/* Eje Y */}
+                <div style={{width:"52px",position:"relative",height:`${CHART_H+24}px`,flexShrink:0}}>
+                  {ticks.map((t,i)=><div key={i} style={{position:"absolute",bottom:`${24+(t/niceMaxV)*CHART_H}px`,right:"8px",fontSize:"9px",color:"rgba(255,255,255,0.3)",whiteSpace:"nowrap",transform:"translateY(50%)",textAlign:"right"}}>{fmtTick(t)}</div>)}
+                </div>
+                {/* Área de barras */}
+                <div style={{flex:1,position:"relative"}}>
+                  {/* Grid lines */}
+                  {ticks.map((t,i)=><div key={i} style={{position:"absolute",bottom:`${24+(t/niceMaxV)*CHART_H}px`,left:0,right:0,height:"1px",background:t===0?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.04)"}}/>)}
+                  {/* Barras */}
+                  <div style={{position:"absolute",bottom:"24px",left:0,right:0,height:`${CHART_H}px`,display:"flex",alignItems:"flex-end",gap:"8px"}}>
+                    {datos.map(d=>{
+                      const barH=Math.max((d.val/niceMaxV)*CHART_H,d.val>0?3:0);
+                      const isSel=d.ym===metaMesSel;
+                      return<div key={d.ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}} onClick={()=>setMetaMesSel(d.ym)}>
+                        {d.val>0&&<div style={{fontSize:"9px",color:isSel?color:"rgba(255,255,255,0.3)",marginBottom:"4px",fontWeight:isSel?700:400,transition:"all 0.2s"}}>{isInv?`$${Math.round(d.val/1000)}k`:fmtN(d.val)}</div>}
+                        <div style={{width:"80%",height:`${barH}px`,background:isSel?color:colorAlpha,borderRadius:"4px 4px 0 0",transition:"all 0.25s",boxShadow:isSel?`0 0 12px ${color}66`:""}}/>
+                      </div>;
+                    })}
+                  </div>
+                  {/* Eje X */}
+                  <div style={{position:"absolute",bottom:0,left:0,right:0,height:"20px",display:"flex",gap:"8px"}}>
+                    {datos.map(d=><div key={d.ym} style={{flex:1,textAlign:"center",fontSize:"10px",color:d.ym===metaMesSel?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.3)",fontWeight:d.ym===metaMesSel?700:400,transition:"all 0.2s"}}>{d.label}</div>)}
+                  </div>
+                </div>
+              </div>;
+            })():null}
+          </div>
+          {loadingMetaMes&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Conectando con Meta...</div>}
+          {!loadingMetaMes&&metaErrorMes&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorMes}</div></div>}
         </div>}
 
         {/* ═══ IMPORTAR ═══ */}
@@ -1117,7 +2013,7 @@ function Dashboard({onLogout}){
           {!posSuc?<div>
             <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"16px"}}>Selecciona la sucursal para importar:</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
-              {USUARIOS.filter(u=>u.rol==="sucursal").map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}>
+              {USUARIOS_DASH.map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}>
                 <div style={{fontSize:"24px",marginBottom:"8px"}}>📥</div>
                 <div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div>
                 <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importar datos →</div>
@@ -1151,7 +2047,145 @@ function Dashboard({onLogout}){
         </div>}
 
         {/* ═══ VER POS ═══ */}
-        {tab==="pos"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>SELECCIONA SUCURSAL</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>{USUARIOS.filter(u=>u.rol==="sucursal").map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}><div style={{width:"40px",height:"40px",borderRadius:"12px",background:`${s.color}22`,border:`1px solid ${s.color}44`,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px"}}>🖥</div><div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Ver POS →</div></div>)}</div></div>}
+        {tab==="pos"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>SELECCIONA SUCURSAL</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>{USUARIOS_DASH.map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}><div style={{width:"40px",height:"40px",borderRadius:"12px",background:`${s.color}22`,border:`1px solid ${s.color}44`,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px"}}>🖥</div><div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Ver POS →</div></div>)}</div></div>}
+
+        {/* ═══ FINANZAS ═══ */}
+        {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUTH HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+const hashPassword=async(pass)=>{
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("CIRE_2026:"+pass));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+};
+const randomCode=()=>{
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PRIMER LOGIN — cambiar contraseña + correo de recuperación
+// ══════════════════════════════════════════════════════════════════════════════
+function FirstLoginScreen({session,onComplete}){
+  useCSSInjection();
+  const[np,setNp]=useState("");const[nc,setNc]=useState("");const[email,setEmail]=useState("");
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  async function save(){
+    if(np.length<8){setErr("Mínimo 8 caracteres");return;}
+    if(np!==nc){setErr("Las contraseñas no coinciden");return;}
+    if(!email.includes("@")){setErr("Ingresa un correo válido");return;}
+    setLoading(true);setErr("");
+    const hash=await hashPassword(np);
+    const{error}=await supabase.from("system_users").update({password_hash:hash,email:email.trim().toLowerCase(),must_change_password:false}).eq("username",session.usuario);
+    if(error){setErr("Error al guardar. Intenta de nuevo.");setLoading(false);return;}
+    setLoading(false);onComplete();
+  }
+  return(
+    <div style={{minHeight:"100vh",background:"#0C0D1A",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Albert Sans',sans-serif",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"#2721E8",opacity:0.08,filter:"blur(100px)",top:"-150px",left:"-150px",pointerEvents:"none"}}/>
+      <div className="glass" style={{width:440,padding:"48px 44px",position:"relative"}}>
+        <div style={{textAlign:"center",marginBottom:"28px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"5px",color:"#49B8D3",marginBottom:"8px",fontWeight:500}}>BIENVENIDA</div>
+          <div style={{fontSize:"22px",fontWeight:700,color:"#fff",marginBottom:"6px"}}>Configura tu acceso</div>
+          <div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)"}}>Establece tu contraseña y correo de recuperación</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}>
+          <div>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA CONTRASEÑA</div>
+            <input className="inp" type="password" placeholder="Mínimo 8 caracteres" value={np} onChange={e=>setNp(e.target.value)} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>CONFIRMAR CONTRASEÑA</div>
+            <input className="inp" type="password" placeholder="Repite la contraseña" value={nc} onChange={e=>setNc(e.target.value)} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>CORREO DE RECUPERACIÓN</div>
+            <input className="inp" type="email" placeholder="tu@correo.com" value={email} onChange={e=>setEmail(e.target.value)} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)",marginTop:"5px"}}>Lo usarás si olvidas tu contraseña</div>
+          </div>
+          {err&&<div style={{color:"#ff6b6b",fontSize:"13px",textAlign:"center"}}>{err}</div>}
+        </div>
+        <button className="btn-blue" style={{width:"100%",padding:"14px",fontSize:"15px",borderRadius:"12px"}} onClick={save} disabled={loading}>{loading?"Guardando...":"Guardar y entrar →"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OLVIDÉ CONTRASEÑA
+// ══════════════════════════════════════════════════════════════════════════════
+function ForgotPasswordScreen({onBack}){
+  useCSSInjection();
+  const[step,setStep]=useState(1);
+  const[username,setUsername]=useState("");const[email,setEmail]=useState("");
+  const[code,setCode]=useState("");const[np,setNp]=useState("");const[nc,setNc]=useState("");
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const[generatedCode,setGeneratedCode]=useState("");const[done,setDone]=useState(false);
+
+  async function requestReset(){
+    if(!username.trim()||!email.trim()){setErr("Completa todos los campos");return;}
+    setLoading(true);setErr("");
+    const{data}=await supabase.from("system_users").select("id").eq("username",username.trim()).eq("email",email.trim().toLowerCase()).maybeSingle();
+    if(!data){setErr("No encontramos una cuenta con esos datos");setLoading(false);return;}
+    const rc=randomCode();
+    const expires=new Date(Date.now()+30*60*1000).toISOString();
+    await supabase.from("system_users").update({reset_code:rc,reset_expires:expires}).eq("username",username.trim());
+    setGeneratedCode(rc);setStep(2);setLoading(false);
+  }
+  async function confirmReset(){
+    if(!code.trim()||!np||!nc){setErr("Completa todos los campos");return;}
+    if(np!==nc){setErr("Las contraseñas no coinciden");return;}
+    if(np.length<8){setErr("Mínimo 8 caracteres");return;}
+    setLoading(true);setErr("");
+    const{data}=await supabase.from("system_users").select("reset_expires").eq("username",username.trim()).eq("reset_code",code.trim().toUpperCase()).maybeSingle();
+    if(!data||new Date(data.reset_expires)<new Date()){setErr("Código inválido o expirado");setLoading(false);return;}
+    const hash=await hashPassword(np);
+    await supabase.from("system_users").update({password_hash:hash,reset_code:null,reset_expires:null}).eq("username",username.trim());
+    setDone(true);setLoading(false);
+  }
+  if(done)return(
+    <div style={{minHeight:"100vh",background:"#0C0D1A",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Albert Sans',sans-serif"}}>
+      <div className="glass" style={{width:420,padding:"48px 44px",textAlign:"center"}}>
+        <div style={{fontSize:"48px",marginBottom:"16px"}}>✓</div>
+        <div style={{fontSize:"20px",fontWeight:700,marginBottom:"8px"}}>¡Contraseña actualizada!</div>
+        <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"28px"}}>Ya puedes iniciar sesión con tu nueva contraseña</div>
+        <button className="btn-blue" style={{padding:"12px 32px",borderRadius:"12px"}} onClick={onBack}>Ir al inicio →</button>
+      </div>
+    </div>
+  );
+  return(
+    <div style={{minHeight:"100vh",background:"#0C0D1A",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Albert Sans',sans-serif",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"#2721E8",opacity:0.08,filter:"blur(100px)",top:"-150px",left:"-150px",pointerEvents:"none"}}/>
+      <div className="glass" style={{width:440,padding:"48px 44px",position:"relative"}}>
+        <button className="btn-ghost" style={{fontSize:"11px",marginBottom:"24px"}} onClick={onBack}>← Volver al inicio</button>
+        <div style={{marginBottom:"28px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"5px",color:"#49B8D3",marginBottom:"8px",fontWeight:500}}>RECUPERAR ACCESO</div>
+          <div style={{fontSize:"20px",fontWeight:700,color:"#fff",marginBottom:"4px"}}>{step===1?"Verificar identidad":"Código de recuperación"}</div>
+          <div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)"}}>{step===1?"Ingresa tu usuario y correo registrado":"Ingresa el código que aparece abajo y tu nueva contraseña"}</div>
+        </div>
+        {step===1&&<div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}>
+          <input className="inp" placeholder="Usuario" value={username} onChange={e=>setUsername(e.target.value)} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          <input className="inp" type="email" placeholder="Correo registrado" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&requestReset()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          {err&&<div style={{color:"#ff6b6b",fontSize:"13px",textAlign:"center"}}>{err}</div>}
+          <button className="btn-blue" style={{width:"100%",padding:"14px",fontSize:"15px",borderRadius:"12px"}} onClick={requestReset} disabled={loading}>{loading?"Verificando...":"Continuar →"}</button>
+        </div>}
+        {step===2&&<div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}>
+          <div style={{background:"rgba(39,33,232,0.12)",border:"1px solid rgba(39,33,232,0.4)",borderRadius:"12px",padding:"20px",textAlign:"center",marginBottom:"4px"}}>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",letterSpacing:"2px",marginBottom:"8px"}}>TU CÓDIGO DE RECUPERACIÓN</div>
+            <div style={{fontSize:"32px",fontWeight:700,letterSpacing:"6px",color:"#49B8D3",fontFamily:"monospace"}}>{generatedCode}</div>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginTop:"8px"}}>Válido por 30 minutos · cópialo antes de continuar</div>
+          </div>
+          <input className="inp" placeholder="Pega el código aquí" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px",letterSpacing:"3px",textAlign:"center"}}/>
+          <input className="inp" type="password" placeholder="Nueva contraseña (mín. 8 caracteres)" value={np} onChange={e=>setNp(e.target.value)} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          <input className="inp" type="password" placeholder="Confirmar contraseña" value={nc} onChange={e=>setNc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmReset()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+          {err&&<div style={{color:"#ff6b6b",fontSize:"13px",textAlign:"center"}}>{err}</div>}
+          <button className="btn-blue" style={{width:"100%",padding:"14px",fontSize:"15px",borderRadius:"12px"}} onClick={confirmReset} disabled={loading}>{loading?"Actualizando...":"Cambiar contraseña →"}</button>
+        </div>}
       </div>
     </div>
   );
@@ -1162,20 +2196,69 @@ function Dashboard({onLogout}){
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App(){
   useCSSInjection();
-  const[session,setSession]=useState(null);const[user,setUser]=useState("");const[pass,setPass]=useState("");const[err,setErr]=useState("");
-  function login(){const f=USUARIOS.find(u=>u.usuario===user.trim()&&u.password===pass);if(f){setSession(f);setErr("");}else setErr("Usuario o contraseña incorrectos");}
-  if(!session)return(
-    <div style={{minHeight:"100vh",background:"#0C0D1A",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Albert Sans',sans-serif",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"#2721E8",opacity:0.08,filter:"blur(100px)",top:"-150px",left:"-150px",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"#49B8D3",opacity:0.06,filter:"blur(80px)",bottom:"0px",right:"0px",pointerEvents:"none"}}/>
-      <div className="glass" style={{width:420,padding:"52px 44px",position:"relative"}}>
-        <div style={{textAlign:"center",marginBottom:"36px"}}><div style={{fontSize:"10px",letterSpacing:"5px",color:"#49B8D3",marginBottom:"10px",fontWeight:500}}>SISTEMA INTERNO</div><div style={{fontSize:"42px",fontWeight:700,color:"#fff",letterSpacing:"8px",lineHeight:1}}>CIRE</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.25)",marginTop:"8px",letterSpacing:"1px"}}>Depilación Láser</div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}><input className="inp" placeholder="Usuario" value={user} onChange={e=>setUser(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/><input className="inp" type="password" placeholder="Contraseña" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>{err&&<div style={{color:"#ff6b6b",fontSize:"13px",textAlign:"center"}}>{err}</div>}</div>
-        <button className="btn-blue" style={{width:"100%",padding:"14px",fontSize:"15px",borderRadius:"12px"}} onClick={login}>Entrar →</button>
-        <div style={{marginTop:"20px",fontSize:"10px",color:"rgba(255,255,255,0.1)",textAlign:"center",letterSpacing:"2px"}}>ACCESO RESTRINGIDO</div>
+  const[session,setSession]=useState(null);
+  const[supaUser,setSupaUser]=useState(null);
+  const[user,setUser]=useState("");const[pass,setPass]=useState("");
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const[showForgot,setShowForgot]=useState(false);
+  const[mustChange,setMustChange]=useState(false);
+
+  async function login(){
+    if(!user.trim()||!pass){setErr("Completa usuario y contraseña");return;}
+    setLoading(true);setErr("");
+    try{
+      const hardcoded=USUARIOS.find(u=>u.usuario===user.trim());
+      if(!hardcoded){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
+      const{data:supaRec}=await supabase.from("system_users").select("*").eq("username",user.trim()).maybeSingle();
+      if(supaRec){
+        const hash=await hashPassword(pass);
+        if(hash!==supaRec.password_hash){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
+        setSession(hardcoded);setSupaUser(supaRec);
+        if(supaRec.must_change_password)setMustChange(true);
+      }else{
+        if(hardcoded.password!==pass){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
+        const hash=await hashPassword(pass);
+        const{data:newRec}=await supabase.from("system_users").insert([{id:hardcoded.id,username:hardcoded.usuario,password_hash:hash,must_change_password:true}]).select().maybeSingle();
+        setSession(hardcoded);setSupaUser(newRec||{must_change_password:true});
+        setMustChange(true);
+      }
+    }catch(e){setErr("Error de conexión. Intenta de nuevo.");}
+    setLoading(false);
+  }
+
+  function logout(){setSession(null);setSupaUser(null);setMustChange(false);}
+
+  if(!session){
+    if(showForgot)return<ForgotPasswordScreen onBack={()=>setShowForgot(false)}/>;
+    return(
+      <div style={{minHeight:"100vh",background:"#0C0D1A",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Albert Sans',sans-serif",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"#2721E8",opacity:0.08,filter:"blur(100px)",top:"-150px",left:"-150px",pointerEvents:"none"}}/>
+        <div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"#49B8D3",opacity:0.06,filter:"blur(80px)",bottom:"0px",right:"0px",pointerEvents:"none"}}/>
+        <div className="glass" style={{width:420,padding:"52px 44px",position:"relative"}}>
+          <div style={{textAlign:"center",marginBottom:"36px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"5px",color:"#49B8D3",marginBottom:"10px",fontWeight:500}}>SISTEMA INTERNO</div>
+            <div style={{fontSize:"42px",fontWeight:700,color:"#fff",letterSpacing:"8px",lineHeight:1}}>CIRE</div>
+            <div style={{fontSize:"12px",color:"rgba(255,255,255,0.25)",marginTop:"8px",letterSpacing:"1px"}}>Depilación Láser</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"20px"}}>
+            <input className="inp" placeholder="Usuario" value={user} onChange={e=>setUser(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+            <input className="inp" type="password" placeholder="Contraseña" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} style={{padding:"13px 16px",fontSize:"14px",borderRadius:"12px"}}/>
+            {err&&<div style={{color:"#ff6b6b",fontSize:"13px",textAlign:"center"}}>{err}</div>}
+          </div>
+          <button className="btn-blue" style={{width:"100%",padding:"14px",fontSize:"15px",borderRadius:"12px"}} onClick={login} disabled={loading}>{loading?"Verificando...":"Entrar →"}</button>
+          <div style={{marginTop:"16px",textAlign:"center"}}>
+            <button onClick={()=>setShowForgot(true)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",fontSize:"12px",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",textDecoration:"underline"}}>Olvidé mi contraseña</button>
+          </div>
+          <div style={{marginTop:"12px",fontSize:"10px",color:"rgba(255,255,255,0.1)",textAlign:"center",letterSpacing:"2px"}}>ACCESO RESTRINGIDO</div>
+        </div>
       </div>
-    </div>
-  );
-  if(session.rol==="admin")return<Dashboard onLogout={()=>setSession(null)}/>;
-  return<POS session={session} onSwitchSucursal={()=>setSession(null)} isAdmin={false}/>;
+    );
+  }
+
+  if(mustChange)return<FirstLoginScreen session={session} onComplete={()=>setMustChange(false)}/>;
+
+  if(session.rol==="admin")return<Dashboard onLogout={logout}/>;
+  if(session.rol==="duena_general")return<Dashboard onLogout={logout} sucursalesPropias={session.sucursalesPropias}/>;
+  if(session.rol==="socia")return<Dashboard onLogout={logout} sucursalesFiltro={session.sucursales}/>;
+  return<POS session={session} onSwitchSucursal={logout} isAdmin={false}/>;
 }
