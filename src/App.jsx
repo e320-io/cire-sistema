@@ -238,7 +238,7 @@ function AgendaCalendar({session,onVerFicha}){
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
   const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
   const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});
-  const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);
+  const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);const[modalReagendar,setModalReagendar]=useState(false);const[citaReagendar,setCitaReagendar]=useState(null);const[fechaRe,setFechaRe]=useState("");const[horaRe,setHoraRe]=useState("");
   const mRef=useRef(true);useEffect(()=>{mRef.current=true;return()=>{mRef.current=false;};},[]);
   const cargar=async()=>{const{data}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).gte("fecha",semana[0]).lte("fecha",semana[5]).order("hora_inicio");if(data)setCitas(data);};
   useEffect(()=>{cargar();},[semana,session]);
@@ -261,6 +261,12 @@ function AgendaCalendar({session,onVerFicha}){
     setModalSig(false);setCitaComp(null);cargar();
   }catch(e){console.error(e);}setSaving(false);};
   const cancelar=async(id,pId,sU)=>{await supabase.from("citas").update({estado:"cancelada"}).eq("id",id);if(pId)await supabase.from("paquetes").update({sesiones_usadas:Math.max(0,sU-1),activo:true}).eq("id",pId);setDetalle(null);cargar();};
+  const reagendar=async()=>{if(!fechaRe||!horaRe||!citaReagendar)return;setSaving(true);try{
+    const dur=TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion||60;
+    await supabase.from("citas").update({estado:"cancelada"}).eq("id",citaReagendar.id);
+    await supabase.from("citas").insert([{clienta_id:citaReagendar.clienta_id,clienta_nombre:citaReagendar.clienta_nombre,paquete_id:citaReagendar.paquete_id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:citaReagendar.servicio,tipo_servicio:citaReagendar.tipo_servicio,duracion_min:dur,fecha:fechaRe,hora_inicio:horaRe,hora_fin:horaFin(horaRe,dur),sesion_numero:citaReagendar.sesion_numero,es_cobro:citaReagendar.es_cobro,estado:"agendada",notas:`Reagendada · Antes: ${citaReagendar.fecha} ${citaReagendar.hora_inicio}`+(citaReagendar.notas?` · ${citaReagendar.notas}`:"")}]);
+    setModalReagendar(false);setCitaReagendar(null);setDetalle(null);cargar();
+  }catch(e){console.error(e);}setSaving(false);};
   const guardarParametros=async()=>{if(!detalle)return;setSavingParams(true);try{await supabase.from("citas").update({parametros_equipo:parametrosEdit}).eq("id",detalle.id);setDetalle({...detalle,parametros_equipo:parametrosEdit});cargar();}catch(e){console.error(e);}setSavingParams(false);};
 
   // Intercepta "Completada" — si hay anticipo pendiente o cita sin anticipo, abre modal de cobro primero
@@ -318,9 +324,9 @@ function AgendaCalendar({session,onVerFicha}){
           {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f);return(
             <div key={f} style={{borderLeft:"1px solid rgba(255,255,255,0.05)",position:"relative",opacity:a?1:0.3}}>
               {HORAS.map(h=><div key={h} style={{height:"64px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}/>)}
-              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro;return(
-                <div key={c.id} onClick={e=>{e.stopPropagation();setDetalle(c);}} style={{position:"absolute",left:"2px",right:"2px",top:`${top}px`,height:`${height}px`,background:`${col}28`,border:`1px solid ${col}70`,borderLeft:`3px solid ${sinAnt?"#f97316":col}`,borderRadius:"6px",padding:"3px 6px",cursor:"pointer",overflow:"hidden",zIndex:5}} onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                  <div style={{fontSize:"10px",fontWeight:700,color:col,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sinAnt?"⚠⚠ ":aparto?"💰💰 ":liquido?"✅✅ ":""}{c.hora_inicio} {c.clienta_nombre}</div>
+              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada");return(
+                <div key={c.id} onClick={e=>{e.stopPropagation();setDetalle(c);}} style={{position:"absolute",left:"2px",right:"2px",top:`${top}px`,height:`${height}px`,background:`${col}28`,border:`1px solid ${col}70`,borderLeft:`3px solid ${sinAnt?"#f97316":reag?"#f59e0b":col}`,borderRadius:"6px",padding:"3px 6px",cursor:"pointer",overflow:"hidden",zIndex:5}} onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                  <div style={{fontSize:"10px",fontWeight:700,color:col,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sinAnt?"⚠⚠ ":aparto?"💰💰 ":liquido?"✅✅ ":reag?"↻ ":""}{c.hora_inicio} {c.clienta_nombre}</div>
                   {height>30&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.5)",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.servicio}</div>}
                 </div>);})}
               {f===hoy()&&(()=>{const n=new Date(),m=(n.getHours()-9)*60+n.getMinutes();if(m<0||m>720)return null;return<div style={{position:"absolute",left:0,right:0,top:`${m*PX_POR_MIN}px`,height:"2px",background:"#ff4444",zIndex:6,pointerEvents:"none"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#ff4444",position:"absolute",left:"-4px",top:"-3px"}}/></div>;})()}
@@ -328,7 +334,7 @@ function AgendaCalendar({session,onVerFicha}){
         </div>
       </div>
       {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorCita(detalle)}44`}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:"16px"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"3px"}}>CITA</div><div style={{fontSize:"18px",fontWeight:700}}>{detalle.clienta_nombre}</div></div><button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button></div>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:"16px"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"3px"}}>CITA</div><div style={{fontSize:"18px",fontWeight:700}}>{detalle.clienta_nombre}</div>{detalle.notas?.startsWith("Reagendada")&&<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"10px",background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.3)",color:"#f59e0b",marginTop:"4px",display:"inline-block"}}>↻ Reagendada</div>}</div><button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button></div>
         <div style={{display:"flex",flexDirection:"column",gap:"9px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",padding:"14px",marginBottom:"12px"}}>
           {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`],["Sesión",`${detalle.sesion_numero}`]].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500}}>{v}</span></div>)}
         </div>
@@ -369,7 +375,7 @@ function AgendaCalendar({session,onVerFicha}){
         {detalle.notas?.match(/Anticipo \$(\d+)/)&&!detalle.es_cobro&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>💰 {detalle.notas.match(/Anticipo \$\d+ \w+/)?.[0]} pagado · <span style={{fontWeight:700}}>pendiente de liquidar</span></div>}
         {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}
         <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
-          {detalle.estado==="agendada"&&<><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button><button className="btn-blue" style={{flex:2}} onClick={()=>abrirCobro(detalle)}>✓ Completada</button></>}
+          {detalle.estado==="agendada"&&<><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button>{!detalle.notas?.startsWith("Reagendada")&&<button className="btn-ghost" style={{flex:1,color:"#f59e0b",borderColor:"rgba(245,158,11,0.3)"}} onClick={()=>{setCitaReagendar(detalle);setFechaRe("");setHoraRe("");setModalReagendar(true);}}>↻ Reagendar</button>}<button className="btn-blue" style={{flex:2}} onClick={()=>abrirCobro(detalle)}>✓ Completada</button></> }
           {detalle.estado==="completada"&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"#10b981",fontWeight:600}}>✓ Completada</div>}
           {detalle.estado==="cancelada"&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"rgba(255,255,255,0.3)"}}>Cancelada</div>}
         </div>
@@ -421,6 +427,14 @@ function AgendaCalendar({session,onVerFicha}){
         {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>SELECCIONA HORA (toca un espacio libre)</div><MiniAgendaDia session={session} fecha={fechaSig} onSelectHora={h=>setHoraSig(h)} horaSeleccionada={horaSig} duracion={TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio)?.duracion||60}/></div>}
         {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalSig(false);setCitaComp(null);}}>No por ahora</button><button className="btn-blue" style={{flex:2,padding:"12px"}} disabled={!fechaSig||!horaSig||saving||new Date(fechaSig+"T12:00:00").getDay()===0} onClick={agSig}>{saving?"Agendando...":"✓ Agendar siguiente"}</button></div>
+      </div></div>}
+
+      {modalReagendar&&citaReagendar&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
+        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sesión {citaReagendar.sesion_numero} de {citaReagendar.clienta_nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.25)",marginTop:"4px"}}>Fecha actual: {new Date(citaReagendar.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {citaReagendar.hora_inicio}</div></div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRe} min={hoy()} onChange={e=>{setFechaRe(e.target.value);setHoraRe("");}} style={{colorScheme:"dark"}}/></div>
+        {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRe} onSelectHora={h=>setHoraRe(h)} horaSeleccionada={horaRe} duracion={TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion||60}/></div>}
+        {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
+        <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalReagendar(false);setCitaReagendar(null);}}>Cancelar</button><button className="btn-ghost" style={{flex:2,padding:"12px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontWeight:600,fontSize:"13px"}} disabled={!fechaRe||!horaRe||saving||new Date(fechaRe+"T12:00:00").getDay()===0} onClick={reagendar}>{saving?"Reagendando...":"↻ Confirmar reagendamiento"}</button></div>
       </div></div>}
     </div>
   );
@@ -491,6 +505,68 @@ function AjustesTerminales({session}){
           <button className="btn-blue" onClick={guardar} disabled={saving} style={{fontSize:"13px",padding:"10px 24px"}}>{saving?"Guardando...":"Guardar cambios"}</button>
           {msg&&<span style={{fontSize:"12px",color:msg.startsWith("✓")?"#10b981":"#ff6b6b"}}>{msg}</span>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONFIRMACIONES MAÑANA — resumen de citas con liga WhatsApp
+// ══════════════════════════════════════════════════════════════════════════════
+function ConfirmacionesManana({session}){
+  const[citas,setCitas]=useState([]);const[loading,setLoading]=useState(true);
+  const manana=()=>{const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);};
+  const cargar=async()=>{
+    setLoading(true);
+    const fecha=manana();
+    const{data:citasData}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).eq("fecha",fecha).neq("estado","cancelada").order("hora_inicio");
+    const ids=[...new Set((citasData||[]).map(c=>c.clienta_id).filter(Boolean))];
+    let cliMap={};
+    if(ids.length>0){const{data:cliData}=await supabase.from("clientas").select("id,telefono").in("id",ids);cliMap=Object.fromEntries((cliData||[]).map(c=>[c.id,c]));}
+    setCitas((citasData||[]).map(c=>({...c,telefono:cliMap[c.clienta_id]?.telefono||null})));
+    setLoading(false);
+  };
+  useEffect(()=>{cargar();},[session.id]);
+  const formatWA=(tel)=>{if(!tel)return null;const clean=tel.replace(/\D/g,"");if(clean.length===10)return"521"+clean;if(clean.startsWith("521")&&clean.length===13)return clean;if(clean.startsWith("52")&&clean.length===12)return"521"+clean.slice(2);return clean;};
+  const msgWA=(c)=>{return encodeURIComponent(`Hola! 👋🏻 Buenas tardes ❣️\n\nTe contacto de 𝗖𝗜𝗥𝗘 𝗗𝗘𝗣𝗜𝗟𝗔𝗖𝗜𝗢́𝗡\n\n📆 Confirmando tu cita de ${c.servicio} el día de mañana a las ${c.hora_inicio}\n\nRecuerda: 🗒️\n\n- Debes venir con la zona(s) completamente 𝗿𝗮𝘀𝘂𝗿𝗮𝗱𝗮 𝘆 𝗹𝗶𝗺𝗽𝗶𝗮.\n- Si estás tomando algún 𝗺𝗲𝗱𝗶𝗰𝗮𝗺𝗲𝗻𝘁𝗼, deberás informar a nuestra cosmetóloga o por este medio.\n- 🩸 Sí puedes asistir en tu 𝗽𝗲𝗿𝗶𝗼𝗱𝗼 𝗺𝗲𝗻𝘀𝘁𝗿𝘂𝗮𝗹 aunque la zona a depilar es bikini 👙 o si es cualquier otra 𝘇𝗼𝗻𝗮 𝗮 𝗱𝗲𝗽𝗶𝗹𝗮𝗿, solo te comentamos que podrías estar más sensible, en caso de bikini, venir aseada y con tampón.\n- Si no asistes a tu sesión, se tomará como 𝗮𝘀𝗶𝘀𝘁𝗶𝗱𝗮 𝘆 𝗽𝗲𝗿𝗱𝗲𝗿𝗮́𝘀 𝗹𝗮 𝗺𝗶𝘀𝗺𝗮.\n- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.\n\nAgradezco tu 𝗖𝗢𝗡𝗙𝗜𝗥𝗠𝗔𝗖𝗜𝗢́𝗡 o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos 12 hrs de anticipación (antes de las 8pm de un día antes).\n\nTe recordamos que las 𝗰𝗮𝗻𝗰𝗲𝗹𝗮𝗰𝗶𝗼𝗻𝗲𝘀 son con 𝟭𝟮 𝗵𝗼𝗿𝗮𝘀 𝗱𝗲 𝗮𝗻𝘁𝗶𝗰𝗶𝗽𝗮𝗰𝗶𝗼́𝗻 (horario para cancelar Máximo 8 pm del día anterior)\n\nTienes 𝟭𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia en caso de Cuerpos completos, combos, y/o zonas amplias.\nY 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia en caso de zonas chicas como: rostro, axilas, bigote, etc.\nTienes 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia si tu cita es a las 7:00 o 7:30 pm.\n\nToma tus precauciones (tráfico, parquímetro, etc)\n\nCita 𝗰𝗼𝗻𝗳𝗶𝗿𝗺𝗮𝗱𝗮 y 𝗻𝗼 𝗮𝘀𝗶𝘀𝘁𝗶𝗱𝗮 se toma como servicio efectuado\n\nSolo se puede 𝗿𝗲𝗮𝗴𝗲𝗻𝗱𝗮𝗿 𝗨𝗡𝗔 𝗩𝗘𝗭 (si no estás segura de tu cita, puedes dejar abierta tu cita)\n\n𝗦𝗮́𝗯𝗮𝗱𝗼𝘀 el tiempo de tolerancia es de 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 y tiempo límite para reagendar o cancelar es 𝟰𝟴𝗵𝗿𝘀 𝗮𝗻𝘁𝗲𝘀 de tu cita.`);};
+  const fechaManana=manana();
+  const diaLabel=new Date(fechaManana+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
+  return(
+    <div style={{flex:1,overflowY:"auto",padding:"24px"}}>
+      <div style={{maxWidth:"700px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+          <div><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>CONFIRMACIONES</div><div style={{fontSize:"15px",fontWeight:600,textTransform:"capitalize"}}>{diaLabel}</div></div>
+          <button className="btn-ghost" onClick={cargar} style={{fontSize:"11px"}}>↻ Actualizar</button>
+        </div>
+        {loading&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Cargando...</div>}
+        {!loading&&citas.length===0&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.15)",fontSize:"13px"}}>Sin citas para mañana</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+          {citas.map(c=>{
+            const waPhone=formatWA(c.telefono);
+            const waLink=waPhone?`https://wa.me/${waPhone}?text=${msgWA(c)}`:null;
+            const esReagendada=c.notas?.startsWith("Reagendada");
+            return(
+              <div key={c.id} className="glass" style={{padding:"16px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px",flexWrap:"wrap"}}>
+                      <div style={{fontSize:"15px",fontWeight:700}}>{c.clienta_nombre}</div>
+                      {esReagendada&&<div style={{fontSize:"9px",padding:"2px 7px",borderRadius:"10px",background:"rgba(245,158,11,0.12)",color:"#f59e0b",border:"1px solid rgba(245,158,11,0.3)",flexShrink:0}}>↻ Reagendada</div>}
+                    </div>
+                    <div style={{fontSize:"12px",color:"rgba(255,255,255,0.5)",marginBottom:"3px"}}>{c.hora_inicio} · {c.servicio}</div>
+                    <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Sesión {c.sesion_numero} · {c.telefono||<span style={{color:"rgba(255,100,100,0.5)"}}>Sin teléfono</span>}</div>
+                  </div>
+                  {waLink?(
+                    <a href={waLink} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"6px",padding:"10px 16px",borderRadius:"10px",background:"rgba(37,211,102,0.1)",border:"1px solid rgba(37,211,102,0.3)",color:"#25d366",fontSize:"12px",fontWeight:600,textDecoration:"none",flexShrink:0,whiteSpace:"nowrap"}}>WhatsApp →</a>
+                  ):(
+                    <div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)",flexShrink:0}}>Sin teléfono</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {!loading&&citas.length>0&&<div style={{marginTop:"16px",padding:"12px 16px",background:"rgba(39,33,232,0.06)",border:"1px solid rgba(39,33,232,0.15)",borderRadius:"10px",fontSize:"12px",color:"rgba(255,255,255,0.35)",textAlign:"center"}}>{citas.length} cita{citas.length!==1?"s":""} mañana · {citas.filter(c=>c.telefono).length} con WhatsApp disponible</div>}
       </div>
     </div>
   );
@@ -591,9 +667,9 @@ function POS({session,onSwitchSucursal,isAdmin}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)",fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","clientas","historial","importar","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)"}}
+            {["pos","agenda","confirmar","clientas","historial","importar","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)"}}
               onClick={()=>{setView(v);setFichaId(null);if(v==="historial")cargarT(session.id);if(v==="clientas")cargarCli("");}}>
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="clientas"?"👤 Clientas":v==="importar"?"📥 Importar":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="importar"?"📥 Importar":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -628,6 +704,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
       </div>}
 
       {view==="ajustes"&&<AjustesTerminales session={session}/>}
+      {view==="confirmar"&&<ConfirmacionesManana session={session}/>}
 
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>HISTORIAL · {session.nombre}</div>
