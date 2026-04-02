@@ -1538,23 +1538,31 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
   useEffect(()=>{cargar();setAiTxt("");},[periodo]);
 
+  const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro"]);
   const pl=(suc)=>{
     const ing=ventas[suc]||0;
     const g=gastos.filter(x=>x.sucursal_id===suc);
-    const cont=3100;const meta=metaGs[suc]||0;
+    const cont=g.filter(x=>x.categoria==="contenido_digital").reduce((s,x)=>s+Number(x.monto),0);
+    const plt=g.filter(x=>x.categoria==="plataforma_cire").reduce((s,x)=>s+Number(x.monto),0);
+    const meta=metaGs[suc]||0;
     const nom=g.filter(x=>x.categoria==="nomina").reduce((s,x)=>s+Number(x.monto),0);
     const ren=g.filter(x=>x.categoria==="renta").reduce((s,x)=>s+Number(x.monto),0);
     const svc=g.filter(x=>x.categoria==="servicios").reduce((s,x)=>s+Number(x.monto),0);
     const otr=g.filter(x=>x.categoria==="otro").reduce((s,x)=>s+Number(x.monto),0);
-    const egr=cont+meta+nom+ren+svc+otr;
+    const customCats=[...new Set(g.filter(x=>!CATS_FIJAS.has(x.categoria)).map(x=>x.categoria))];
+    const customItems=customCats.map(cat=>{const items=g.filter(x=>x.categoria===cat);return{cat,label:cat,monto:items.reduce((s,x)=>s+Number(x.monto),0),items};});
+    const customTotal=customItems.reduce((s,c)=>s+c.monto,0);
+    const egr=cont+plt+meta+nom+ren+svc+otr+customTotal;
     const util=ing-egr;
-    return{ing,cont,meta,nom,ren,svc,otr,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina")};
+    return{ing,cont,plt,meta,nom,ren,svc,otr,customItems,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina")};
   };
 
   const plC=(sucs)=>{
     const ps=sucs.map(s=>pl(s));const sm=k=>ps.reduce((a,p)=>a+p[k],0);
+    const customMap={};ps.forEach(p=>p.customItems.forEach(c=>{customMap[c.cat]=(customMap[c.cat]||0)+c.monto;}));
+    const customItems=Object.entries(customMap).map(([cat,monto])=>({cat,label:cat,monto,items:[]}));
     const ing=sm("ing"),egr=sm("egr"),util=ing-egr;
-    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr")};
+    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),plt:sm("plt"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr"),customItems};
   };
 
   const guardar=async()=>{
@@ -1563,9 +1571,14 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
       const validas=nomRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
       await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria","nomina");
       if(validas.length)await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto)})));
+    }else if(fCat==="personalizado"){
+      if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
+      const catPersonal=fConc.trim();
+      await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",catPersonal);
+      await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto)}]);
     }else{
       if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
-      if(fCat==="renta"||fCat==="servicios")await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",fCat);
+      if(fCat==="renta"||fCat==="servicios"||fCat==="contenido_digital"||fCat==="plataforma_cire")await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",fCat);
       await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto)}]);
     }
     setFMonto("");setFConc("");setSaving(false);await cargar();
@@ -1611,12 +1624,20 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
         </div>
         <FilaGL l={`Ventas`} v={p.ing} c="#10b981" bold/>
         <div style={{height:"8px"}}/>
-        <FilaGL l="Contenido digital" v={p.cont} neg indent/>
+        {p.cont>0&&<FilaGL l="Contenido digital" v={p.cont} neg indent/>}
+        {p.plt>0&&<FilaGL l="Plataforma CIRE" v={p.plt} neg indent/>}
         <FilaGL l="Meta Ads" v={p.meta} neg indent/>
         <FilaGL l="Nóminas" v={p.nom} neg indent/>
         {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent/>}
         {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent/>}
         {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent/>}
+        {p.customItems.map(c=><div key={c.cat} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+          <span style={{fontSize:"13px",color:"rgba(255,255,255,0.45)",paddingLeft:"14px"}}>{c.label}</span>
+          <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+            <span style={{fontSize:"13px",fontWeight:500,color:"#f97316"}}>{fmt(c.monto)}</span>
+            {!compact&&c.items.map(it=><button key={it.id} onClick={()=>borrarGasto(it.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>)}
+          </div>
+        </div>)}
         <FilaGL l="Total gastos" v={p.egr} neg bold/>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"10px",borderTop:"2px solid rgba(255,255,255,0.1)",marginTop:"4px"}}>
           <span style={{fontSize:compact?14:16,fontWeight:700}}>{pos?"Utilidad":"Pérdida neta"}</span>
@@ -1700,14 +1721,17 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
         </div>
         <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Categoría</div>
           <select className="inp" style={{width:"190px"}} value={fCat} onChange={e=>setFCat(e.target.value)}>
+            <option value="contenido_digital">Contenido digital</option>
+            <option value="plataforma_cire">Plataforma CIRE</option>
             <option value="renta">Renta</option>
             <option value="servicios">Servicios (agua/luz/internet)</option>
             <option value="nomina">Nómina</option>
             <option value="otro">Otro gasto</option>
+            <option value="personalizado">＋ Concepto personalizado</option>
           </select>
         </div>
-        {fCat!=="nomina"&&<><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Concepto</div>
-          <input className="inp" style={{width:"180px"}} placeholder="Descripción (opcional)" value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
+        {fCat!=="nomina"&&<><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>{fCat==="personalizado"?"Nombre del concepto *":"Concepto"}</div>
+          <input className="inp" style={{width:"180px",borderColor:fCat==="personalizado"?"rgba(39,33,232,0.6)":"undefined"}} placeholder={fCat==="personalizado"?"Ej: Software CRM":"Descripción (opcional)"} value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
           <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Monto</div>
           <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
           <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?"...":"Guardar"}</button>
