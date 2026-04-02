@@ -33,8 +33,12 @@ const CSS = `
   .nav-tab{padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);transition:all 0.18s;}
   .nav-tab:hover{color:rgba(255,255,255,0.75);}
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:200;display:flex;align-items:center;justify-content:center;}
-  .tab-dash{padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);transition:all 0.18s;}
-  .tab-dash:hover{color:rgba(255,255,255,0.75);}
+  .tab-dash{padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:rgba(255,255,255,0.45);transition:all 0.18s;letter-spacing:0.2px;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .tab-dash:hover{color:rgba(255,255,255,0.85);}
+  .tab-dash.active{color:#fff;}
+  @keyframes meta-spin{to{transform:rotate(360deg)}}
+  .meta-spinner{width:28px;height:28px;border:2.5px solid rgba(255,255,255,0.1);border-top-color:#a855f7;border-radius:50%;animation:meta-spin 0.8s linear infinite;}
+  .meta-loading-overlay{position:absolute;inset:-4px;z-index:10;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:rgba(34,38,74,0.72);border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.3s;}
   .rank-row{display:grid;grid-template-columns:32px 110px 1fr 110px 110px 100px;gap:0;padding:15px 20px;border-bottom:1px solid rgba(255,255,255,0.05);align-items:center;font-size:14px;}
   .rank-row:hover{background:rgba(255,255,255,0.03);}
   .clienta-sugg{padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);transition:background 0.15s;font-size:14px;}
@@ -896,10 +900,10 @@ function POS({session,onSwitchSucursal,isAdmin}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)",fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","importar","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)",position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)",position:"relative"}}
               onClick={()=>{setView(v);setFichaId(null);if(v==="historial")cargarT(session.id);if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="importar"?"📥 Importar":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -944,14 +948,6 @@ function POS({session,onSwitchSucursal,isAdmin}){
             {!loadingCli&&clientas.length===0&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.15)",fontSize:"13px"}}>Sin clientas</div>}
           </div>
         </div>)}
-
-      {view==="importar"&&<div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-        <div style={{display:"flex",gap:"12px",marginBottom:"20px"}}>
-          <button className="btn-ghost" style={{borderColor:!fichaId||fichaId==="csv"?"#2721E8":"rgba(255,255,255,0.1)",color:!fichaId||fichaId==="csv"?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setFichaId("csv")}>📊 Ventas (CSV)</button>
-          <button className="btn-ghost" style={{borderColor:fichaId==="ics"?"#2721E8":"rgba(255,255,255,0.1)",color:fichaId==="ics"?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setFichaId("ics")}>📅 Agenda (ICS)</button>
-        </div>
-        {fichaId==="ics"?<GCalImport session={session}/>:<CSVImport session={session}/>}
-      </div>}
 
       {view==="ajustes"&&<AjustesTerminales session={session}/>}
       {view==="confirmar"&&<ConfirmacionesManana session={session}/>}
@@ -1763,7 +1759,6 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
-  const[metaMesSel,setMetaMesSel]=useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
   const[metaDataMes,setMetaDataMes]=useState(null);
   const[metaDiarioMes,setMetaDiarioMes]=useState([]);
   const[loadingMetaMes,setLoadingMetaMes]=useState(false);
@@ -1913,7 +1908,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
     setLoadingHist(false);
   };
   useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel]);
-  useEffect(()=>{cargarMetaMes(metaMesSel);},[metaMesSel]);
+  useEffect(()=>{cargarMetaMes(mesSel);},[mesSel]);
   useEffect(()=>{cargarMetaHistorial();},[]);
 
   // ─── Filtrado por rol ──────────────────────────────────────────────────────
@@ -1924,7 +1919,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const metaDiarioF=filtro?metaDiario.filter(d=>filtro.includes(d.sucursal)):metaDiario;
   const metaDiarioMesF=filtro?metaDiarioMes.filter(d=>filtro.includes(d.sucursal)):metaDiarioMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
-  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:["resumen","sucursales","servicios","meta","importar","pos","finanzas"];
+  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -1991,8 +1986,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           <div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
           <div style={{display:"flex"}}>
-            {TABS_DASH.map(t=><div key={t} className="tab-dash" style={{borderBottomColor:tab===t?"#2721E8":"transparent",color:tab===t?"#fff":"rgba(255,255,255,0.35)"}} onClick={()=>setTab(t)}>
-              {{resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",importar:"📥 Importar",pos:"🖥 POS",finanzas:"Finanzas"}[t]}</div>)}
+            {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent"}} onClick={()=>setTab(t)}><span style={{fontSize:"15px"}}>{ico}</span><span>{lbl}</span></div>;})}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
@@ -2000,10 +1994,10 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
             {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
           </div>
-          {periodo==="mes"&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
+          {(periodo==="mes"||tab==="meta")&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
             {mesesOpciones.map(o=><option key={o.v} value={o.v} style={{background:"#22264A",textTransform:"capitalize"}}>{o.l}</option>)}
           </select>}
-          {periodo==="semana"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>}
+          {periodo==="semana"&&tab!=="meta"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>}
           {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳</div>
             :metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>
             :metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
@@ -2020,7 +2014,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           {/* KPIs fila 1 */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
             {[
-              {l:"VENTAS TOTALES",v:fmt(ventasTotal),s:`${fmtN(tickets.length)} tickets`,cls:"hi",cl:"#2721E8"},
+              {l:"VENTAS TOTALES",v:fmt(ventasTotal),s:`${fmtN(tickets.length)} tickets`,cls:"hi",cl:"#fff"},
               {l:"CLIENTAS NUEVAS",v:nuevas,s:`${nuevas>0?Math.round(nuevas/tickets.length*100):0}% del total`,cls:"green",cl:"#10b981"},
               {l:"RECOMPRAS",v:recompras,s:`${recompRatio}% recompra`,cls:"",cl:"#49B8D3"},
               {l:"SESIONES",v:sesionesComp,s:`${sesionesAg} por atender`,cls:"",cl:"#fff"},
@@ -2202,18 +2196,22 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
 
         {/* ═══ META ADS ═══ */}
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-          {/* Selector de mes */}
-          {(()=>{const selSt={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"};
-          const ahora=new Date();const opts=Array.from({length:12},(_,i)=>{const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);const y=d.getFullYear(),m=d.getMonth()+1;const ym=`${y}-${String(m).padStart(2,"0")}`;const lbl=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return<option key={ym} value={ym} style={{background:"#22264A"}}>{lbl.charAt(0).toUpperCase()+lbl.slice(1)}</option>;});
-          return<div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-            <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>PERÍODO</div>
-            <select value={metaMesSel} onChange={e=>setMetaMesSel(e.target.value)} style={selSt}>{opts}</select>
-            {loadingMetaMes?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳ cargando...</div>
-            :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>cargarMetaMes(metaMesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
-          </div>;})()}
+          {/* Barra de acciones: solo Sincronizar */}
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            {loadingMetaMes
+              ?<div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",color:"rgba(255,255,255,0.4)",padding:"6px 12px",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",background:"rgba(255,255,255,0.03)"}}><div className="meta-spinner" style={{width:"14px",height:"14px",borderWidth:"2px"}}/> Sincronizando...</div>
+              :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>cargarMetaMes(mesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
+          </div>
+          {/* Contenedor con overlay de carga */}
+          <div style={{position:"relative"}}>
+            {loadingMetaMes&&<div className="meta-loading-overlay">
+              <div className="meta-spinner"/>
+              <div style={{fontSize:"15px",fontWeight:600,color:"rgba(255,255,255,0.85)"}}>Cargando Meta Ads...</div>
+              <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)"}}>Conectando con la API de Meta</div>
+            </div>}
           {/* Datos del mes seleccionado */}
           {metaDataMes&&!metaErrorMes&&(()=>{
-            const[mY,mM]=metaMesSel.split("-").map(Number);
+            const[mY,mM]=mesSel.split("-").map(Number);
             const mesSelLabel=new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
             const porSucMes=sucNames.map(n=>{const ms=metaDataMes.porSucursal?.[n]?.mensajes||0;const sp=metaDataMes.porSucursal?.[n]?.spend||0;return{nombre:n,mensajes:ms,spend:sp};});
             const maxMsMes=Math.max(...porSucMes.map(s=>s.mensajes),1);
@@ -2221,7 +2219,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
             const msgsMes=filtro?filtro.reduce((s,n)=>s+(metaDataMes.porSucursal?.[n]?.mensajes||0),0):metaDataMes.mensajes;
             return<>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-                {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDataMes.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDataMes.alcance),c:"#2721E8"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
+                {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDataMes.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDataMes.alcance),c:"#49B8D3"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
               </div>
               <div className="glass" style={{overflow:"hidden"}}>
                 <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES E INVERSIÓN POR SUCURSAL · {mesSelLabel.toUpperCase()}</div></div>
@@ -2267,7 +2265,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
               {metaDataMes.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
                 <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO · {mesSelLabel.toUpperCase()}</div>
                 <div style={{display:"flex",alignItems:"stretch"}}>
-                  {[{label:"Alcance",value:fmtN(metaDataMes.alcance),color:"#2721E8"},{label:"Clics",value:fmtN(metaDataMes.clics),color:"#49B8D3",pct:metaDataMes.alcance>0?((metaDataMes.clics/metaDataMes.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaDataMes.mensajes),color:"#a855f7",pct:metaDataMes.clics>0?((metaDataMes.mensajes/metaDataMes.clics)*100).toFixed(1):0}].map((e,i)=>
+                  {[{label:"Alcance",value:fmtN(metaDataMes.alcance),color:"#49B8D3"},{label:"Clics",value:fmtN(metaDataMes.clics),color:"#49B8D3",pct:metaDataMes.alcance>0?((metaDataMes.clics/metaDataMes.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaDataMes.mensajes),color:"#a855f7",pct:metaDataMes.clics>0?((metaDataMes.mensajes/metaDataMes.clics)*100).toFixed(1):0}].map((e,i)=>
                     <div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":"0 12px 12px 0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}
                 </div>
               </div>}
@@ -2315,8 +2313,8 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
                   <div style={{position:"absolute",bottom:"24px",left:0,right:0,height:`${CHART_H}px`,display:"flex",alignItems:"flex-end",gap:"8px"}}>
                     {datos.map(d=>{
                       const barH=Math.max((d.val/niceMaxV)*CHART_H,d.val>0?3:0);
-                      const isSel=d.ym===metaMesSel;
-                      return<div key={d.ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}} onClick={()=>setMetaMesSel(d.ym)}>
+                      const isSel=d.ym===mesSel;
+                      return<div key={d.ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}} onClick={()=>setMesSel(d.ym)}>
                         {d.val>0&&<div style={{fontSize:"9px",color:isSel?color:"rgba(255,255,255,0.3)",marginBottom:"4px",fontWeight:isSel?700:400,transition:"all 0.2s"}}>{isInv?`$${Math.round(d.val/1000)}k`:fmtN(d.val)}</div>}
                         <div style={{width:"80%",height:`${barH}px`,background:isSel?color:colorAlpha,borderRadius:"4px 4px 0 0",transition:"all 0.25s",boxShadow:isSel?`0 0 12px ${color}66`:""}}/>
                       </div>;
@@ -2324,53 +2322,15 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
                   </div>
                   {/* Eje X */}
                   <div style={{position:"absolute",bottom:0,left:0,right:0,height:"20px",display:"flex",gap:"8px"}}>
-                    {datos.map(d=><div key={d.ym} style={{flex:1,textAlign:"center",fontSize:"10px",color:d.ym===metaMesSel?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.3)",fontWeight:d.ym===metaMesSel?700:400,transition:"all 0.2s"}}>{d.label}</div>)}
+                    {datos.map(d=><div key={d.ym} style={{flex:1,textAlign:"center",fontSize:"10px",color:d.ym===mesSel?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.3)",fontWeight:d.ym===mesSel?700:400,transition:"all 0.2s"}}>{d.label}</div>)}
                   </div>
                 </div>
               </div>;
             })():null}
-          </div>
-          {loadingMetaMes&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Conectando con Meta...</div>}
+          </div>{/* /glass tendencia */}
+          {!loadingMetaMes&&!metaDataMes&&!metaErrorMes&&<div style={{textAlign:"center",padding:"60px 32px",color:"rgba(255,255,255,0.25)",fontSize:"13px"}}>Sin datos para este período</div>}
           {!loadingMetaMes&&metaErrorMes&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorMes}</div></div>}
-        </div>}
-
-        {/* ═══ IMPORTAR ═══ */}
-        {tab==="importar"&&<div>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>IMPORTAR DATOS</div>
-          {!posSuc?<div>
-            <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"16px"}}>Selecciona la sucursal para importar:</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
-              {USUARIOS_DASH.map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}>
-                <div style={{fontSize:"24px",marginBottom:"8px"}}>📥</div>
-                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div>
-                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importar datos →</div>
-              </div>)}
-            </div>
-          </div>:<div>
-            <div style={{display:"flex",gap:"10px",alignItems:"center",marginBottom:"16px"}}>
-              <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>{setPosSuc(null);setImportType(null);}}>← Otra sucursal</button>
-              <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sucursal: <span style={{color:posSuc.color,fontWeight:600}}>{posSuc.nombre}</span></div>
-            </div>
-            {!importType?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"16px",maxWidth:"900px"}}>
-              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center"}} onClick={()=>setImportType("csv")} onMouseEnter={e=>e.currentTarget.style.borderColor="#2721E8"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>
-                <div style={{fontSize:"36px",marginBottom:"12px"}}>📊</div>
-                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Ventas (CSV)</div>
-                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importa el archivo de ventas de Excel con tickets, montos y clientas</div>
-              </div>
-              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center"}} onClick={()=>setImportType("ics")} onMouseEnter={e=>e.currentTarget.style.borderColor="#2721E8"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>
-                <div style={{fontSize:"36px",marginBottom:"12px"}}>📅</div>
-                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px"}}>Agenda (ICS)</div>
-                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Importa citas desde Google Calendar con historial de sesiones</div>
-              </div>
-              <div className="glass" style={{padding:"32px 24px",cursor:"pointer",textAlign:"center",borderColor:"rgba(255,80,80,0.15)"}} onClick={()=>setImportType("purge")} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,80,80,0.4)"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,80,80,0.15)"}>
-                <div style={{fontSize:"36px",marginBottom:"12px"}}>🗑</div>
-                <div style={{fontSize:"15px",fontWeight:700,marginBottom:"6px",color:"#ff6b6b"}}>Borrar datos</div>
-                <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Elimina tickets, citas, paquetes y clientas de prueba de esta sucursal</div>
-              </div>
-            </div>:importType==="purge"?<PurgeSucursal session={posSuc} onDone={()=>setImportType(null)}/>
-            :importType==="csv"?<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><CSVImport session={posSuc}/></div>
-            :<div><button className="btn-ghost" style={{fontSize:"11px",marginBottom:"12px"}} onClick={()=>setImportType(null)}>← Tipo de importación</button><GCalImport session={posSuc}/></div>}
-          </div>}
+          </div>{/* /loading wrapper */}
         </div>}
 
         {/* ═══ VER POS ═══ */}
