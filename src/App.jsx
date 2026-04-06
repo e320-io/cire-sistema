@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
@@ -75,6 +78,7 @@ const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
 const hoy=()=>new Date().toISOString().slice(0,10);
 const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(data?.[0]?.ticket_num||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
+const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();
 const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
 const defaultMes=()=>{const d=new Date();if(d.getDate()<=5){const p=new Date(d.getFullYear(),d.getMonth()-1,1);return`${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}`;}return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
 
@@ -1099,24 +1103,68 @@ function POS({session,onSwitchSucursal,isAdmin}){
 // ══════════════════════════════════════════════════════════════════════════════
 // IMPORTAR CALENDARIO — Archivo .ics exportado de Google Calendar
 // ══════════════════════════════════════════════════════════════════════════════
-function parseICS(text){
-  const events=[];let cur=null;
-  text.split(/\r?\n/).forEach(line=>{
-    if(line==="BEGIN:VEVENT"){cur={summary:"",description:"",dtstart:"",dtend:""};}
-    else if(line==="END:VEVENT"&&cur){events.push(cur);cur=null;}
-    else if(cur){
-      if(line.startsWith("SUMMARY:")){cur.summary+=line.slice(8);}
-      else if(line.startsWith("DESCRIPTION:")){cur.description+=line.slice(12);}
-      else if(line.startsWith("DTSTART")){const m=line.match(/(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/);if(m)cur.dtstart=`${m[1]}-${m[2]}-${m[3]}T${m[4]||"10"}:${m[5]||"00"}`;}
-      else if(line.startsWith("DTEND")){const m=line.match(/(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/);if(m)cur.dtend=`${m[1]}-${m[2]}-${m[3]}T${m[4]||"11"}:${m[5]||"00"}`;}
-      else if(line.startsWith(" ")&&cur.description){cur.description+=line.slice(1);}
-    }
-  });
-  return events;
+// Helpers para parseo robusto de ICS
+const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario/i;
+const ICS_EMOJI_RE=/[\p{Emoji_Presentation}\p{Extended_Pictographic}✅🔁🤖🧾\u200d\ufe0f]/gu;
+const ICS_SES_MAP=[[/\b1[ae]?ra?\b|primera\b|1er\b/,1],[/\b2d[ao]?\b|segunda\b/,2],[/\b3[ae]?ra?\b|tercera?\b/,3],[/\b4t[ao]?\b|cuarta?\b/,4],[/\b5t[ao]?\b|quinta?\b/,5],[/\b6t[ao]?\b|sexta?\b/,6],[/\b7m[ao]?\b|s[eé]ptima?\b/,7],[/\b8v[ao]?\b|octava?\b/,8],[/\b9n[ao]?\b|novena?\b/,9],[/\b10[ao]?\b|d[eé]cima?\b/,10]];
+function icsSesDesc(d){if(!d)return 1;const l=d.toLowerCase();for(const[re,n]of ICS_SES_MAP)if(re.test(l))return n;const m=d.match(/sesi[oó]n\s*#?\s*(\d+)/i);return m?parseInt(m[1]):1;}
+function icsSesSum(s){if(!s)return null;const m=s.match(/\b(\d{1,2})\s*(?:era?|ra?|da?|ta?|va?|ma?)\b/i);return m?parseInt(m[1]):null;}
+function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase();if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilian|bikini\s*brazil|brazilia/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/brazos\s*y\s*piernas/.test(src))return"Brazos y Piernas";if(/piernas/.test(src))return"Piernas";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro/.test(src))return"Rostro";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";return"Servicio";}
+function icsParseDT(dt,useDST){if(!dt)return{date:null,time:null};if(/^\d{8}$/.test(dt))return{date:`${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`,time:null};const m=dt.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}(Z?)$/);if(!m)return{date:null,time:null};const[,Y,Mo,D,H,Mi,isZ]=m;if(isZ==="Z"){const utc=new Date(Date.UTC(+Y,+Mo-1,+D,+H,+Mi));const off=(useDST&&+Mo>=4&&+Mo<=10)?5:6;const local=new Date(utc.getTime()-off*3600000);return{date:`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,"0")}-${String(local.getUTCDate()).padStart(2,"0")}`,time:`${String(local.getUTCHours()).padStart(2,"0")}:${String(local.getUTCMinutes()).padStart(2,"0")}`};}return{date:`${Y}-${Mo}-${D}`,time:`${H}:${Mi}`};}
+
+function parseICS(text,opts={}){
+  // 1. Unfold continuation lines (RFC 5545 §3.1) — causa principal de datos incompletos
+  const unfolded=text.replace(/\r\n[ \t]/g,"").replace(/\n[ \t]/g,"");
+  const lines=unfolded.split(/\r?\n/);
+  const rawEvs=[];let cur=null;
+  for(const line of lines){
+    if(line==="BEGIN:VEVENT"){cur={};continue;}
+    if(line==="END:VEVENT"&&cur){rawEvs.push(cur);cur=null;continue;}
+    if(!cur)continue;
+    const ci=line.indexOf(":");if(ci<0)continue;
+    const key=line.slice(0,ci).toUpperCase().replace(/;.*/,""); // strip params tipo ;TZID=...
+    const val=line.slice(ci+1);
+    if(!cur[key])cur[key]=val;
+  }
+  const minDate=opts.minDate||"2025-01-01";
+  const useDST=opts.useDST!==false; // true = CDMX con horario de verano (Polanco, Metepec, etc.)
+  const appointments=[],skipped=[];
+  for(const ev of rawEvs){
+    const rawS=ev["SUMMARY"]||"";
+    const sl=rawS.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if(ICS_SKIP_RE.test(sl)){skipped.push({summary:rawS,razon:"Entrada administrativa"});continue;}
+    // Limpiar summary: quitar emojis, bytes corruptos UTF-8→Latin-1, ordinal de sesión
+    let clean=rawS.replace(ICS_EMOJI_RE,"").replace(/[\u00c0-\u00ff]+/g,"");
+    clean=clean.replace(/^\d{1,2}\s*(?:era?|ra?|da?|ta?|va?|ma?)\s*/i,"").replace(/\s+/g," ").trim();
+    if(!clean||clean.length<3){skipped.push({summary:rawS,razon:"Nombre vacío o muy corto"});continue;}
+    // Extraer teléfono del final si existe
+    const phoneM=clean.match(/(\d[\d\s\-]{6,}\d)\s*$/);
+    let nombre=clean;
+    if(phoneM){const nm=clean.slice(0,clean.lastIndexOf(phoneM[0])).trim();if(nm)nombre=nm;}
+    // Fechas con zona horaria correcta
+    const dtS=ev["DTSTART"]||"";const dtE=ev["DTEND"]||"";
+    const{date,time:horaIni}=icsParseDT(dtS,useDST);
+    const{time:horaFinRaw}=icsParseDT(dtE,useDST);
+    if(!date){skipped.push({summary:rawS,razon:"Fecha inválida"});continue;}
+    if(date<minDate){skipped.push({summary:rawS,razon:`Anterior a ${minDate}`});continue;}
+    // Servicio y número de sesión
+    const rawDesc=(ev["DESCRIPTION"]||"").replace(/\\n/g,"\n").replace(/\\\\/g,"\\");
+    const servicio=icsServicio(rawDesc,rawS);
+    const tipo=detectTipo(servicio);
+    const sesNum=icsSesSum(rawS)||icsSesDesc(rawDesc);
+    // Estado: checkmark ✅ = completada, sin checkmark en pasado = cancelada
+    const hasCheck=rawS.includes("✅");
+    const estado=date<hoy()?(hasCheck?"completada":"cancelada"):"agendada";
+    appointments.push({id:`ics-${appointments.length}`,nombre,servicio,tipo:tipo.id,duracion:tipo.duracion,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion),sesNum,totalSes:8,estado,incluir:estado!=="cancelada"});
+  }
+  appointments.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  return{appointments,skipped};
 }
 
-function GCalImport({session}){
+function GCalImport({session,useDST=true}){
   const[parsed,setParsed]=useState([]);
+  const[skipped,setSkipped]=useState([]);
+  const[showSkipped,setShowSkipped]=useState(false);
   const[loading,setLoading]=useState(false);
   const[importing,setImporting]=useState(false);
   const[result,setResult]=useState(null);
@@ -1131,27 +1179,8 @@ function GCalImport({session}){
     const reader=new FileReader();
     reader.onload=(e)=>{
       const text=e.target.result;
-      const events=parseICS(text);
-      const p=events.map((ev,i)=>{
-        const nombre=(ev.summary||"").replace(/\\n/g," ").replace(/\\,/g,",").trim();
-        const desc=(ev.description||"").replace(/\\n/g,"\n").replace(/\\,/g,",").trim();
-        const fecha=ev.dtstart.slice(0,10);
-        const horaIni=ev.dtstart.slice(11,16)||"10:00";
-        const horaFi=ev.dtend?ev.dtend.slice(11,16):horaFin(horaIni,60);
-        // Parsear sesión de descripción
-        let servicio="",sesNum=1,totalSes=8;
-        const sesMatch=desc.match(/[Ss]esi[oó]n\s*(\d+)\s*[\/de]*\s*(\d+)?/)||desc.match(/[Ss](\d+)\s*[\/de]*\s*(\d+)?/)||desc.match(/#(\d+)\s*[\/de]*\s*(\d+)?/);
-        if(sesMatch){sesNum=parseInt(sesMatch[1])||1;totalSes=parseInt(sesMatch[2])||8;}
-        const descLines=desc.split(/\n/).map(l=>l.trim()).filter(Boolean);
-        servicio=descLines.length>0?descLines[0].replace(/[Ss]esi[oó]n\s*\d+\s*[\/de]*\s*\d*/,"").replace(/[Ss]\d+\s*[\/de]*\s*\d*/,"").replace(/#\d+\s*[\/de]*\s*\d*/,"").trim():"";
-        if(!servicio&&descLines.length>1)servicio=descLines[1];
-        const tipo=detectTipo(servicio||nombre);
-        const estado=fecha<hoy()?"completada":"agendada";
-        return{id:`ics-${i}`,nombre:nombre||"Sin nombre",servicio:servicio||tipo.label,tipo:tipo.id,duracion:tipo.duracion,fecha,horaIni,horaFi:horaFi||horaFin(horaIni,tipo.duracion),sesNum,totalSes,estado,incluir:true};
-      }).filter(p=>p.nombre&&p.nombre!=="Sin nombre");
-      // Ordenar por fecha
-      p.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-      setParsed(p);setStep(2);setLoading(false);
+      const{appointments,skipped:sk}=parseICS(text,{useDST,minDate:"2025-01-01"});
+      setParsed(appointments);setSkipped(sk);setStep(2);setLoading(false);
     };
     reader.readAsText(file);
   };
@@ -1194,6 +1223,7 @@ function GCalImport({session}){
   const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v})));
   const editEvento=(id,field,val)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,[field]:val}:p));
   const completadas=parsed.filter(p=>p.incluir&&p.estado==="completada").length;
+  const canceladas=parsed.filter(p=>p.estado==="cancelada").length;
   const agendadas=parsed.filter(p=>p.incluir&&p.estado==="agendada").length;
 
   return(
@@ -1237,28 +1267,48 @@ function GCalImport({session}){
 
       {/* PASO 2 — Preview */}
       {step===2&&<div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
-          <div><div style={{fontSize:"14px",fontWeight:600}}>{parsed.length} eventos en {fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionados · 🟢 {completadas} completadas · 🔵 {agendadas} por atender</div></div>
-          <div style={{display:"flex",gap:"6px"}}><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(true)}>✓ Todos</button><button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button></div>
+        {/* Stats bar */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"10px",marginBottom:"14px"}}>
+          {[{l:"Total en archivo",v:parsed.length+skipped.length,c:"rgba(255,255,255,0.5)"},{l:"Válidos",v:parsed.length,c:"#49B8D3"},{l:"Omitidos",v:skipped.length,c:"#f97316"},{l:"Canceladas (sin ✅)",v:canceladas,c:"rgba(255,255,255,0.25)"}].map(k=><div key={k.l} style={{padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"20px",fontWeight:700,color:k.c}}>{k.v}</div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"2px"}}>{k.l}</div></div>)}
         </div>
-        <div style={{fontSize:"10px",color:"rgba(255,255,255,0.15)",marginBottom:"8px"}}>Puedes editar nombre, servicio, sesión y total antes de importar</div>
-        <div style={{maxHeight:"420px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"36px 1fr 1fr 78px 46px 46px 76px",padding:"8px 12px",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,background:"#22264A",zIndex:2}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+          <div><div style={{fontSize:"13px",fontWeight:600}}>{fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionados · ✅ {completadas} completadas · 📅 {agendadas} agendadas</div></div>
+          <div style={{display:"flex",gap:"6px"}}>
+            {skipped.length>0&&<button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px",borderColor:showSkipped?"#f97316":"rgba(255,255,255,0.1)",color:showSkipped?"#f97316":"rgba(255,255,255,0.4)"}} onClick={()=>setShowSkipped(v=>!v)}>⚠ {skipped.length} omitidos</button>}
+            <button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(true)}>✓ Todos</button>
+            <button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button>
+          </div>
+        </div>
+
+        {/* Omitidos */}
+        {showSkipped&&skipped.length>0&&<div style={{marginBottom:"10px",border:"1px solid rgba(249,115,22,0.2)",borderRadius:"10px",overflow:"hidden"}}>
+          <div style={{padding:"8px 12px",background:"rgba(249,115,22,0.06)",borderBottom:"1px solid rgba(249,115,22,0.15)",fontSize:"10px",letterSpacing:"1px",color:"#f97316",fontWeight:600}}>EVENTOS OMITIDOS — no se importarán</div>
+          <div style={{maxHeight:"180px",overflowY:"auto"}}>
+            {skipped.map((s,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",gap:"8px"}}>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.summary||"(sin título)"}</div>
+              <div style={{fontSize:"10px",color:"#f97316",whiteSpace:"nowrap"}}>{s.razon}</div>
+            </div>)}
+          </div>
+        </div>}
+
+        <div style={{fontSize:"10px",color:"rgba(255,255,255,0.15)",marginBottom:"8px"}}>Puedes editar nombre, servicio y número de sesión antes de importar. Las canceladas están desmarcadas por defecto.</div>
+        <div style={{maxHeight:"380px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"36px 1fr 1fr 78px 46px 46px 90px",padding:"8px 12px",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,background:"#22264A",zIndex:2}}>
             {["","Nombre","Servicio","Fecha","Ses","Tot","Estado"].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
           </div>
-          {parsed.map(p=><div key={p.id} style={{display:"grid",gridTemplateColumns:"36px 1fr 1fr 78px 46px 46px 76px",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",opacity:p.incluir?1:0.25,alignItems:"center"}}>
+          {parsed.map(p=><div key={p.id} style={{display:"grid",gridTemplateColumns:"36px 1fr 1fr 78px 46px 46px 90px",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",opacity:p.incluir?1:0.3,alignItems:"center"}}>
             <input type="checkbox" checked={p.incluir} onChange={()=>toggleEvento(p.id)} style={{width:"14px",height:"14px",cursor:"pointer",accentColor:"#2721E8"}}/>
             <input value={p.nombre} onChange={e=>editEvento(p.id,"nombre",e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontSize:"12px",fontWeight:500,outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
             <input value={p.servicio} onChange={e=>editEvento(p.id,"servicio",e.target.value)} style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.5)",fontSize:"11px",outline:"none",padding:"4px 4px 4px 0",width:"100%"}}/>
             <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>{new Date(p.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"2-digit"})}</div>
             <input type="number" value={p.sesNum} onChange={e=>editEvento(p.id,"sesNum",parseInt(e.target.value)||1)} min="1" style={{background:"transparent",border:"none",color:"#49B8D3",fontSize:"12px",fontWeight:600,outline:"none",width:"28px",textAlign:"center"}}/>
             <input type="number" value={p.totalSes} onChange={e=>editEvento(p.id,"totalSes",parseInt(e.target.value)||8)} min="1" style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.3)",fontSize:"11px",outline:"none",width:"28px",textAlign:"center"}}/>
-            <div style={{fontSize:"10px",fontWeight:600,color:p.estado==="completada"?"#10b981":"#49B8D3"}}>{p.estado==="completada"?"✓ Hecha":"📅 Agendada"}</div>
+            <div style={{fontSize:"10px",fontWeight:600,color:p.estado==="completada"?"#10b981":p.estado==="cancelada"?"rgba(255,255,255,0.2)":"#49B8D3"}}>{p.estado==="completada"?"✅ Hecha":p.estado==="cancelada"?"✗ Cancelada":"📅 Agendada"}</div>
           </div>)}
         </div>
         <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
-          <button className="btn-ghost" style={{flex:1}} onClick={()=>{setStep(1);setParsed([]);setFileName("");}}>← Otro archivo</button>
-          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||parsed.filter(p=>p.incluir).length===0}>{importing?"Importando...":"✓ Importar "+parsed.filter(p=>p.incluir).length+" eventos a "+session.nombre}</button>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>{setStep(1);setParsed([]);setSkipped([]);setShowSkipped(false);setFileName("");}}>← Otro archivo</button>
+          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||parsed.filter(p=>p.incluir).length===0}>{importing?"Importando...":"✓ Importar "+parsed.filter(p=>p.incluir).length+" eventos → "+session.nombre}</button>
         </div>
       </div>}
 
@@ -1272,7 +1322,7 @@ function GCalImport({session}){
         </div>
         {result.errores>0&&<div style={{fontSize:"12px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ {result.errores} errores</div>}
         <div style={{display:"flex",gap:"10px",justifyContent:"center"}}>
-          <button className="btn-ghost" onClick={()=>{setStep(1);setParsed([]);setFileName("");setResult(null);}}>Importar otro archivo</button>
+          <button className="btn-ghost" onClick={()=>{setStep(1);setParsed([]);setSkipped([]);setShowSkipped(false);setFileName("");setResult(null);}}>Importar otro archivo</button>
         </div>
       </div>}
     </div>
@@ -1476,6 +1526,655 @@ function CSVImport({session}){
         </div>
         {result.errores>0&&<div style={{fontSize:"12px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ {result.errores} errores</div>}
         <button className="btn-ghost" onClick={()=>{setStep(1);setParsed([]);setFileName("");setResult(null);}}>Importar otro archivo</button>
+      </div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMBINED IMPORT — ICS + CSV ventas: preview completo + matching + importación
+// ══════════════════════════════════════════════════════════════════════════════
+function CombinedImport({session,useDST=true}){
+  const[step,setStep]=useState(1);
+  const[minDate,setMinDate]=useState("2025-01-01");
+  // ICS
+  const[citasAll,setCitasAll]=useState([]);
+  const[skipped,setSkipped]=useState([]);
+  const[icsFile,setIcsFile]=useState("");
+  const[icsLoading,setIcsLoading]=useState(false);
+  const[icsDrag,setIcsDrag]=useState(false);
+  const[filterTab,setFilterTab]=useState("validos");
+  // CSV ventas
+  const[ventas,setVentas]=useState([]);
+  const[ventasFile,setVentasFile]=useState("");
+  const[csvLoading,setCsvLoading]=useState(false);
+  const[csvDrag,setCsvDrag]=useState(false);
+  // Import
+  const[importing,setImporting]=useState(false);
+  const[result,setResult]=useState(null);
+  const icsRef=useRef(null);const csvRef=useRef(null);
+
+  // ── Parse ICS ─────────────────────────────────────────────────────────────
+  const onICS=(file)=>{
+    if(!file)return;
+    setIcsFile(file.name);setIcsLoading(true);
+    const r=new FileReader();
+    r.onload=(e)=>{
+      const{appointments,skipped:sk}=parseICS(e.target.result,{useDST,minDate:"2000-01-01"});
+      const withMeta=appointments.map(a=>({
+        ...a,
+        incluir:a.estado!=="cancelada"&&a.fecha>=minDate,
+        beforeMin:a.fecha<minDate
+      }));
+      setCitasAll(withMeta);setSkipped(sk);setIcsLoading(false);setStep(2);
+    };
+    r.readAsText(file);
+  };
+  const reapplyMin=(md)=>{
+    setMinDate(md);
+    setCitasAll(prev=>prev.map(a=>({...a,incluir:a.estado!=="cancelada"&&a.fecha>=md,beforeMin:a.fecha<md})));
+  };
+
+  // ── Parse ventas (PDF + CSV) ────────────────────────────────────────────────
+  const MESES_ES={enero:"01",febrero:"02",marzo:"03",abril:"04",mayo:"05",junio:"06",julio:"07",agosto:"08",septiembre:"09",octubre:"10",noviembre:"11",diciembre:"12"};
+  // Parser de una línea CSV respetando comillas
+  const parseCSVRow=(line)=>{const fields=[];let cur="",inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&!inQ){inQ=true;continue;}if(c==='"'&&inQ){inQ=false;continue;}if(c===','&&!inQ){fields.push(cur);cur="";continue;}cur+=c;}fields.push(cur);return fields;};
+  // Normalizar nombre de servicio (por si el CSV viene con Ã como artefacto de encoding)
+  const normServicio=(s)=>{const u=(s||"").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(u.includes("LASER")||u.includes("LAER"))return"LÁSER";if(u.includes("HIFU"))return"HIFU";if(u.includes("CERA"))return"CERA";return u.split(/\s/)[0];};
+  // Métodos de pago ordenados de más específico a más general (para usar como ancla)
+  const PDF_PAGOS=["EFECTIVO Y TERMINAL BANORTE","TRANSFERENCIA Y TERMINAL BANORTE 6MSI","TRANSFERENCIA Y TERMINAL BANORTE","TRANSFERENCIA Y 3MSI ZETTLE","TRANSFERENCIA Y EFECTIVO","6MSI TERMINAL BANORTE","3MSI TERMINAL BANORTE","TERMINAL BANORTE","3MSI ZETTLE","6MSI ZETTLE","EFECTIVO Y TERMINAL","DEPOSITO","DEPÓSITO","TRANSFERENCIA","EFECTIVO"];
+  const parsePDFLine=(line,docYear)=>{
+    // Quitar acento tipográfico inicial común en Metepec: "´02 marzo"
+    const clean=line.replace(/^[´'`]+/,"").trim();
+    // Detectar inicio: SERVICIO FECHA $MONTO
+    const mHead=clean.match(/^(L[AÁ]SER|LASER|HIFU|CERA)\s+(\d{1,2}\s+\w+)\s+(\$[\d,]+(?:\.\d+)?(?:\s+anticipo)?)\s+(.*)/i);
+    if(!mHead)return null;
+    const svcRaw=mHead[1].toUpperCase();
+    const servicio=(svcRaw==="LASER"||svcRaw==="LÁSER")?"LÁSER":svcRaw.split(/\s/)[0];
+    const fechaRaw=mHead[2].trim();
+    const fm=fechaRaw.match(/^(\d{1,2})\s+(\w+)$/i);
+    if(!fm)return null;
+    const mes=MESES_ES[fm[2].toLowerCase()];
+    if(!mes)return null;
+    const fecha=`${docYear}-${mes}-${fm[1].padStart(2,"0")}`;
+    // Monto: quitar "anticipo", "liquidó", etc.
+    const monto=parseMontoVenta(mHead[3]);
+    if(!monto)return null;
+    const rest=mHead[4]; // "CC TERMINAL BANORTE Jaqueline Zamudio POST CC 18:46 ..."
+    const restUP=rest.toUpperCase();
+    // Buscar método de pago como ancla
+    let pagoIdx=-1,pagoLen=0;
+    for(const p of PDF_PAGOS){
+      const i=restUP.indexOf(p);
+      if(i>=0){pagoIdx=i;pagoLen=p.length;break;}
+    }
+    if(pagoIdx<0)return null;
+    const concepto=rest.slice(0,pagoIdx).replace(/\s+$/,"").trim();
+    const metodoRaw=rest.slice(pagoIdx,pagoIdx+pagoLen);
+    const metodo=parseMetodoPago(metodoRaw);
+    const afterPago=rest.slice(pagoIdx+pagoLen).trim();
+    // Cliente: secuencia de palabras Capitalizadas al inicio (máx 6 palabras)
+    // Cortar cuando hay todo-mayúsculas (campaña) o dígito (hora/recibo)
+    const words=afterPago.split(/\s+/);
+    const clienteWords=[];
+    for(const w of words){
+      if(!w)continue;
+      if(/^\d/.test(w))break; // hora o recibo
+      // Palabra todo mayúsculas larga = start of campaña
+      if(w.length>3&&w===w.toUpperCase()&&/[A-Z]/.test(w))break;
+      clienteWords.push(w);
+      if(clienteWords.length>=6)break;
+    }
+    const cliente=clienteWords.join(" ").trim();
+    if(!cliente||cliente.length<3)return null;
+    const afterCliente=afterPago.slice(cliente.length).trim();
+    // Campaña: texto hasta la hora (HH:MM) o número de recibo
+    const campanaM=afterCliente.match(/^(.*?)(?:\s+\d{1,2}:\d{2}|\s+\d{4,}|$)/);
+    const campana=(campanaM?campanaM[1]:"").trim();
+    const cl=(campana+" "+concepto).toLowerCase();
+    const tipo=(cl.includes("es clienta")||cl.includes("clienta")||cl.includes("recurrente")||cl.includes("mantenimiento"))?"Recompra":"Nueva";
+    return{servicio,fecha,monto,concepto,metodo,cliente,campana,tipo};
+  };
+  // ── Parse un archivo CSV de mightymerge.io → devuelve array de rows ─────────
+  const parseOneCSV=async(file,docYear,rowOffset)=>{
+    const text=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,"UTF-8");});
+    const allLines=text.split(/\r?\n/);
+    const hdrIdx=allLines.findIndex(l=>l.toUpperCase().includes("SERVICIO")&&(l.toUpperCase().includes("FECHA")||l.toUpperCase().includes("MONTO")));
+    const dataLines=hdrIdx>=0?allLines.slice(hdrIdx+1):allLines.slice(1);
+    const rows=[];
+    for(let i=0;i<dataLines.length;i++){
+      const line=dataLines[i].trim();
+      if(!line||line.startsWith(",,,"))continue;
+      const f=parseCSVLine(line);
+      if(f.length<6)continue;
+      const[servicioRaw,fechaRaw,montoRaw,concepto,metodoPagoRaw,clienteRaw,campana=""]=f;
+      if(!servicioRaw||!clienteRaw)continue;
+      const servicio=normServicio(servicioRaw);
+      const cleanFecha=fechaRaw.replace(/^[^0-9]*/,"").trim();
+      const fm=cleanFecha.match(/^(\d{1,2})(?:\s+de)?\s+(\w+)/i);
+      if(!fm)continue;
+      const mesKey=fm[2].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+      const mes=MESES_ES[mesKey];
+      if(!mes)continue;
+      const fecha=`${docYear}-${mes}-${fm[1].padStart(2,"0")}`;
+      const montoClean=(montoRaw||"").replace(/[$,]/g,"").replace(/\s.*$/,"").trim();
+      const monto=Number(montoClean)||0;
+      if(!monto)continue;
+      const metodo=parseMetodoPago(metodoPagoRaw.trim());
+      const cliente=clienteRaw.trim();
+      if(cliente.length<3)continue;
+      const cl=(campana+"").toLowerCase();
+      const tipo=(cl.includes("es clienta")||cl.includes("clienta")||cl.includes("recurrente")||cl.includes("mantenimiento"))?"Recompra":"Nueva";
+      rows.push({id:`v${rowOffset+rows.length}`,servicio,fecha,monto,concepto:(concepto||"").trim(),metodo,cliente,campana:campana.trim(),tipo,incluir:true});
+    }
+    return rows;
+  };
+  // ── Procesar uno o varios archivos CSV/PDF ────────────────────────────────
+  const handleVentasFile=async(fileList)=>{
+    const files=Array.from(fileList instanceof FileList?fileList:[fileList]);
+    if(!files.length)return;
+    setCsvLoading(true);
+    setVentasFile(files.length===1?files[0].name:`${files.length} archivos`);
+    try{
+      const docYear=minDate.slice(0,4)||String(new Date().getFullYear());
+      let allRows=[];
+      for(const file of files){
+        if(file.name.toLowerCase().endsWith(".csv")){
+          const rows=await parseOneCSV(file,docYear,allRows.length);
+          allRows=[...allRows,...rows];
+        }else{
+          // PDF fallback: ejecuta parsePDFVentas pero retorna rows en vez de setVentas
+          // (reuse parsePDFVentas logic inline para PDF)
+          const ab=await file.arrayBuffer();
+          const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+          for(let pg=1;pg<=pdf.numPages;pg++){
+            const page=await pdf.getPage(pg);
+            const content=await page.getTextContent();
+            const byY={};
+            content.items.forEach(it=>{const y=Math.round(it.transform[5]/4)*4;if(!byY[y])byY[y]=[];byY[y].push({x:it.transform[4],s:it.str});});
+            Object.keys(byY).sort((a,b)=>Number(b)-Number(a)).forEach(y=>{
+              const line=byY[y].sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim();
+              if(!line)return;
+              const splitRE=/(L[AÁ]SER|LASER|HIFU|CERA)\s+\d{1,2}\s+\w+\s+\$/ig;
+              const positions=[];let sm;const re2=new RegExp(splitRE.source,"ig");
+              while((sm=re2.exec(line))!==null)positions.push(sm.index);
+              if(!positions.length)return;
+              positions.map((pos,i)=>line.slice(pos,i<positions.length-1?positions[i+1]:undefined))
+                .forEach(seg=>{const p=parsePDFLine(seg,docYear);if(p)allRows.push({id:`v${allRows.length}`,...p,incluir:true});});
+            });
+          }
+        }
+      }
+      // Re-asignar IDs correlativos
+      allRows=allRows.map((r,i)=>({...r,id:`v${i}`}));
+      console.log(`Ventas cargadas: ${files.length} archivos → ${allRows.length} registros`);
+      setVentas(allRows);
+      setStep(4);
+    }catch(e){
+      console.error("Ventas parse error:",e);
+      alert("Error al leer archivo: "+e.message);
+    }finally{
+      setCsvLoading(false);
+    }
+  };
+  const parsePDFVentas=async(file)=>{
+    setVentasFile(file.name);setCsvLoading(true);
+    try{
+      const ab=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+      const docYear=minDate.slice(0,4)||String(new Date().getFullYear());
+      const rows=[];
+      for(let pg=1;pg<=pdf.numPages;pg++){
+        const page=await pdf.getPage(pg);
+        const content=await page.getTextContent();
+        // Agrupar items por Y → reconstruir líneas completas (no columnas)
+        const byY={};
+        content.items.forEach(it=>{
+          const y=Math.round(it.transform[5]/4)*4;
+          if(!byY[y])byY[y]=[];
+          byY[y].push({x:it.transform[4],s:it.str});
+        });
+        Object.keys(byY).sort((a,b)=>Number(b)-Number(a)).forEach(y=>{
+          // Reconstruir línea completa uniendo todos los items ordenados por X
+          const line=byY[y].sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim();
+          if(!line)return;
+          // Detectar múltiples registros fusionados en una sola línea (pdfjs agrupa filas cercanas)
+          const splitRE=/(L[AÁ]SER|LASER|HIFU|CERA)\s+\d{1,2}\s+\w+\s+\$/ig;
+          const positions=[];
+          let sm;
+          const re2=new RegExp(splitRE.source,"ig");
+          while((sm=re2.exec(line))!==null)positions.push(sm.index);
+          if(!positions.length)return;
+          const segments=positions.map((pos,i)=>line.slice(pos,i<positions.length-1?positions[i+1]:undefined));
+          segments.forEach(seg=>{const p=parsePDFLine(seg,docYear);if(p)rows.push({id:`v${rows.length}`,...p,incluir:true});});
+        });
+      }
+      setVentas(rows);
+      setStep(4);
+    }catch(e){
+      console.error("PDF parse error:",e);
+      alert("Error al leer el PDF: "+e.message);
+    }finally{
+      setCsvLoading(false);
+    }
+  };
+
+  // ── Matching citas ↔ ventas (useEffect en vez de useMemo) ─────────────────
+  const[citasMatched,setCitasMatched]=useState([]);
+  const[unmatchedVentas,setUnmatchedVentas]=useState([]);
+  // Links manuales: Map<citaId, ventaId>
+  const[manualLinks,setManualLinks]=useState(new Map());
+  const[linkingVenta,setLinkingVenta]=useState(null); // ventaId que se está vinculando
+  const[linkSearch,setLinkSearch]=useState("");
+  useEffect(()=>{
+    if(!citasAll.length){setCitasMatched([]);setUnmatchedVentas([]);return;}
+    if(!ventas.length){setCitasMatched(citasAll.map(c=>({...c,venta:null})));setUnmatchedVentas([]);return;}
+    const pool=new Map();
+    ventas.forEach(v=>{const k=normName(v.cliente);if(!pool.has(k))pool.set(k,[]);pool.get(k).push(v);});
+    const wordIdx=new Map();
+    for(const k of pool.keys()){k.split(" ").filter(w=>w.length>2).forEach(w=>{if(!wordIdx.has(w))wordIdx.set(w,[]);wordIdx.get(w).push(k);});}
+    const used=new Set();
+    // Aplicar links manuales primero
+    manualLinks.forEach((ventaId)=>used.add(ventaId));
+    const findMatch=(cNorm)=>{
+      const exact=(pool.get(cNorm)||[]).find(v=>!used.has(v.id));
+      if(exact)return exact;
+      const words=cNorm.split(" ").filter(w=>w.length>2);
+      const counts=new Map();
+      words.forEach(w=>(wordIdx.get(w)||[]).forEach(k=>counts.set(k,(counts.get(k)||0)+1)));
+      let bestKey=null,bestC=1;
+      for(const[k,c]of counts)if(c>bestC){bestC=c;bestKey=k;}
+      return bestKey?(pool.get(bestKey)||[]).find(v=>!used.has(v.id))||null:null;
+    };
+    const cm=citasAll.map(c=>{
+      // Link manual tiene prioridad
+      const manualVentaId=manualLinks.get(c.id);
+      if(manualVentaId){const v=ventas.find(v=>v.id===manualVentaId);return{...c,venta:v||null,manualMatch:true};}
+      const avail=findMatch(normName(c.nombre));
+      if(avail)used.add(avail.id);
+      return{...c,venta:avail||null};
+    });
+    setCitasMatched(cm);
+    setUnmatchedVentas(ventas.filter(v=>!used.has(v.id)));
+  },[citasAll,ventas,manualLinks]);
+
+  const toggleCita=(id)=>setCitasAll(p=>p.map(c=>c.id===id?{...c,incluir:!c.incluir}:c));
+  const toggleAll=(v)=>setCitasAll(p=>p.map(c=>({...c,incluir:v&&!c.beforeMin&&c.estado!=="cancelada"})));
+  const toggleVenta=(id)=>setVentas(p=>p.map(v=>v.id===id?{...v,incluir:!v.incluir}:v));
+  const addManualLink=(citaId,ventaId)=>{setManualLinks(prev=>{const m=new Map(prev);m.set(citaId,ventaId);return m;});setLinkingVenta(null);setLinkSearch("");};
+  const removeManualLink=(citaId)=>setManualLinks(prev=>{const m=new Map(prev);m.delete(citaId);return m;});
+
+  // ── Estadísticas ───────────────────────────────────────────────────────────
+  const citasPost=citasAll.filter(c=>!c.beforeMin);
+  const citasPre=citasAll.filter(c=>c.beforeMin);
+  const citasSel=citasAll.filter(c=>c.incluir);
+  const citasCan=citasPost.filter(c=>c.estado==="cancelada");
+  const withVenta=citasMatched.filter(c=>c.incluir&&c.venta).length;
+  const sinVenta=citasMatched.filter(c=>c.incluir&&!c.venta).length;
+
+  // ── Progreso de importación ────────────────────────────────────────────────
+  const[progress,setProgress]=useState({fase:"",done:0,total:0});
+
+  // ── Importación combinada ──────────────────────────────────────────────────
+  const importar=async()=>{
+    const toImport=citasMatched.filter(c=>c.incluir);
+    if(!toImport.length)return;
+    setImporting(true);
+    setProgress({fase:"Iniciando...",done:0,total:0});
+    let clientasCreadas=0,citasCreadas=0,paqCreados=0,ticketsCreados=0,errores=0;
+    try{
+      // 1. Build client map
+      setProgress({fase:"Preparando clientas...",done:0,total:1});
+      const cliMap=new Map();
+      toImport.forEach(c=>{const k=normName(c.nombre);if(!cliMap.has(k))cliMap.set(k,{name:c.nombre,campana:c.venta?.campana||"",tipo:c.venta?.tipo||"Nueva"});});
+      unmatchedVentas.filter(v=>v.incluir).forEach(v=>{const k=normName(v.cliente);if(!cliMap.has(k))cliMap.set(k,{name:v.cliente,campana:v.campana||"",tipo:v.tipo||"Nueva"});});
+      // 2. Check existing clientas
+      const allNames=[...cliMap.values()].map(c=>c.name);
+      const{data:ex}=await supabase.from("clientas").select("id,nombre").eq("sucursal_id",session.id).in("nombre",allNames);
+      const idMap={};(ex||[]).forEach(c=>{idMap[c.nombre]=c.id;});
+      // 3. Insert new clientas in batch
+      const newClis=[...cliMap.values()].filter(c=>!idMap[c.name]).map(c=>({nombre:c.name,sucursal_id:session.id,sucursal_nombre:session.nombre,como_nos_conocio:c.campana}));
+      if(newClis.length){
+        setProgress({fase:`Creando ${newClis.length} clientas nuevas...`,done:0,total:newClis.length});
+        for(let i=0;i<newClis.length;i+=50){
+          const{data:ins}=await supabase.from("clientas").insert(newClis.slice(i,i+50)).select("id,nombre");
+          (ins||[]).forEach(c=>{idMap[c.nombre]=c.id;clientasCreadas++;});
+          setProgress({fase:`Creando clientas...`,done:Math.min(i+50,newClis.length),total:newClis.length});
+        }
+      }
+      // 4. Obtener ticket_num base usando la función global probada
+      let nextTNum=await nextTicketNum();
+      // 5. Group citas by normName+servicio → paquetes + citas + tickets
+      const groups=new Map();
+      toImport.forEach(c=>{const k=`${normName(c.nombre)}|${c.servicio}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(c);});
+      const groupArr=[...groups.values()];
+      let gDone=0;
+      setProgress({fase:"Creando paquetes y citas...",done:0,total:groupArr.length});
+      for(const ses of groupArr){
+        const first=ses[0];const clientaId=idMap[first.nombre];
+        if(!clientaId){errores++;gDone++;continue;}
+        const maxSes=Math.max(...ses.map(s=>s.totalSes||1));
+        const sesUsadas=ses.filter(s=>s.estado==="completada").length;
+        const precio=ses.find(s=>s.venta?.monto)?.venta?.monto||0;
+        const{data:paq,error:ePaq}=await supabase.from("paquetes").insert([{clienta_id:clientaId,clienta_nombre:first.nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:first.servicio,total_sesiones:maxSes,sesiones_usadas:sesUsadas,precio,fecha_compra:ses[0].fecha,activo:sesUsadas<maxSes}]).select();
+        if(ePaq){console.error("Paquete error:",ePaq.message);errores++;gDone++;continue;}
+        const paqId=paq?.[0]?.id;paqCreados++;
+        // Batch insert citas del grupo
+        const citaRows=ses.map(c=>({clienta_id:clientaId,clienta_nombre:c.nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:"Importado ICS+CSV"}));
+        const{error:eCitas}=await supabase.from("citas").insert(citaRows);
+        if(eCitas){console.error("Citas error:",eCitas.message);errores++;}else citasCreadas+=citaRows.length;
+        // Ticket de venta (solo sesión 1 con venta vinculada)
+        const primeraSesConVenta=ses.find(c=>c.sesNum===1&&c.venta?.monto);
+        if(primeraSesConVenta){
+          const v=primeraSesConVenta.venta;
+          const tNum=nextTNum++;
+          const{error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[v.concepto||primeraSesConVenta.servicio],total:v.monto,metodo_pago:v.metodo||"Otro",descuento:0,tipo_clienta:v.tipo||"Nueva",fecha:primeraSesConVenta.fecha}]);
+          if(eT){console.error("Ticket error:",eT.message,{tNum});}else ticketsCreados++;
+        }
+        gDone++;
+        setProgress({fase:`Paquetes y citas... (${gDone}/${groupArr.length})`,done:gDone,total:groupArr.length});
+      }
+      // 6. Ventas sin cita → solo tickets
+      const ventasSinCita=unmatchedVentas.filter(v=>v.incluir);
+      if(ventasSinCita.length){
+        setProgress({fase:`Importando ${ventasSinCita.length} tickets sin cita...`,done:0,total:ventasSinCita.length});
+        for(let i=0;i<ventasSinCita.length;i++){
+          const v=ventasSinCita[i];
+          const clientaId=idMap[v.cliente];
+          const tNum=nextTNum++;
+          const{error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[v.concepto||v.servicio],total:v.monto,metodo_pago:v.metodo||"Otro",descuento:0,tipo_clienta:v.tipo||"Nueva",fecha:v.fecha}]);
+          if(eT){console.error("Ticket sin cita error:",eT.message,{tNum});}else ticketsCreados++;
+          setProgress({fase:`Tickets sin cita... (${i+1}/${ventasSinCita.length})`,done:i+1,total:ventasSinCita.length});
+        }
+      }
+    }catch(e){console.error("Importar error:",e);errores++;}
+    setResult({clientas:clientasCreadas,citas:citasCreadas,paquetes:paqCreados,tickets:ticketsCreados,errores});
+    setStep(5);setImporting(false);
+  };
+
+  const PASOS=[{n:1,l:"Subir ICS"},{n:2,l:"Revisar calendario"},{n:3,l:"Subir ventas"},{n:4,l:"Matching"},{n:5,l:"Listo"}];
+
+  const ROW_STYLE={display:"grid",gridTemplateColumns:"32px 1fr 120px 80px 36px 36px 90px",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",gap:"6px"};
+  const HDR_STYLE={...ROW_STYLE,padding:"7px 12px",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,background:"#22264A",zIndex:2};
+
+  return(
+    <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
+        <div style={{fontSize:"22px"}}>🔗</div>
+        <div><div style={{fontSize:"16px",fontWeight:700}}>Importar ICS + Ventas (combinado)</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Previsualiza todo antes de importar · Sucursal: <span style={{color:"#49B8D3"}}>{session.nombre}</span></div></div>
+      </div>
+
+      {/* Stepper */}
+      <div style={{display:"flex",gap:"6px",marginBottom:"24px",flexWrap:"wrap"}}>
+        {PASOS.map((p,i)=>(
+          <div key={p.n} style={{display:"flex",alignItems:"center",gap:"6px",flex:i<4?1:"auto"}}>
+            <div style={{width:"26px",height:"26px",borderRadius:"50%",background:step>=p.n?"#2721E8":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:700,color:step>=p.n?"#fff":"rgba(255,255,255,0.2)",flexShrink:0}}>{step>p.n?"✓":p.n}</div>
+            <div style={{fontSize:"11px",color:step===p.n?"#fff":"rgba(255,255,255,0.25)",fontWeight:step===p.n?600:400,whiteSpace:"nowrap"}}>{p.l}</div>
+            {i<4&&<div style={{flex:1,height:"1px",background:step>p.n?"#2721E8":"rgba(255,255,255,0.06)",minWidth:"8px"}}/>}
+          </div>
+        ))}
+      </div>
+
+      {/* ─── PASO 1: Subir ICS ─────────────────────────────────────────────── */}
+      {step===1&&<div>
+        <div onDragOver={e=>{e.preventDefault();setIcsDrag(true);}} onDragLeave={()=>setIcsDrag(false)}
+          onDrop={e=>{e.preventDefault();setIcsDrag(false);const f=e.dataTransfer.files[0];if(f&&f.name.endsWith(".ics"))onICS(f);}}
+          onClick={()=>icsRef.current?.click()}
+          style={{border:`2px dashed ${icsDrag?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"16px",padding:"60px 40px",textAlign:"center",cursor:"pointer",background:icsDrag?"rgba(39,33,232,0.08)":"rgba(255,255,255,0.02)",transition:"all 0.2s"}}>
+          <div style={{fontSize:"48px",marginBottom:"16px"}}>{icsLoading?"⏳":"📅"}</div>
+          <div style={{fontSize:"15px",fontWeight:600,marginBottom:"8px"}}>{icsLoading?"Procesando...":"Arrastra tu archivo .ics aquí"}</div>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>Exporta desde Google Calendar → Configuración → tu calendario → Exportar</div>
+          <div className="btn-blue" style={{display:"inline-block",padding:"10px 24px",fontSize:"13px"}}>Seleccionar .ics</div>
+        </div>
+        <input ref={icsRef} type="file" accept=".ics" onChange={e=>{if(e.target.files[0])onICS(e.target.files[0]);}} style={{display:"none"}}/>
+        <div style={{marginTop:"12px",display:"flex",alignItems:"center",gap:"10px",fontSize:"12px",color:"rgba(255,255,255,0.35)"}}>
+          <span>Filtrar desde:</span>
+          <input type="date" value={minDate} onChange={e=>setMinDate(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:"#fff",padding:"4px 8px",fontSize:"11px",colorScheme:"dark"}}/>
+          <span style={{opacity:0.5}}>(eventos antes de esta fecha se marcarán como "histórico")</span>
+        </div>
+      </div>}
+
+      {/* ─── PASO 2: Preview completo del ICS ──────────────────────────────── */}
+      {step===2&&<div>
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"8px",marginBottom:"14px"}}>
+          {[
+            {l:"Total en archivo",v:citasAll.length+skipped.length,c:"rgba(255,255,255,0.5)"},
+            {l:"A importar",v:citasSel.length,c:"#10b981"},
+            {l:"Canceladas",v:citasCan.length,c:"rgba(255,255,255,0.25)"},
+            {l:"Históricas (antes "+minDate.slice(0,7)+")",v:citasPre.length,c:"rgba(255,255,255,0.2)"},
+            {l:"Omitidas (sin datos)",v:skipped.length,c:"#f97316"},
+          ].map(k=><div key={k.l} style={{padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+            <div style={{fontSize:"20px",fontWeight:700,color:k.c}}>{k.v}</div>
+            <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginTop:"2px",lineHeight:1.3}}>{k.l}</div>
+          </div>)}
+        </div>
+
+        {/* Fecha mínima */}
+        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"12px",flexWrap:"wrap"}}>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)"}}>Importar desde:</div>
+          <input type="date" value={minDate} onChange={e=>reapplyMin(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:"#fff",padding:"4px 8px",fontSize:"11px",colorScheme:"dark"}}/>
+          <button className="btn-ghost" style={{fontSize:"10px",padding:"4px 10px"}} onClick={()=>toggleAll(true)}>✓ Marcar válidas</button>
+          <button className="btn-ghost" style={{fontSize:"10px",padding:"4px 10px"}} onClick={()=>toggleAll(false)}>✕ Desmarcar todo</button>
+        </div>
+
+        {/* Tabs de filtro */}
+        <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
+          {[{v:"validos",l:`Válidas (${citasPost.length})`},{v:"historicas",l:`Históricas (${citasPre.length})`},{v:"omitidas",l:`Omitidas (${skipped.length})`}].map(t=>(
+            <button key={t.v} onClick={()=>setFilterTab(t.v)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:600,cursor:"pointer",background:filterTab===t.v?"rgba(39,33,232,0.15)":"transparent",borderColor:filterTab===t.v?"#2721E8":"rgba(255,255,255,0.1)",color:filterTab===t.v?"#fff":"rgba(255,255,255,0.4)"}}>{t.l}</button>
+          ))}
+        </div>
+
+        {/* Tabla válidas */}
+        {filterTab==="validos"&&<div style={{maxHeight:"380px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px"}}>
+          <div style={HDR_STYLE}>{["","Nombre","Servicio","Fecha","Ses","Tot","Estado"].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}</div>
+          {citasPost.length===0&&<div style={{padding:"30px",textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:"12px"}}>No hay citas en este rango de fechas</div>}
+          {citasPost.map(c=><div key={c.id} style={{...ROW_STYLE,opacity:c.incluir?1:0.3,background:c.estado==="cancelada"?"rgba(255,100,100,0.04)":"transparent"}}>
+            <input type="checkbox" checked={c.incluir} onChange={()=>toggleCita(c.id)} style={{width:"13px",height:"13px",cursor:"pointer",accentColor:"#2721E8"}}/>
+            <div style={{fontSize:"12px",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.nombre}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.servicio}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"2-digit"})}</div>
+            <div style={{fontSize:"11px",color:"#49B8D3",fontWeight:600,textAlign:"center"}}>{c.sesNum}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",textAlign:"center"}}>{c.totalSes}</div>
+            <div style={{fontSize:"10px",fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="cancelada"?"rgba(255,100,100,0.5)":"#49B8D3"}}>{c.estado==="completada"?"✅ Hecha":c.estado==="cancelada"?"✗ Cancelada":"📅 Agendada"}</div>
+          </div>)}
+        </div>}
+
+        {/* Tabla históricas */}
+        {filterTab==="historicas"&&<div style={{maxHeight:"380px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px"}}>
+          <div style={{padding:"10px 14px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>
+            Citas anteriores a {minDate} — no se importarán (puedes cambiar la fecha de filtro arriba para incluirlas)
+          </div>
+          {citasPre.length===0&&<div style={{padding:"30px",textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:"12px"}}>Ninguna</div>}
+          {citasPre.map(c=><div key={c.id} style={{...ROW_STYLE,opacity:0.35}}>
+            <div/><div style={{fontSize:"11px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.nombre}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>{c.servicio}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>{c.fecha}</div>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",textAlign:"center"}}>{c.sesNum}</div>
+            <div/><div/>
+          </div>)}
+        </div>}
+
+        {/* Tabla omitidas */}
+        {filterTab==="omitidas"&&<div style={{maxHeight:"380px",overflowY:"auto",border:"1px solid rgba(249,115,22,0.2)",borderRadius:"10px"}}>
+          <div style={{padding:"8px 12px",background:"rgba(249,115,22,0.06)",borderBottom:"1px solid rgba(249,115,22,0.15)",fontSize:"10px",letterSpacing:"1px",color:"#f97316",fontWeight:600}}>EVENTOS OMITIDOS — no se importarán</div>
+          {skipped.length===0&&<div style={{padding:"30px",textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:"12px"}}>Ninguno</div>}
+          {skipped.map((s,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",gap:"8px"}}>
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.summary||"(sin título)"}</div>
+            <div style={{fontSize:"10px",color:"#f97316",whiteSpace:"nowrap",flexShrink:0}}>{s.razon}</div>
+          </div>)}
+        </div>}
+
+        <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>{setStep(1);setCitasAll([]);setSkipped([]);setIcsFile("");}}>← Otro archivo</button>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>importar()} disabled={importing||citasSel.length===0}>
+            {importing?"Importando...":"↑ Importar solo calendario ("+citasSel.length+")"}
+          </button>
+          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"13px"}} onClick={()=>setStep(3)} disabled={citasSel.length===0}>
+            Continuar → subir ventas ({citasSel.length} citas)
+          </button>
+        </div>
+        <div style={{fontSize:"10px",color:"rgba(255,255,255,0.15)",marginTop:"8px",textAlign:"center"}}>
+          {icsFile} · {citasAll.length+skipped.length} eventos brutos en el archivo
+        </div>
+      </div>}
+
+      {/* ─── PASO 3: Subir CSV o PDF de ventas ─────────────────────────────── */}
+      {step===3&&<div>
+        <div style={{marginBottom:"12px",padding:"12px 16px",background:"rgba(39,33,232,0.08)",borderRadius:"10px",border:"1px solid rgba(39,33,232,0.2)",fontSize:"12px",color:"rgba(255,255,255,0.6)"}}>
+          Sube el <b>CSV de mightymerge.io</b> (recomendado) o el PDF del reporte mensual — se extraen: Servicio, Fecha, Monto, Cliente, Forma de Pago, Campaña
+        </div>
+        <div onDragOver={e=>{e.preventDefault();setCsvDrag(true);}} onDragLeave={()=>setCsvDrag(false)}
+          onDrop={e=>{e.preventDefault();setCsvDrag(false);if(e.dataTransfer.files.length)handleVentasFile(e.dataTransfer.files);}}
+          onClick={()=>csvRef.current?.click()}
+          style={{border:`2px dashed ${csvDrag?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"16px",padding:"40px 40px",textAlign:"center",cursor:"pointer",background:csvDrag?"rgba(39,33,232,0.08)":"rgba(255,255,255,0.02)",transition:"all 0.2s",marginBottom:"14px"}}>
+          <div style={{fontSize:"40px",marginBottom:"12px"}}>{csvLoading?"⏳":"📊"}</div>
+          <div style={{fontSize:"14px",fontWeight:600,marginBottom:"6px"}}>{csvLoading?"Leyendo archivos de ventas...":"Arrastra los CSV de ventas aquí"}</div>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginBottom:"12px"}}>Puedes seleccionar varios CSVs a la vez (uno por mes) · También acepta PDF</div>
+          {!csvLoading&&<div className="btn-blue" style={{display:"inline-block",padding:"8px 20px",fontSize:"12px"}}>Seleccionar archivos</div>}
+        </div>
+        <input ref={csvRef} type="file" accept=".pdf,.csv" multiple onChange={e=>{if(e.target.files.length)handleVentasFile(e.target.files);}} style={{display:"none"}}/>
+        <div style={{display:"flex",gap:"10px"}}>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(2)}>← Regresar</button>
+          <button className="btn-ghost" style={{flex:2,padding:"13px"}} onClick={()=>setStep(4)}>Omitir ventas → solo importar citas</button>
+        </div>
+      </div>}
+
+      {/* ─── PASO 4: Preview matching ───────────────────────────────────────── */}
+      {step===4&&<div>
+        {/* Stats matching */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"14px"}}>
+          {[
+            {l:"Citas a importar",v:citasSel.length,c:"#fff"},
+            {l:"Con venta vinculada",v:withVenta,c:"#10b981"},
+            {l:"Sin venta",v:sinVenta,c:"#f97316"},
+            {l:"Ventas sin cita",v:unmatchedVentas.filter(v=>v.incluir).length,c:"#49B8D3"},
+          ].map(k=><div key={k.l} style={{padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+            <div style={{fontSize:"22px",fontWeight:700,color:k.c}}>{k.v}</div>
+            <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginTop:"2px"}}>{k.l}</div>
+          </div>)}
+        </div>
+
+        {/* Tabla citas + matching */}
+        <div style={{fontSize:"10px",color:"rgba(255,255,255,0.25)",marginBottom:"6px",letterSpacing:"1px"}}>CITAS — matching con ventas por nombre de cliente</div>
+        <div style={{maxHeight:"320px",overflowY:"auto",border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px",marginBottom:"14px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"32px 1fr 100px 70px 90px 90px 80px",padding:"7px 12px",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,background:"#22264A",zIndex:2}}>
+            {["","Nombre","Servicio","Fecha","Estado","Venta","Método"].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
+          </div>
+          {citasMatched.filter(c=>c.incluir).map(c=>(
+            <div key={c.id} style={{display:"grid",gridTemplateColumns:"32px 1fr 100px 70px 90px 90px 80px",padding:"5px 12px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",gap:"4px",background:c.venta?"rgba(16,185,129,0.03)":"transparent"}}>
+              <div style={{width:"8px",height:"8px",borderRadius:"50%",background:c.venta?"#10b981":"#f97316",flexShrink:0}}/>
+              <div style={{fontSize:"11px",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.nombre}</div>
+              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.servicio}</div>
+              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>{c.fecha?.slice(5)}</div>
+              <div style={{fontSize:"10px",color:c.estado==="completada"?"#10b981":c.estado==="cancelada"?"rgba(255,100,100,0.5)":"#49B8D3"}}>{c.estado==="completada"?"✅ Hecha":c.estado==="cancelada"?"✗ Cancelada":"📅 Agenda"}</div>
+              <div style={{fontSize:"11px",color:c.venta?"#10b981":"rgba(255,255,255,0.2)",fontWeight:c.venta?600:400}}>{c.venta?fmt(c.venta.monto):"sin match"}</div>
+              <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.venta?.metodo||""}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Ventas sin cita */}
+        {unmatchedVentas.length>0&&<div style={{marginBottom:"14px"}}>
+          <div style={{fontSize:"10px",color:"rgba(73,184,211,0.8)",marginBottom:"6px",letterSpacing:"1px"}}>
+            VENTAS SIN CITA — {unmatchedVentas.length} sin vincular · haz clic en "Vincular" para asignar manualmente
+          </div>
+          <div style={{border:"1px solid rgba(73,184,211,0.15)",borderRadius:"10px",overflow:"hidden"}}>
+            {unmatchedVentas.map(v=>(
+              <div key={v.id} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                {/* Fila principal */}
+                <div style={{display:"grid",gridTemplateColumns:"32px 1fr 90px 60px 80px 70px 90px",padding:"6px 12px",alignItems:"center",gap:"4px",background:linkingVenta===v.id?"rgba(39,33,232,0.08)":"transparent"}}>
+                  <input type="checkbox" checked={v.incluir} onChange={()=>toggleVenta(v.id)} style={{width:"13px",height:"13px",cursor:"pointer",accentColor:"#49B8D3"}}/>
+                  <div style={{fontSize:"11px",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.cliente}</div>
+                  <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.concepto||v.servicio}</div>
+                  <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>{v.fecha?.slice(5)}</div>
+                  <div style={{fontSize:"11px",color:"#49B8D3",fontWeight:600}}>{fmt(v.monto)}</div>
+                  <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.metodo}</div>
+                  <button
+                    onClick={()=>{if(linkingVenta===v.id){setLinkingVenta(null);setLinkSearch("");}else{setLinkingVenta(v.id);setLinkSearch("");}}}
+                    style={{fontSize:"10px",padding:"3px 8px",borderRadius:"5px",border:"1px solid rgba(39,33,232,0.4)",background:linkingVenta===v.id?"#2721E8":"rgba(39,33,232,0.15)",color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>
+                    {linkingVenta===v.id?"✕ Cancelar":"🔗 Vincular"}
+                  </button>
+                </div>
+                {/* Panel de búsqueda inline */}
+                {linkingVenta===v.id&&<div style={{padding:"8px 12px",background:"rgba(39,33,232,0.06)",borderTop:"1px solid rgba(39,33,232,0.15)"}}>
+                  <div style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",marginBottom:"6px"}}>
+                    Buscar cita de <b style={{color:"#49B8D3"}}>{v.cliente}</b> — escribe parte del nombre:
+                  </div>
+                  <input
+                    autoFocus
+                    value={linkSearch}
+                    onChange={e=>setLinkSearch(e.target.value)}
+                    placeholder="Nombre de la clienta en el calendario..."
+                    style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"6px",color:"#fff",padding:"6px 10px",fontSize:"12px",boxSizing:"border-box",marginBottom:"6px"}}
+                  />
+                  {linkSearch.length>1&&(()=>{
+                    const q=normName(linkSearch);
+                    const results=citasMatched.filter(c=>!c.venta&&normName(c.nombre).includes(q)&&c.incluir).slice(0,8);
+                    return results.length===0
+                      ?<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",padding:"4px 0"}}>Sin resultados para "{linkSearch}"</div>
+                      :<div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
+                        {results.map(c=>(
+                          <div key={c.id}
+                            onClick={()=>addManualLink(c.id,v.id)}
+                            style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",borderRadius:"6px",background:"rgba(255,255,255,0.04)",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(39,33,232,0.2)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.04)"}>
+                            <div style={{fontSize:"11px",fontWeight:500}}>{c.nombre}</div>
+                            <div style={{display:"flex",gap:"8px",fontSize:"10px",color:"rgba(255,255,255,0.4)"}}>
+                              <span>{c.servicio}</span>
+                              <span>{c.fecha?.slice(5)}</span>
+                              <span style={{color:"#2721E8",fontWeight:600}}>← Vincular</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>;
+                  })()}
+                </div>}
+              </div>
+            ))}
+          </div>
+        </div>}
+        {/* Citas vinculadas manualmente */}
+        {manualLinks.size>0&&<div style={{marginBottom:"10px",padding:"8px 12px",background:"rgba(16,185,129,0.06)",borderRadius:"8px",border:"1px solid rgba(16,185,129,0.15)",fontSize:"11px"}}>
+          <div style={{color:"rgba(16,185,129,0.8)",marginBottom:"6px",fontSize:"10px",letterSpacing:"1px"}}>LINKS MANUALES ({manualLinks.size})</div>
+          {[...manualLinks.entries()].map(([citaId,ventaId])=>{
+            const cita=citasAll.find(c=>c.id===citaId);
+            const venta=ventas.find(v=>v.id===ventaId);
+            return cita&&venta?<div key={citaId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"3px"}}>
+              <span style={{color:"rgba(255,255,255,0.7)"}}>{cita.nombre} <span style={{color:"rgba(255,255,255,0.3)"}}>↔</span> {venta.cliente} · {fmt(venta.monto)}</span>
+              <button onClick={()=>removeManualLink(citaId)} style={{fontSize:"10px",padding:"1px 6px",borderRadius:"4px",border:"1px solid rgba(255,100,100,0.3)",background:"transparent",color:"rgba(255,100,100,0.7)",cursor:"pointer"}}>✕</button>
+            </div>:null;
+          })}
+        </div>}
+
+        {importing&&<div style={{marginBottom:"12px",padding:"12px 16px",background:"rgba(39,33,232,0.08)",borderRadius:"10px",border:"1px solid rgba(39,33,232,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+            <div style={{fontSize:"12px",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{progress.fase}</div>
+            {progress.total>0&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)"}}>{progress.done}/{progress.total}</div>}
+          </div>
+          {progress.total>0&&<div style={{height:"4px",background:"rgba(255,255,255,0.08)",borderRadius:"2px",overflow:"hidden"}}>
+            <div style={{height:"100%",background:"#2721E8",borderRadius:"2px",width:`${Math.round(progress.done/progress.total*100)}%`,transition:"width 0.3s"}}/>
+          </div>}
+        </div>}
+        <div style={{display:"flex",gap:"10px"}}>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(ventas.length?3:2)} disabled={importing}>← Regresar</button>
+          <button className="btn-blue" style={{flex:3,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||citasSel.length===0}>
+            {importing?"Trabajando...":"✓ Importar todo → "+citasSel.length+" citas · "+unmatchedVentas.filter(v=>v.incluir).length+" tickets extra → "+session.nombre}
+          </button>
+        </div>
+      </div>}
+
+      {/* ─── PASO 5: Resultado ──────────────────────────────────────────────── */}
+      {step===5&&result&&<div style={{textAlign:"center",padding:"40px 20px"}}>
+        <div style={{fontSize:"48px",marginBottom:"16px"}}>🎉</div>
+        <div style={{fontSize:"18px",fontWeight:700,marginBottom:"8px"}}>¡Importación completada!</div>
+        <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",marginBottom:"24px"}}>{icsFile} · {ventasFile||"sin CSV"} → {session.nombre}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px",maxWidth:"600px",margin:"0 auto 24px"}}>
+          {[{l:"Clientas creadas",v:result.clientas,c:"#10b981"},{l:"Citas importadas",v:result.citas,c:"#2721E8"},{l:"Paquetes creados",v:result.paquetes,c:"#49B8D3"},{l:"Tickets creados",v:result.tickets,c:"#f59e0b"}].map(k=><div key={k.l} className="glass" style={{padding:"16px",textAlign:"center"}}><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{k.l}</div></div>)}
+        </div>
+        {result.errores>0&&<div style={{fontSize:"12px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ {result.errores} errores — revisa la consola</div>}
+        <button className="btn-ghost" onClick={()=>{setStep(1);setCitasAll([]);setSkipped([]);setVentas([]);setIcsFile("");setVentasFile("");setResult(null);}}>Importar otra sucursal</button>
       </div>}
     </div>
   );
@@ -1793,7 +2492,9 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const[metaChartMetrica,setMetaChartMetrica]=useState("inversion");
   const[expandedSucSem,setExpandedSucSem]=useState(null);
   const[posSuc,setPosSuc]=useState(null);
-  const[importType,setImportType]=useState(null); // "csv" | "ics"
+  const[importType,setImportType]=useState("combinado"); // "combinado" | "ics" | "csv"
+  const[importSuc,setImportSuc]=useState(USUARIOS.find(u=>u.rol==="sucursal")||null);
+  const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
   const[soloMias,setSoloMias]=useState(false);
   const[mesSel,setMesSel]=useState(()=>defaultMes());
 
@@ -1943,7 +2644,8 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const metaDiarioF=filtro?metaDiario.filter(d=>filtro.includes(d.sucursal)):metaDiario;
   const metaDiarioMesF=filtro?metaDiarioMes.filter(d=>filtro.includes(d.sucursal)):metaDiarioMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
-  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
+  const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
+  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -2010,7 +2712,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           <div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/>
           <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
           <div style={{display:"flex"}}>
-            {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent"}} onClick={()=>setTab(t)}><span style={{fontSize:"15px"}}>{ico}</span><span>{lbl}</span></div>;})}
+            {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent"}} onClick={()=>setTab(t)}><span style={{fontSize:"15px"}}>{ico}</span><span>{lbl}</span></div>;})}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
@@ -2362,6 +3064,50 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
 
         {/* ═══ FINANZAS ═══ */}
         {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
+
+        {/* ═══ IMPORTAR ═══ */}
+        {tab==="importar"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          {/* Header + controles */}
+          <div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
+              <div style={{fontSize:"22px"}}>📥</div>
+              <div><div style={{fontSize:"16px",fontWeight:700}}>Importar datos a sucursal</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)"}}>Previsualiza y revisa los datos antes de importarlos</div></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"16px",alignItems:"end"}}>
+              {/* Sucursal */}
+              <div>
+                <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>SUCURSAL</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                  {USUARIOS.filter(u=>u.rol==="sucursal").map(s=><button key={s.id} onClick={()=>setImportSuc(s)} style={{padding:"7px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:importSuc?.id===s.id?`${s.color}22`:"transparent",borderColor:importSuc?.id===s.id?s.color:"rgba(255,255,255,0.1)",color:importSuc?.id===s.id?s.color:"rgba(255,255,255,0.4)"}}>{s.nombre}</button>)}
+                </div>
+              </div>
+              {/* Tipo */}
+              <div>
+                <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>TIPO DE ARCHIVO</div>
+                <div style={{display:"flex",gap:"6px"}}>
+                  {[{v:"combinado",l:"🔗 ICS + Ventas"},{v:"ics",l:"📅 Solo Calendario"},{v:"csv",l:"📊 Solo Ventas CSV"}].map(t=><button key={t.v} onClick={()=>setImportType(t.v)} style={{padding:"8px 16px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:importType===t.v?"rgba(39,33,232,0.15)":"transparent",borderColor:importType===t.v?"#2721E8":"rgba(255,255,255,0.1)",color:importType===t.v?"#fff":"rgba(255,255,255,0.4)"}}>{t.l}</button>)}
+                </div>
+              </div>
+              {/* Zona horaria (solo para ICS o combinado) */}
+              {(importType==="ics"||importType==="combinado")&&<div>
+                <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>ZONA HORARIA</div>
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                  <button onClick={()=>setImportDST(true)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CDT/CST (CDMX, Polanco, Metepec)</button>
+                  <button onClick={()=>setImportDST(false)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:!importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:!importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:!importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CST fijo (Oriente)</button>
+                </div>
+              </div>}
+            </div>
+          </div>
+          {/* Componente de importación */}
+          {importSuc&&<div className="glass" style={{padding:"0",overflow:"hidden"}}>
+            {importType==="combinado"
+              ?<CombinedImport key={`${importSuc.id}-combined`} session={importSuc} useDST={importDST}/>
+              :importType==="ics"
+              ?<GCalImport key={`${importSuc.id}-ics`} session={importSuc} useDST={importDST}/>
+              :<CSVImport key={`${importSuc.id}-csv`} session={importSuc}/>}
+          </div>}
+          {!importSuc&&<div style={{textAlign:"center",padding:"60px",color:"rgba(255,255,255,0.25)",fontSize:"13px"}}>Selecciona una sucursal para comenzar</div>}
+        </div>}
       </div>
     </div>
   );
