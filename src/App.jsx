@@ -2390,6 +2390,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[fConc,setFConc]=useState("");
   const[fMonto,setFMonto]=useState("");
   const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
+  const[fRecurrente,setFRecurrente]=useState(false);
+  const[fPeriodo,setFPeriodo]=useState(hoyYM);
 
   const cargar=async()=>{
     setLoading(true);
@@ -2415,6 +2417,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   };
 
   useEffect(()=>{cargar();setAiTxt("");},[periodo]);
+  useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
 
   const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro"]);
   const pl=(suc)=>{
@@ -2443,26 +2446,51 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),plt:sm("plt"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr"),customItems};
   };
 
+  const nextPeriodos=(from,count)=>{
+    const[y,m]=from.split("-").map(Number);
+    return Array.from({length:count},(_,i)=>{const d=new Date(y,m-1+i+1,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
+  };
+
   const guardar=async()=>{
     setSaving(true);
-    if(fCat==="nomina"){
-      const validas=nomRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
-      await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria","nomina");
-      if(validas.length)await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto)})));
-    }else if(fCat==="personalizado"){
-      if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
-      const catPersonal=fConc.trim();
-      await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",catPersonal);
-      await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto)}]);
-    }else{
-      if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
-      if(fCat==="renta"||fCat==="servicios"||fCat==="contenido_digital"||fCat==="plataforma_cire")await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",periodo).eq("categoria",fCat);
-      await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto)}]);
+    const periodos=fRecurrente?[fPeriodo,...nextPeriodos(fPeriodo,11)]:[fPeriodo];
+    try{
+      if(fCat==="nomina"){
+        const validas=nomRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
+        for(const p of periodos){
+          const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria","nomina");
+          if(de)throw de;
+          if(validas.length){const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto)})));if(ie)throw ie;}
+        }
+      }else if(fCat==="personalizado"){
+        if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
+        const catPersonal=fConc.trim();
+        for(const p of periodos){
+          const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",catPersonal);
+          if(de)throw de;
+          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto)}]);
+          if(ie)throw ie;
+        }
+      }else{
+        if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
+        for(const p of periodos){
+          if(fCat==="renta"||fCat==="servicios"||fCat==="contenido_digital"||fCat==="plataforma_cire"){const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",fCat);if(de)throw de;}
+          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto)}]);
+          if(ie)throw ie;
+        }
+      }
+      setFMonto("");setFConc("");
+      if(fPeriodo===periodo)await cargar();
+      else{setPeriodo(fPeriodo);}
+    }catch(err){
+      alert(`Error al guardar: ${err.message||JSON.stringify(err)}`);
+    }finally{
+      setSaving(false);
     }
-    setFMonto("");setFConc("");setSaving(false);await cargar();
   };
 
   const borrarGasto=async(id)=>{await supabase.from("gastos_operativos").delete().eq("id",id);await cargar();};
+  const borrarCategoria=async(suc,cat)=>{await supabase.from("gastos_operativos").delete().eq("sucursal_id",suc).eq("periodo",periodo).eq("categoria",cat);await cargar();};
 
   const analizarIA=async()=>{
     if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
@@ -2483,10 +2511,13 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     setAiLoad(false);
   };
 
-  const FilaGL=({l,v,c,neg=false,bold=false,indent=false})=>(
+  const FilaGL=({l,v,c,neg=false,bold=false,indent=false,onDelete=null})=>(
     <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
       <span style={{fontSize:"13px",color:bold?"#fff":indent?"rgba(255,255,255,0.45)":"rgba(255,255,255,0.65)",fontWeight:bold?700:400,paddingLeft:indent?"14px":"0"}}>{l}</span>
-      <span style={{fontSize:"13px",fontWeight:bold?700:500,color:c||(neg?"#f97316":"rgba(255,255,255,0.7)")}}>{fmt(v)}</span>
+      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+        <span style={{fontSize:"13px",fontWeight:bold?700:500,color:c||(neg?"#f97316":"rgba(255,255,255,0.7)")}}>{fmt(v)}</span>
+        {onDelete&&<button onClick={onDelete} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>}
+      </div>
     </div>
   );
 
@@ -2502,13 +2533,13 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
         </div>
         <FilaGL l={`Ventas`} v={p.ing} c="#10b981" bold/>
         <div style={{height:"8px"}}/>
-        {p.cont>0&&<FilaGL l="Contenido digital" v={p.cont} neg indent/>}
-        {p.plt>0&&<FilaGL l="Plataforma CIRE" v={p.plt} neg indent/>}
+        {p.cont>0&&<FilaGL l="Contenido digital" v={p.cont} neg indent onDelete={!compact?()=>borrarCategoria(suc,"contenido_digital"):null}/>}
+        {p.plt>0&&<FilaGL l="Plataforma CIRE" v={p.plt} neg indent onDelete={!compact?()=>borrarCategoria(suc,"plataforma_cire"):null}/>}
         <FilaGL l="Meta Ads" v={p.meta} neg indent/>
-        <FilaGL l="Nóminas" v={p.nom} neg indent/>
-        {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent/>}
-        {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent/>}
-        {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent/>}
+        {p.nom>0&&<FilaGL l="Nóminas" v={p.nom} neg indent/>}
+        {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent onDelete={!compact?()=>borrarCategoria(suc,"renta"):null}/>}
+        {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent onDelete={!compact?()=>borrarCategoria(suc,"servicios"):null}/>}
+        {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent onDelete={!compact?()=>borrarCategoria(suc,"otro"):null}/>}
         {p.customItems.map(c=><div key={c.cat} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
           <span style={{fontSize:"13px",color:"rgba(255,255,255,0.45)",paddingLeft:"14px"}}>{c.label}</span>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
@@ -2590,11 +2621,26 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
     {/* Formulario gastos */}
     <div className="glass" style={{padding:"22px"}}>
-      <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>REGISTRAR GASTO DEL MES</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>REGISTRAR GASTO · <span style={{color:"rgba(255,255,255,0.5)"}}>{etiq(fPeriodo).toUpperCase()}</span></div>
+        <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",userSelect:"none"}}>
+          <div onClick={()=>setFRecurrente(v=>!v)} style={{width:"36px",height:"20px",borderRadius:"10px",background:fRecurrente?"#2721E8":"rgba(255,255,255,0.12)",transition:"background 0.2s",position:"relative",flexShrink:0}}>
+            <div style={{position:"absolute",top:"3px",left:fRecurrente?"19px":"3px",width:"14px",height:"14px",borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+          </div>
+          <span style={{fontSize:"12px",color:fRecurrente?"#a5b4fc":"rgba(255,255,255,0.4)"}}>
+            {fRecurrente?"Gasto fijo mensual (se guardará en los próximos 12 meses)":"Solo este mes"}
+          </span>
+        </label>
+      </div>
       <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"flex-end"}}>
         <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Sucursal</div>
           <select className="inp" style={{width:"140px"}} value={fSuc} onChange={e=>setFSuc(e.target.value)}>
             {sucVisible.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Mes</div>
+          <select className="inp" style={{width:"150px"}} value={fPeriodo} onChange={e=>setFPeriodo(e.target.value)}>
+            {listaMeses.map(m=><option key={m} value={m}>{etiq(m)}</option>)}
           </select>
         </div>
         <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Categoría</div>
@@ -2612,11 +2658,11 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
           <input className="inp" style={{width:"180px",borderColor:fCat==="personalizado"?"rgba(39,33,232,0.6)":"undefined"}} placeholder={fCat==="personalizado"?"Ej: Software CRM":"Descripción (opcional)"} value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
           <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"4px"}}>Monto</div>
           <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
-          <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?"...":"Guardar"}</button>
+          <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?(fRecurrente?"Guardando 12 meses...":"Guardando..."):"Guardar"}</button>
         </>}
       </div>
       {fCat==="nomina"&&<div style={{marginTop:"14px"}}>
-        <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"8px"}}>Colaboradoras de {fSuc} · {etiq(periodo)} <span style={{color:"rgba(255,255,255,0.2)"}}>(reemplaza lo anterior)</span></div>
+        <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"8px"}}>Colaboradoras de {fSuc} · {etiq(fPeriodo)} <span style={{color:"rgba(255,255,255,0.2)"}}>(reemplaza lo anterior{fRecurrente?" en los próximos 12 meses":""})</span></div>
         {nomRows.map((n,i)=><div key={i} style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
           <input className="inp" style={{flex:2}} placeholder="Nombre" value={n.nombre} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],nombre:e.target.value};return c;})}/>
           <input className="inp" style={{width:"130px"}} type="number" placeholder="$ Monto" value={n.monto} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],monto:e.target.value};return c;})}/>
@@ -2704,9 +2750,23 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
     setLoadingMeta(true);setMetaError("");
     try{
       const since=desde,until=(hasta===hoy()?ayer():hasta),fields="adset_name,spend,actions,impressions,clicks,reach";
-      // Fetch agregado
+      const ahora=new Date();
+      const curYM=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
+      const curMonthStart=`${curYM}-01`;
+      // Si el período es completamente histórico (hasta antes del mes actual), leer de caché
+      const isAllHistorical=until<curMonthStart;
+      if(isAllHistorical){
+        const{data:diarioCached}=await supabase.from("meta_diario").select("*").gte("fecha",since).lte("fecha",until);
+        if(diarioCached&&diarioCached.length>0){
+          let tS=0,tM=0;const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+          diarioCached.forEach(r=>{tS+=Number(r.spend||0);tM+=Number(r.mensajes||0);if(pS[r.sucursal]){pS[r.sucursal].spend+=Number(r.spend||0);pS[r.sucursal].mensajes+=Number(r.mensajes||0);}});
+          setMetaData({spend:tS,mensajes:tM,impresiones:0,clics:0,alcance:0,porSucursal:pS});
+          setMetaDiario(diarioCached.map(r=>({fecha:r.fecha,sucursal:r.sucursal,mensajes:Number(r.mensajes),spend:Number(r.spend)})));
+          setLoadingMeta(false);return;
+        }
+      }
+      // Fetch desde Meta API
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      // Fetch diario
       const urlDiario=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
       const[res,resDiario]=await Promise.all([fetch(url),fetch(urlDiario)]);
       const json=await res.json();let jsonDiario=await resDiario.json();
@@ -2717,7 +2777,6 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
       rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});});
       setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
-      // Procesar datos diarios con paginación completa
       let allDiarioData=[...(jsonDiario.data||[])];
       let nextUrl=jsonDiario.paging?.next;
       while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
@@ -2727,6 +2786,14 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
         SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});
       });
       setMetaDiario(diario);
+      // Guardar datos diarios históricos en caché para futuras consultas
+      if(isAllHistorical&&diario.length>0){
+        const now=new Date().toISOString();
+        supabase.from("meta_diario").upsert(
+          diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:d.fecha.substring(0,7),mensajes:d.mensajes,spend:d.spend,updated_at:now})),
+          {onConflict:"fecha,sucursal"}
+        );
+      }
     }catch(e){setMetaError("Error Meta.");}
     setLoadingMeta(false);
   };
@@ -2744,7 +2811,9 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           const todas=cached.find(r=>r.sucursal==="Todas");
           const pS={};SUCURSALES_NAMES.forEach(s=>{const r=cached.find(c=>c.sucursal===s);pS[s]={spend:Number(r?.spend||0),mensajes:Number(r?.mensajes||0)};});
           setMetaDataMes({spend:Number(todas.spend),mensajes:Number(todas.mensajes),impresiones:Number(todas.impresiones),clics:Number(todas.clics),alcance:Number(todas.alcance),porSucursal:pS});
-          setMetaDiarioMes([]);setLoadingMetaMes(false);return;
+          const{data:diarioCached}=await supabase.from("meta_diario").select("*").eq("mes",ym);
+          setMetaDiarioMes((diarioCached||[]).map(r=>({fecha:r.fecha,sucursal:r.sucursal,mensajes:Number(r.mensajes),spend:Number(r.spend)})));
+          setLoadingMetaMes(false);return;
         }
       }
       // Fetch desde Meta API
@@ -2773,6 +2842,14 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
       const diario=[];
       allD.forEach(r=>{const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});});
       setMetaDiarioMes(diario);
+      // Guardar datos diarios en caché para meses pasados
+      if(isPast&&diario.length>0){
+        const now=new Date().toISOString();
+        supabase.from("meta_diario").upsert(
+          diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:ym,mensajes:d.mensajes,spend:d.spend,updated_at:now})),
+          {onConflict:"fecha,sucursal"}
+        );
+      }
     }catch(e){setMetaErrorMes("Error Meta.");}
     setLoadingMetaMes(false);
   };
