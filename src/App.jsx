@@ -8,7 +8,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
 const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
-const CLAUDE_KEY   = import.meta.env.VITE_CLAUDE_KEY;
+const CLAUDE_KEY        = import.meta.env.VITE_CLAUDE_KEY;
 const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const CSS = `
@@ -3635,6 +3635,381 @@ function ForgotPasswordScreen({onBack}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ASISTENTE VIRTUAL — MAYA
+// ══════════════════════════════════════════════════════════════════════════════
+// SETUP EMAIL (una sola vez):
+//   1. Crea cuenta gratis en emailjs.com
+//   2. Conecta tu correo (Gmail/Outlook)
+//   3. Crea una plantilla con variables: {{tipo}}, {{sucursal}}, {{fecha}}, {{descripcion}}, {{conversacion}}
+//   4. Agrega en .env.local:
+//      VITE_EMAILJS_SERVICE=service_xxxxx
+//      VITE_EMAILJS_TEMPLATE=template_xxxxx
+//      VITE_EMAILJS_PUBLIC_KEY=tu_public_key
+//      VITE_SOPORTE_EMAIL=tu_correo@ejemplo.com
+//
+// TABLA SUPABASE (ejecutar en SQL Editor):
+//   CREATE TABLE tickets_soporte (
+//     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+//     tipo TEXT NOT NULL,
+//     descripcion TEXT,
+//     conversacion JSONB,
+//     usuario_nombre TEXT,
+//     usuario_rol TEXT,
+//     estado TEXT DEFAULT 'abierto',
+//     creado_en TIMESTAMPTZ DEFAULT NOW()
+//   );
+
+const PROMPT_SOPORTE = `Eres Maya, asistente de soporte de CIRE Sistema, una plataforma de gestión para centros de depilación láser en México.
+
+Ayudas a las dueñas y empleadas de sucursales. Son personas con poca experiencia con tecnología, así que:
+- Explica todo de forma muy clara, amable y sencilla
+- Usa pasos numerados (1, 2, 3...) cuando expliques algo
+- Nunca uses términos técnicos sin explicarlos
+- Usa emojis ocasionalmente para ser más amigable
+- Si hay una imagen/captura adjunta, analízala para entender mejor
+
+Responde siempre en español. Al final de cada respuesta pregunta si quedó claro o si necesitan más ayuda.`;
+
+const PROMPT_SUGERENCIA = `Eres Maya, asistente de CIRE Sistema. Tu misión es recopilar sugerencias de mejora de la plataforma durante el período de pruebas con usuarios reales.
+
+- Agradece calurosamente cada sugerencia
+- Haz 1-2 preguntas para entender mejor qué necesitan y por qué
+- Sé muy entusiasta: cada sugerencia es valiosa y será revisada por el equipo
+- Confirma los detalles al final para asegurarte de haberlo entendido bien
+- Responde siempre en español`;
+
+function AsistenteVirtual({ session }) {
+  const [open, setOpen]           = useState(false);
+  const [modo, setModo]           = useState(null); // 'soporte' | 'sugerencia'
+  const [mensajes, setMensajes]   = useState([]);
+  const [input, setInput]         = useState("");
+  const [cargando, setCargando]   = useState(false);
+  const [imagen, setImagen]       = useState(null); // { base64, mimeType, url, name }
+  const [enviando, setEnviando]   = useState(false);
+  const [exito, setExito]         = useState(false);
+  const chatRef  = useRef(null);
+  const fileRef  = useRef(null);
+
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [mensajes, cargando]);
+
+  function resetear() {
+    setModo(null); setMensajes([]); setInput(""); setImagen(null);
+    setEnviando(false); setExito(false);
+  }
+
+  function iniciarModo(m) {
+    const saludo = m === "soporte"
+      ? `¡Hola, ${session.nombre}! 😊 Cuéntame, ¿qué está pasando? Describe lo que ves o lo que no te funciona. También puedes adjuntar una captura de pantalla con el clip 📎`
+      : `¡Qué bueno que me escribes, ${session.nombre}! 🌟 Me encantaría escuchar tu idea. ¿Qué te gustaría que cambiáramos o mejoráramos en la plataforma?`;
+    setModo(m);
+    setMensajes([{ role: "assistant", content: saludo }]);
+  }
+
+  function procesarImagen(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const full = e.target.result;
+      const base64 = full.split(",")[1];
+      setImagen({ base64, mimeType: file.type, url: full, name: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function enviar() {
+    const texto = input.trim();
+    if (!texto && !imagen) return;
+    if (cargando) return;
+
+    const imgActual = imagen;
+    const nuevos = [...mensajes, { role: "user", content: texto, imagen: imgActual }];
+    setMensajes(nuevos);
+    setInput(""); setImagen(null);
+    setCargando(true);
+
+    try {
+      const apiMessages = nuevos.map(m => {
+        if (m.imagen) {
+          return {
+            role: m.role,
+            content: [
+              { type: "image", source: { type: "base64", media_type: m.imagen.mimeType, data: m.imagen.base64 } },
+              { type: "text", text: m.content || "¿Puedes ver lo que está pasando en esta imagen?" }
+            ]
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": CLAUDE_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 800,
+          system: modo === "soporte" ? PROMPT_SOPORTE : PROMPT_SUGERENCIA,
+          messages: apiMessages
+        })
+      });
+      const data = await res.json();
+      const resp = data.content?.[0]?.text || "No pude obtener respuesta. Por favor intenta de nuevo. 😅";
+      setMensajes([...nuevos, { role: "assistant", content: resp }]);
+    } catch {
+      setMensajes([...nuevos, { role: "assistant", content: "Ups, hubo un problema de conexión 😅 Intenta de nuevo en un momento." }]);
+    }
+    setCargando(false);
+  }
+
+  async function crearTicket() {
+    setEnviando(true);
+    const primerMensaje = mensajes.find(m => m.role === "user")?.content || "";
+    const conversacionTexto = mensajes
+      .map(m => `${m.role === "user" ? session.nombre : "Maya"}: ${m.content || (m.imagen ? "[imagen adjunta]" : "")}`)
+      .join("\n\n");
+    // Guardar en Supabase (sin base64 para no saturar la DB)
+    const msgsLimpios = mensajes.map(m => ({ ...m, imagen: m.imagen ? { name: m.imagen.name } : null }));
+    try {
+      await supabase.from("tickets_soporte").insert([{
+        tipo: modo,
+        descripcion: primerMensaje,
+        conversacion: msgsLimpios,
+        usuario_nombre: session.nombre,
+        usuario_rol: session.rol,
+        estado: "abierto"
+      }]);
+    } catch { /* silencioso */ }
+
+    // Enviar correo vía Edge Function (Gmail)
+    try {
+      await supabase.functions.invoke("enviar-ticket", {
+        body: {
+          tipo: modo,
+          sucursal: session.nombre,
+          fecha: new Date().toLocaleDateString("es-MX", { dateStyle: "full" }),
+          descripcion: primerMensaje,
+          conversacion: conversacionTexto
+        }
+      });
+    } catch { /* silencioso */ }
+
+    setEnviando(false);
+    setExito(true);
+  }
+
+  const hayMensajesUsuario = mensajes.some(m => m.role === "user");
+  const btnPanelStyle = {
+    position: "fixed", bottom: 24, right: 24,
+    width: 56, height: 56, borderRadius: "50%",
+    background: "linear-gradient(135deg, #2721E8, #49B8D3)",
+    border: "none", cursor: "pointer", zIndex: 400,
+    boxShadow: "0 8px 32px rgba(39,33,232,0.5)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 22, transition: "transform 0.2s, box-shadow 0.2s",
+    color: "#fff", fontFamily: "'Albert Sans',sans-serif"
+  };
+
+  return (
+    <>
+      {/* Botón flotante */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={btnPanelStyle}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(39,33,232,0.7)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(39,33,232,0.5)"; }}
+        title={open ? "Cerrar asistente" : "¿Necesitas ayuda?"}
+      >
+        {open ? "✕" : "💬"}
+      </button>
+
+      {/* Panel de chat */}
+      {open && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 24,
+          width: 370, height: 580,
+          background: "#1a1d40",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 20,
+          boxShadow: "0 28px 80px rgba(0,0,0,0.65)",
+          display: "flex", flexDirection: "column",
+          zIndex: 399, overflow: "hidden",
+          animation: "fadeIn 0.2s ease",
+          fontFamily: "'Albert Sans',sans-serif"
+        }}>
+          {/* Header */}
+          <div style={{
+            background: "linear-gradient(135deg, #2721E8 0%, #49B8D3 100%)",
+            padding: "14px 18px",
+            display: "flex", alignItems: "center", gap: 12, flexShrink: 0
+          }}>
+            <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🤖</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Maya — Asistente CIRE</div>
+              <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>
+                {modo === "soporte" ? "Soporte técnico 🔧" : modo === "sugerencia" ? "Sugerencias 💡" : "Siempre aquí para ayudarte ✨"}
+              </div>
+            </div>
+            {modo && !exito && (
+              <button onClick={resetear} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 11, fontFamily: "'Albert Sans',sans-serif" }}>← Menú</button>
+            )}
+          </div>
+
+          {/* Selección de modo */}
+          {!modo && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px", gap: 14 }}>
+              <div style={{ textAlign: "center", marginBottom: 4 }}>
+                <div style={{ color: "#fff", fontSize: 15, fontWeight: 600 }}>¡Hola, {session.nombre}! 👋</div>
+                <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 13, marginTop: 4 }}>¿En qué te puedo ayudar hoy?</div>
+              </div>
+              {[
+                { m: "soporte",    ico: "🔧", titulo: "Tengo un problema",    sub: "Algo no funciona como espero",          bg: "rgba(39,33,232,0.18)", brd: "rgba(39,33,232,0.4)" },
+                { m: "sugerencia", ico: "💡", titulo: "Tengo una sugerencia", sub: "Quiero proponer una mejora al sistema",   bg: "rgba(73,184,211,0.12)", brd: "rgba(73,184,211,0.35)" }
+              ].map(op => (
+                <button key={op.m} onClick={() => iniciarModo(op.m)} style={{
+                  width: "100%", padding: "15px 16px",
+                  background: op.bg, border: `1px solid ${op.brd}`,
+                  borderRadius: 14, color: "#fff", cursor: "pointer",
+                  textAlign: "left", display: "flex", alignItems: "center", gap: 14,
+                  fontFamily: "'Albert Sans',sans-serif", transition: "opacity 0.15s"
+                }}>
+                  <span style={{ fontSize: 28, flexShrink: 0 }}>{op.ico}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{op.titulo}</div>
+                    <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, marginTop: 2 }}>{op.sub}</div>
+                  </div>
+                </button>
+              ))}
+              <div style={{ color: "rgba(255,255,255,0.18)", fontSize: 10, marginTop: 8, textAlign: "center" }}>Plataforma en período de pruebas — Tu opinión importa 💙</div>
+            </div>
+          )}
+
+          {/* Éxito */}
+          {exito && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, textAlign: "center", gap: 14 }}>
+              <div style={{ fontSize: 52 }}>✅</div>
+              <div style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>
+                {modo === "soporte" ? "¡Ticket de soporte enviado!" : "¡Sugerencia registrada!"}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.65 }}>
+                {modo === "soporte"
+                  ? "El equipo de soporte recibió tu caso y te contactará pronto. ¡Gracias por avisarnos! 💪"
+                  : "¡Mil gracias! Tu sugerencia es muy valiosa y el equipo la revisará. ¡Tú eres parte de cómo crece CIRE! 🌟"}
+              </div>
+              <button className="btn-blue" style={{ marginTop: 6 }} onClick={resetear}>Listo ✓</button>
+            </div>
+          )}
+
+          {/* Chat */}
+          {modo && !exito && (
+            <>
+              {/* Mensajes */}
+              <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "14px 14px 6px", display: "flex", flexDirection: "column", gap: 10 }}>
+                {mensajes.map((m, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
+                    {m.imagen && (
+                      <img src={m.imagen.url} alt="captura" style={{ maxWidth: 200, borderRadius: 10, marginBottom: 4, border: "1px solid rgba(255,255,255,0.12)" }} />
+                    )}
+                    {(m.content || m.role === "assistant") && (
+                      <div style={{
+                        maxWidth: "88%", padding: "9px 13px",
+                        borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                        background: m.role === "user" ? "linear-gradient(135deg,#2721E8,#4f46e5)" : "rgba(255,255,255,0.08)",
+                        color: "#fff", fontSize: 13, lineHeight: 1.58, whiteSpace: "pre-wrap"
+                      }}>
+                        {m.content}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {cargando && (
+                  <div style={{ display: "flex", alignItems: "flex-start" }}>
+                    <div style={{ padding: "9px 14px", background: "rgba(255,255,255,0.08)", borderRadius: "14px 14px 14px 4px", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Maya está escribiendo…</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Banner de acción (escalar o enviar sugerencia) */}
+              {hayMensajesUsuario && (
+                <div style={{
+                  margin: "10px 14px 0",
+                  padding: "10px 12px",
+                  background: modo === "soporte" ? "rgba(249,115,22,0.1)" : "rgba(73,184,211,0.1)",
+                  border: `1px solid ${modo === "soporte" ? "rgba(249,115,22,0.3)" : "rgba(73,184,211,0.3)"}`,
+                  borderRadius: 12, display: "flex", alignItems: "center", gap: 10, flexShrink: 0
+                }}>
+                  <span style={{ fontSize: 16 }}>{modo === "soporte" ? "🎫" : "💌"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: "#fff", fontSize: 12, fontWeight: 600 }}>
+                      {modo === "soporte" ? "¿No pudiste resolverlo?" : "¿Lista para enviar tu sugerencia?"}
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 1 }}>
+                      {modo === "soporte" ? "Escalamos con el equipo de soporte" : "Llegará directo al equipo de CIRE"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={crearTicket}
+                    disabled={enviando}
+                    style={{
+                      background: modo === "soporte" ? "#f97316" : "#49B8D3",
+                      border: "none", borderRadius: 9, color: "#fff",
+                      padding: "7px 13px", fontSize: 12, fontWeight: 600,
+                      cursor: enviando ? "default" : "pointer", whiteSpace: "nowrap",
+                      opacity: enviando ? 0.7 : 1, fontFamily: "'Albert Sans',sans-serif"
+                    }}
+                  >
+                    {enviando ? "Enviando…" : modo === "soporte" ? "Escalar 🚀" : "Enviar 💙"}
+                  </button>
+                </div>
+              )}
+
+              {/* Input */}
+              <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+                {imagen && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "rgba(255,255,255,0.06)", borderRadius: 8, marginBottom: 8 }}>
+                    <img src={imagen.url} alt="" style={{ width: 30, height: 30, borderRadius: 4, objectFit: "cover" }} />
+                    <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{imagen.name}</span>
+                    <button onClick={() => setImagen(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+                  <input
+                    className="inp"
+                    placeholder={modo === "soporte" ? "Describe tu problema…" : "Escribe tu sugerencia…"}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+                    style={{ flex: 1, borderRadius: 10, padding: "9px 12px", fontSize: 13 }}
+                  />
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    title="Adjuntar captura de pantalla"
+                    style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}
+                  >📎</button>
+                  <button
+                    onClick={enviar}
+                    disabled={cargando || (!input.trim() && !imagen)}
+                    className="btn-blue"
+                    style={{ width: 36, height: 36, padding: 0, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  >➤</button>
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { procesarImagen(e.target.files[0]); e.target.value = ""; }} />
+                <div style={{ color: "rgba(255,255,255,0.15)", fontSize: 10, textAlign: "center", marginTop: 7 }}>Powered by Claude AI · CIRE Sistema UAT</div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // APP ROOT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App(){
@@ -3700,8 +4075,8 @@ export default function App(){
 
   if(mustChange)return<FirstLoginScreen session={session} onComplete={()=>setMustChange(false)}/>;
 
-  if(session.rol==="admin")return<Dashboard onLogout={logout}/>;
-  if(session.rol==="duena_general")return<Dashboard onLogout={logout} sucursalesPropias={session.sucursalesPropias}/>;
-  if(session.rol==="socia")return<Dashboard onLogout={logout} sucursalesFiltro={session.sucursales}/>;
-  return<POS session={session} onSwitchSucursal={logout} isAdmin={false}/>;
+  if(session.rol==="admin")return<><Dashboard onLogout={logout}/><AsistenteVirtual session={session}/></>;
+  if(session.rol==="duena_general")return<><Dashboard onLogout={logout} sucursalesPropias={session.sucursalesPropias}/><AsistenteVirtual session={session}/></>;
+  if(session.rol==="socia")return<><Dashboard onLogout={logout} sucursalesFiltro={session.sucursales}/><AsistenteVirtual session={session}/></>;
+  return<><POS session={session} onSwitchSucursal={logout} isAdmin={false}/><AsistenteVirtual session={session}/></>;
 }
