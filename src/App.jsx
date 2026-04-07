@@ -2683,11 +2683,11 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const curYM=(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;})();
   const mesDesde=`${mesSel}-01`;
   const mesHasta=mesSel<curYM?`${mesSel}-${new Date(mesY,mesM,0).getDate()}`:hoy();
-  const desde=periodo==="semana"?inicioSemana():periodo==="personalizado"?customDesde:mesDesde;
-  const hasta=periodo==="semana"?hoy():periodo==="personalizado"?customHasta:mesHasta;
+  const desde=periodo==="personalizado"?customDesde:mesDesde;
+  const hasta=periodo==="personalizado"?customHasta:mesHasta;
   const mesSelLabel=new Date(mesY,mesM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
   const customLabel=`${new Date(customDesde+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${new Date(customHasta+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;
-  const periodoLabel=periodo==="semana"?semanaLabel():periodo==="personalizado"?customLabel:mesSelLabel;
+  const periodoLabel=periodo==="personalizado"?customLabel:mesSelLabel;
   const mesesOpciones=Array.from({length:13},(_,i)=>{const d=new Date(new Date().getFullYear(),new Date().getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});
 
   const cargarDatos=async()=>{
@@ -3001,35 +3001,43 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   return(
     <div style={{minHeight:"100vh",background:"#22264A",color:"#fff"}}>
       {/* Topbar */}
-      <div style={{padding:"0 28px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"space-between",height:"64px",background:"rgba(0,0,0,0.4)",backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",gap:"20px"}}>
-          <div style={{fontSize:"20px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div>
-          <div style={{width:"1px",height:"20px",background:"rgba(255,255,255,0.1)"}}/>
-          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",letterSpacing:"1px"}}>DASHBOARD</div>
-          <div style={{display:"flex"}}>
-            {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent"}} onClick={()=>setTab(t)}><span style={{fontSize:"15px"}}>{ico}</span><span>{lbl}</span></div>;})}
+      <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(20,23,60,0.96)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+        {/* Fila 1: logo + controles */}
+        <div style={{padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:"52px",gap:"12px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"14px",flexShrink:0}}>
+            <div style={{fontSize:"19px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div>
+            <div style={{width:"1px",height:"16px",background:"rgba(255,255,255,0.1)"}}/>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.35)",letterSpacing:"2px"}}>DASHBOARD</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"nowrap"}}>
+            {/* Toggle Mes / Personalizado */}
+            <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden",flexShrink:0}}>
+              {[{v:"mes",l:"Mes"},{v:"personalizado",l:"Personalizado"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif",whiteSpace:"nowrap"}}>{p.l}</button>)}
+            </div>
+            {/* Selector de mes (solo modo Mes) */}
+            {!isCustomPeriod&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize",flexShrink:0}}>
+              {mesesOpciones.map(o=><option key={o.v} value={o.v} style={{background:"#22264A",textTransform:"capitalize"}}>{o.l}</option>)}
+            </select>}
+            {/* Date pickers (modo Personalizado) */}
+            {isCustomPeriod&&<div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+              <input type="date" value={customDesde} max={customHasta} onChange={e=>setCustomDesde(e.target.value)} style={{padding:"4px 7px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer",width:"130px"}}/>
+              <span style={{fontSize:"10px",color:"rgba(255,255,255,0.25)"}}>→</span>
+              <input type="date" value={customHasta} min={customDesde} max={hoy()} onChange={e=>setCustomHasta(e.target.value)} style={{padding:"4px 7px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer",width:"130px"}}/>
+            </div>}
+            {/* Indicador Meta */}
+            {loadingMeta
+              ?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.35)",flexShrink:0}}>⟳</div>
+              :metaError
+              ?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)",flexShrink:0}}>⚠ Meta</div>
+              :metaData?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.25)",flexShrink:0}}>● Meta</div>:null}
+            <button className="btn-ghost" style={{padding:"5px 9px",fontSize:"13px",flexShrink:0}} onClick={()=>{cargarDatos();cargarMeta();}}>↻</button>
+            {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px",flexShrink:0,whiteSpace:"nowrap"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ ${sucursalesPropias.join(" & ")}`:`Mis sucursales`}</button>}
+            <button className="btn-ghost" style={{fontSize:"11px",flexShrink:0}} onClick={onLogout}>Salir</button>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-          {/* Periodo toggle */}
-          <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-            {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"},{v:"personalizado",l:"Personalizado"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
-          </div>
-          {(periodo==="mes"||(tab==="meta"&&!isCustomPeriod))&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
-            {mesesOpciones.map(o=><option key={o.v} value={o.v} style={{background:"#22264A",textTransform:"capitalize"}}>{o.l}</option>)}
-          </select>}
-          {periodo==="semana"&&tab!=="meta"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>}
-          {isCustomPeriod&&<div style={{display:"flex",alignItems:"center",gap:"6px"}}>
-            <input type="date" value={customDesde} max={customHasta} onChange={e=>setCustomDesde(e.target.value)} style={{padding:"4px 8px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer"}}/>
-            <span style={{fontSize:"11px",color:"rgba(255,255,255,0.25)"}}>→</span>
-            <input type="date" value={customHasta} min={customDesde} max={hoy()} onChange={e=>setCustomHasta(e.target.value)} style={{padding:"4px 8px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer"}}/>
-          </div>}
-          {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳</div>
-            :metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>
-            :metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
-          <button className="btn-ghost" onClick={()=>{cargarDatos();cargarMeta();}}>↻</button>
-          {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ Solo ${sucursalesPropias.join(" & ")}`:`Solo mis sucursales`}</button>}
-          <button className="btn-ghost" onClick={onLogout}>Salir</button>
+        {/* Fila 2: tabs */}
+        <div style={{padding:"0 24px",display:"flex",borderTop:"1px solid rgba(255,255,255,0.04)",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
