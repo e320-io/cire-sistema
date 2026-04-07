@@ -2676,15 +2676,18 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
   const[soloMias,setSoloMias]=useState(false);
   const[mesSel,setMesSel]=useState(()=>defaultMes());
+  const[customDesde,setCustomDesde]=useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;});
+  const[customHasta,setCustomHasta]=useState(()=>ayer());
 
   const[mesY,mesM]=mesSel.split("-").map(Number);
   const curYM=(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;})();
   const mesDesde=`${mesSel}-01`;
   const mesHasta=mesSel<curYM?`${mesSel}-${new Date(mesY,mesM,0).getDate()}`:hoy();
-  const desde=periodo==="semana"?inicioSemana():mesDesde;
-  const hasta=periodo==="semana"?hoy():mesHasta;
+  const desde=periodo==="semana"?inicioSemana():periodo==="personalizado"?customDesde:mesDesde;
+  const hasta=periodo==="semana"?hoy():periodo==="personalizado"?customHasta:mesHasta;
   const mesSelLabel=new Date(mesY,mesM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-  const periodoLabel=periodo==="semana"?semanaLabel():mesSelLabel;
+  const customLabel=`${new Date(customDesde+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${new Date(customHasta+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;
+  const periodoLabel=periodo==="semana"?semanaLabel():periodo==="personalizado"?customLabel:mesSelLabel;
   const mesesOpciones=Array.from({length:13},(_,i)=>{const d=new Date(new Date().getFullYear(),new Date().getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});
 
   const cargarDatos=async()=>{
@@ -2812,17 +2815,18 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
     setLoadingHist(false);
   };
   const exportarReporteMeta=()=>{
-    if(!metaDataMes)return;
+    const dataExp=isCustomPeriod?metaData:metaDataMes;
+    if(!dataExp)return;
     const[mY,mM]=mesSel.split("-").map(Number);
-    const mesLbl=new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-    const fechaCorte=ayer();
+    const mesLbl=isCustomPeriod?customLabel:new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+    const fechaCorte=isCustomPeriod?customHasta:ayer();
     const fechaGen=new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
     const fmtPeso=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
     const fmtNum=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
     const colorMap={Coapa:"#2721E8",Valle:"#49B8D3",Oriente:"#a855f7",Polanco:"#f97316",Metepec:"#10b981"};
-    const porSucAll=SUCURSALES_NAMES.map(n=>{const sp=metaDataMes.porSucursal?.[n]?.spend||0;const ms=metaDataMes.porSucursal?.[n]?.mensajes||0;return{nombre:n,spend:sp,mensajes:ms,cpm:ms>0?sp/ms:0};});
+    const porSucAll=SUCURSALES_NAMES.map(n=>{const sp=dataExp.porSucursal?.[n]?.spend||0;const ms=dataExp.porSucursal?.[n]?.mensajes||0;return{nombre:n,spend:sp,mensajes:ms,cpm:ms>0?sp/ms:0};});
     const sorted=[...porSucAll].filter(s=>s.spend>0||s.mensajes>0).sort((a,b)=>b.spend-a.spend);
-    const totalSpend=metaDataMes.spend;const totalMsgs=metaDataMes.mensajes;const totalCPM=totalMsgs>0?totalSpend/totalMsgs:0;
+    const totalSpend=dataExp.spend;const totalMsgs=dataExp.mensajes;const totalCPM=totalMsgs>0?totalSpend/totalMsgs:0;
     const maxSpend=Math.max(...sorted.map(s=>s.spend),1);
     const masEficiente=sorted.filter(s=>s.mensajes>0).sort((a,b)=>a.cpm-b.cpm)[0];
     const menosEficiente=sorted.filter(s=>s.mensajes>0).sort((a,b)=>b.cpm-a.cpm)[0];
@@ -2917,7 +2921,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
     const w=window.open("","_blank");
     if(w){w.document.write(html);w.document.close();}
   };
-  useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel]);
+  useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel,customDesde,customHasta]);
   useEffect(()=>{cargarMetaMes(mesSel);},[mesSel]);
   useEffect(()=>{cargarMetaHistorial();},[]);
 
@@ -2928,6 +2932,12 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const ctsF=filtro?citas.filter(c=>filtro.includes(c.sucursal_nombre)):citas;
   const metaDiarioF=filtro?metaDiario.filter(d=>filtro.includes(d.sucursal)):metaDiario;
   const metaDiarioMesF=filtro?metaDiarioMes.filter(d=>filtro.includes(d.sucursal)):metaDiarioMes;
+  // Aliases para el tab Meta: cuando el periodo es personalizado se usan los datos de cargarMeta
+  const isCustomPeriod=periodo==="personalizado";
+  const metaDisplay=isCustomPeriod?metaData:metaDataMes;
+  const metaDiarioDisplay=isCustomPeriod?metaDiarioF:metaDiarioMesF;
+  const loadingMetaDisplay=isCustomPeriod?loadingMeta:loadingMetaMes;
+  const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
@@ -3003,12 +3013,17 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {/* Periodo toggle */}
           <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-            {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
+            {[{v:"semana",l:"Semana"},{v:"mes",l:"Mes"},{v:"personalizado",l:"Personalizado"}].map(p=><button key={p.v} onClick={()=>setPeriodo(p.v)} style={{padding:"5px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:periodo===p.v?"#2721E8":"transparent",color:periodo===p.v?"#fff":"rgba(255,255,255,0.35)",fontFamily:"'Albert Sans',sans-serif"}}>{p.l}</button>)}
           </div>
-          {(periodo==="mes"||tab==="meta")&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
+          {(periodo==="mes"||(tab==="meta"&&!isCustomPeriod))&&<select value={mesSel} onChange={e=>setMesSel(e.target.value)} style={{padding:"5px 10px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",textTransform:"capitalize"}}>
             {mesesOpciones.map(o=><option key={o.v} value={o.v} style={{background:"#22264A",textTransform:"capitalize"}}>{o.l}</option>)}
           </select>}
           {periodo==="semana"&&tab!=="meta"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{periodoLabel}</div>}
+          {isCustomPeriod&&<div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+            <input type="date" value={customDesde} max={customHasta} onChange={e=>setCustomDesde(e.target.value)} style={{padding:"4px 8px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer"}}/>
+            <span style={{fontSize:"11px",color:"rgba(255,255,255,0.25)"}}>→</span>
+            <input type="date" value={customHasta} min={customDesde} max={hoy()} onChange={e=>setCustomHasta(e.target.value)} style={{padding:"4px 8px",fontSize:"11px",fontWeight:600,border:"1px solid rgba(255,255,255,0.15)",borderRadius:"7px",background:"rgba(255,255,255,0.06)",color:"#fff",fontFamily:"'Albert Sans',sans-serif",outline:"none",colorScheme:"dark",cursor:"pointer"}}/>
+          </div>}
           {loadingMeta?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,255,255,0.05)",color:"rgba(255,255,255,0.4)"}}>⟳</div>
             :metaError?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)"}}>⚠</div>
             :metaData?<div style={{fontSize:"11px",padding:"4px 10px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.3)"}}>● Meta</div>:null}
@@ -3209,32 +3224,32 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
           {/* Barra de acciones */}
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-            {loadingMetaMes
+            {loadingMetaDisplay
               ?<div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",color:"rgba(255,255,255,0.4)",padding:"6px 12px",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",background:"rgba(255,255,255,0.03)"}}><div className="meta-spinner" style={{width:"14px",height:"14px",borderWidth:"2px"}}/> Sincronizando...</div>
-              :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>cargarMetaMes(mesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
-            {metaDataMes&&!loadingMetaMes&&<button onClick={exportarReporteMeta} style={{fontSize:"11px",padding:"6px 14px",borderRadius:"8px",border:"1px solid rgba(168,85,247,0.4)",background:"rgba(168,85,247,0.1)",color:"#a855f7",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:"6px"}} title="Exportar reporte PDF para cobro a sucursales">⬇ Exportar reporte</button>}
+              :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>isCustomPeriod?cargarMeta():cargarMetaMes(mesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
+            {metaDisplay&&!loadingMetaDisplay&&<button onClick={exportarReporteMeta} style={{fontSize:"11px",padding:"6px 14px",borderRadius:"8px",border:"1px solid rgba(168,85,247,0.4)",background:"rgba(168,85,247,0.1)",color:"#a855f7",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:"6px"}} title="Exportar reporte PDF para cobro a sucursales">⬇ Exportar reporte</button>}
           </div>
           {/* Contenedor con overlay de carga */}
           <div style={{position:"relative"}}>
-            {loadingMetaMes&&<div className="meta-loading-overlay">
+            {loadingMetaDisplay&&<div className="meta-loading-overlay">
               <div className="meta-spinner"/>
               <div style={{fontSize:"15px",fontWeight:600,color:"rgba(255,255,255,0.85)"}}>Cargando Meta Ads...</div>
               <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)"}}>Conectando con la API de Meta</div>
             </div>}
-          {/* Datos del mes seleccionado */}
-          {metaDataMes&&!metaErrorMes&&(()=>{
+          {/* Datos del período seleccionado */}
+          {metaDisplay&&!metaErrorDisplay&&(()=>{
             const[mY,mM]=mesSel.split("-").map(Number);
-            const mesSelLabel=new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-            const porSucMes=sucNames.map(n=>{const ms=metaDataMes.porSucursal?.[n]?.mensajes||0;const sp=metaDataMes.porSucursal?.[n]?.spend||0;return{nombre:n,mensajes:ms,spend:sp};});
+            const periodoDisp=isCustomPeriod?customLabel:new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+            const porSucMes=sucNames.map(n=>{const ms=metaDisplay.porSucursal?.[n]?.mensajes||0;const sp=metaDisplay.porSucursal?.[n]?.spend||0;return{nombre:n,mensajes:ms,spend:sp};});
             const maxMsMes=Math.max(...porSucMes.map(s=>s.mensajes),1);
-            const invMes=filtro?filtro.reduce((s,n)=>s+(metaDataMes.porSucursal?.[n]?.spend||0),0):metaDataMes.spend;
-            const msgsMes=filtro?filtro.reduce((s,n)=>s+(metaDataMes.porSucursal?.[n]?.mensajes||0),0):metaDataMes.mensajes;
+            const invMes=filtro?filtro.reduce((s,n)=>s+(metaDisplay.porSucursal?.[n]?.spend||0),0):metaDisplay.spend;
+            const msgsMes=filtro?filtro.reduce((s,n)=>s+(metaDisplay.porSucursal?.[n]?.mensajes||0),0):metaDisplay.mensajes;
             return<>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-                {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDataMes.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDataMes.alcance),c:"#49B8D3"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
+                {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDisplay.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDisplay.alcance),c:"#49B8D3"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
               </div>
               <div className="glass" style={{overflow:"hidden"}}>
-                <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES E INVERSIÓN POR SUCURSAL · {mesSelLabel.toUpperCase()}</div></div>
+                <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES E INVERSIÓN POR SUCURSAL · {periodoDisp.toUpperCase()}</div></div>
                 <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 100px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
                   {["#","Sucursal","Mensajes","Inversión"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.25)"}}>{h}</div>)}
                 </div>
@@ -3245,17 +3260,17 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
                   <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
                 </div>)}
               </div>
-              {/* Gráfica diaria del mes */}
-              {metaDiarioMesF.length>0&&(()=>{
+              {/* Gráfica diaria */}
+              {metaDiarioDisplay.length>0&&(()=>{
                 const selSt2={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"};
-                const filtrado=msgSucFiltro==="Todas"?metaDiarioMesF:metaDiarioMesF.filter(d=>d.sucursal===msgSucFiltro);
+                const filtrado=msgSucFiltro==="Todas"?metaDiarioDisplay:metaDiarioDisplay.filter(d=>d.sucursal===msgSucFiltro);
                 const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
                 const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
                 const maxMsg=Math.max(...dias.map(d=>d[1]),1);
                 const totalMsgFilt=dias.reduce((s,d)=>s+d[1],0);
                 return<div className="glass" style={{padding:"24px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-                    <div><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES POR DÍA · {mesSelLabel.toUpperCase()}</div><div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:"rgba(255,255,255,0.3)"}}>msgs · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div></div>
+                    <div><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>MENSAJES POR DÍA · {periodoDisp.toUpperCase()}</div><div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:"rgba(255,255,255,0.3)"}}>msgs · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div></div>
                     <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={selSt2}>
                       <option value="Todas" style={{background:"#22264A"}}>Todas las sucursales</option>
                       {sucNames.map(s=><option key={s} value={s} style={{background:"#22264A"}}>{s}</option>)}
@@ -3269,15 +3284,15 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
                     </div>;})}
                   </div>
                   {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
-                    {sucNames.map(s=>{const t=metaDiarioMesF.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
+                    {sucNames.map(s=>{const t=metaDiarioDisplay.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
                   </div>}
                 </div>;
               })()}
               {/* Embudo */}
-              {metaDataMes.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
-                <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO · {mesSelLabel.toUpperCase()}</div>
+              {metaDisplay.mensajes>0&&<div className="glass" style={{padding:"24px"}}>
+                <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"20px"}}>EMBUDO · {periodoDisp.toUpperCase()}</div>
                 <div style={{display:"flex",alignItems:"stretch"}}>
-                  {[{label:"Alcance",value:fmtN(metaDataMes.alcance),color:"#49B8D3"},{label:"Clics",value:fmtN(metaDataMes.clics),color:"#49B8D3",pct:metaDataMes.alcance>0?((metaDataMes.clics/metaDataMes.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaDataMes.mensajes),color:"#a855f7",pct:metaDataMes.clics>0?((metaDataMes.mensajes/metaDataMes.clics)*100).toFixed(1):0}].map((e,i)=>
+                  {[{label:"Alcance",value:fmtN(metaDisplay.alcance),color:"#49B8D3"},{label:"Clics",value:fmtN(metaDisplay.clics),color:"#49B8D3",pct:metaDisplay.alcance>0?((metaDisplay.clics/metaDisplay.alcance)*100).toFixed(1):0},{label:"Mensajes",value:fmtN(metaDisplay.mensajes),color:"#a855f7",pct:metaDisplay.clics>0?((metaDisplay.mensajes/metaDisplay.clics)*100).toFixed(1):0}].map((e,i)=>
                     <div key={e.label} style={{flex:1,padding:"20px 16px",background:`${e.color}12`,border:`1px solid ${e.color}33`,borderLeft:i>0?"none":"",borderRadius:i===0?"12px 0 0 12px":"0 12px 12px 0",textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:700,color:e.color}}>{e.value}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",margin:"4px 0"}}>{e.label}</div>{i>0&&<div style={{fontSize:"11px",color:e.color,fontWeight:600}}>{e.pct}% del anterior</div>}</div>)}
                 </div>
               </div>}
@@ -3340,8 +3355,8 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
               </div>;
             })():null}
           </div>{/* /glass tendencia */}
-          {!loadingMetaMes&&!metaDataMes&&!metaErrorMes&&<div style={{textAlign:"center",padding:"60px 32px",color:"rgba(255,255,255,0.25)",fontSize:"13px"}}>Sin datos para este período</div>}
-          {!loadingMetaMes&&metaErrorMes&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorMes}</div></div>}
+          {!loadingMetaDisplay&&!metaDisplay&&!metaErrorDisplay&&<div style={{textAlign:"center",padding:"60px 32px",color:"rgba(255,255,255,0.25)",fontSize:"13px"}}>Sin datos para este período</div>}
+          {!loadingMetaDisplay&&metaErrorDisplay&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorDisplay}</div></div>}
           </div>{/* /loading wrapper */}
         </div>}
 
