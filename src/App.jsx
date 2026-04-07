@@ -40,6 +40,7 @@ const CSS = `
   .tab-dash:hover{color:rgba(255,255,255,0.85);}
   .tab-dash.active{color:#fff;}
   @keyframes meta-spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
   .meta-spinner{width:28px;height:28px;border:2.5px solid rgba(255,255,255,0.1);border-top-color:#a855f7;border-radius:50%;animation:meta-spin 0.8s linear infinite;}
   .meta-loading-overlay{position:absolute;inset:-4px;z-index:10;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:rgba(34,38,74,0.72);border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.3s;}
   .rank-row{display:grid;grid-template-columns:32px 110px 1fr 110px 110px 100px;gap:0;padding:15px 20px;border-bottom:1px solid rgba(255,255,255,0.05);align-items:center;font-size:14px;}
@@ -76,6 +77,7 @@ const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
 const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
 const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
 const hoy=()=>new Date().toISOString().slice(0,10);
+const ayer=()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);};
 const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(data?.[0]?.ticket_num||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
 const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();
@@ -423,20 +425,34 @@ function FichaClienta({clientaId,session,onClose}){
   );
 }
 
+// Calcula posiciones de columna para citas solapadas en el mismo día
+function layoutCitas(citas){
+  const getMin=c=>{const[h,m]=c.hora_inicio.split(":").map(Number);return h*60+m;};
+  const getEnd=c=>getMin(c)+(c.duracion_min||60);
+  const sorted=[...citas].sort((a,b)=>a.hora_inicio.localeCompare(b.hora_inicio));
+  const cols=[];
+  const asgn=sorted.map(c=>{const s=getMin(c);let ci=0;while(ci<cols.length&&cols[ci]>s)ci++;if(ci===cols.length)cols.push(0);cols[ci]=getEnd(c);return{id:c.id,col:ci};});
+  const res={};
+  sorted.forEach((c,i)=>{const sA=getMin(c),eA=getEnd(c);let mx=asgn[i].col;sorted.forEach((d,j)=>{if(i===j)return;if(sA<getEnd(d)&&getMin(d)<eA)mx=Math.max(mx,asgn[j].col);});res[c.id]={col:asgn[i].col,total:mx+1};});
+  return res;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // AGENDA CALENDAR — sin "Nueva cita", con siguiente sesión al completar
 // ══════════════════════════════════════════════════════════════════════════════
-function AgendaCalendar({session,onVerFicha}){
+function AgendaCalendar({session,onVerFicha,isAdmin}){
   const[semana,setSemana]=useState(semanaD(hoy()));const[citas,setCitas]=useState([]);const[detalle,setDetalle]=useState(null);const[saving,setSaving]=useState(false);
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
   const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
   const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});
   const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);const[modalReagendar,setModalReagendar]=useState(false);const[citaReagendar,setCitaReagendar]=useState(null);const[fechaRe,setFechaRe]=useState("");const[horaRe,setHoraRe]=useState("");const[modalSinDatos,setModalSinDatos]=useState(false);const[citaSinDatos,setCitaSinDatos]=useState(null);const[datosPendientesMode,setDatosPendientesMode]=useState(false);const[confirmDelCita,setConfirmDelCita]=useState(false);
+  const[hoverCita,setHoverCita]=useState(null);const[hoverPos,setHoverPos]=useState({x:0,y:0});const hoverTimer=useRef(null);
+  const[editSesionNum,setEditSesionNum]=useState(null);const[savingSesion,setSavingSesion]=useState(false);
   const mRef=useRef(true);useEffect(()=>{mRef.current=true;return()=>{mRef.current=false;};},[]);
   const cargar=async()=>{const{data}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).gte("fecha",semana[0]).lte("fecha",semana[5]).order("hora_inicio");if(data)setCitas(data);};
   useEffect(()=>{cargar();},[semana,session]);
   useEffect(()=>{(async()=>{try{const{data,error}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");if(!error&&data?.length>0)setTerminalesAg(data);else setTerminalesAg(TERMINALES_DEFAULT);}catch(e){setTerminalesAg(TERMINALES_DEFAULT);}})();},[session.id]);
-  useEffect(()=>{if(detalle){setParametrosEdit(detalle.parametros_equipo||[]);setZonaNew("");setValNew("");}else{setParametrosEdit([]);setHistorialParams([]);setConfirmDelCita(false);}}, [detalle?.id]);
+  useEffect(()=>{if(detalle){setParametrosEdit(detalle.parametros_equipo||[]);setZonaNew("");setValNew("");}else{setParametrosEdit([]);setHistorialParams([]);setConfirmDelCita(false);}setEditSesionNum(null);},[detalle?.id]);
   useEffect(()=>{if(!detalle?.clienta_id||!detalle?.paquete_id)return;(async()=>{const{data}=await supabase.from("citas").select("sesion_numero,fecha,parametros_equipo").eq("clienta_id",detalle.clienta_id).eq("paquete_id",detalle.paquete_id).not("parametros_equipo","is",null).neq("id",detalle.id).order("sesion_numero",{ascending:false}).limit(5);setHistorialParams((data||[]).filter(c=>c.parametros_equipo?.length>0));})();},[detalle?.id]);
   const completar=async(cita,datosPendientes=false)=>{
     const isDatPend=datosPendientes||datosPendientesMode;
@@ -458,6 +474,20 @@ function AgendaCalendar({session,onVerFicha}){
     setModalSig(false);setCitaComp(null);cargar();
   }catch(e){console.error(e);}setSaving(false);};
   const cancelar=async(id,pId,sU)=>{await supabase.from("citas").update({estado:"cancelada"}).eq("id",id);if(pId)await supabase.from("paquetes").update({sesiones_usadas:Math.max(0,sU-1),activo:true}).eq("id",pId);setDetalle(null);cargar();};
+  const guardarSesionNum=async(cita,nSes)=>{
+    if(!nSes||nSes<1||nSes===cita.sesion_numero)return;
+    setSavingSesion(true);
+    try{
+      await supabase.from("citas").update({sesion_numero:nSes}).eq("id",cita.id);
+      if(cita.paquete_id&&cita.clienta_id){
+        const{data:prev}=await supabase.from("citas").select("id").eq("clienta_id",cita.clienta_id).eq("paquete_id",cita.paquete_id).neq("id",cita.id).lt("sesion_numero",nSes);
+        if(prev?.length)for(const p of prev)await supabase.from("citas").update({estado:"completada"}).eq("id",p.id);
+        await supabase.from("paquetes").update({sesiones_usadas:nSes-1}).eq("id",cita.paquete_id);
+      }
+      setEditSesionNum(null);setDetalle(null);cargar();
+    }catch(e){console.error(e);}
+    setSavingSesion(false);
+  };
   const eliminarCita=async()=>{if(!detalle)return;await supabase.from("citas").delete().eq("id",detalle.id);if(detalle.paquete_id&&detalle.estado==="completada"){const{data:paq}=await supabase.from("paquetes").select("*").eq("id",detalle.paquete_id).single();if(paq){const ns=Math.max(0,paq.sesiones_usadas-1);await supabase.from("paquetes").update({sesiones_usadas:ns,activo:true}).eq("id",paq.id);}}setDetalle(null);setConfirmDelCita(false);cargar();};
   const reagendar=async()=>{if(!fechaRe||!horaRe||!citaReagendar)return;setSaving(true);try{
     const dur=TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion||60;
@@ -525,22 +555,50 @@ function AgendaCalendar({session,onVerFicha}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:"52px repeat(6,1fr)",position:"relative"}}>
           <div>{HORAS.map(h=><div key={h} style={{height:"64px",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:"8px",paddingTop:"2px"}}><span style={{fontSize:"10px",color:"#999"}}>{h>12?`${h-12}pm`:h===12?"12pm":`${h}am`}</span></div>)}</div>
-          {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f);return(
+          {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f),ly=layoutCitas(cd);return(
             <div key={f} style={{borderLeft:"1px solid #e8e8e8",position:"relative",opacity:a?1:0.3}}>
               {HORAS.map(h=><div key={h} style={{height:"64px",borderBottom:"1px solid #f0f0f0"}}/>)}
-              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada";return(
-                <div key={c.id} onClick={e=>{e.stopPropagation();setDetalle(c);}} style={{position:"absolute",left:"2px",right:"2px",top:`${top}px`,height:`${height}px`,background:datPend?"rgba(245,158,11,0.15)":`${col}28`,border:`1px solid ${datPend?"rgba(245,158,11,0.5)":col+"70"}`,borderLeft:`3px solid ${datPend?"#f59e0b":sinAnt?"#f97316":reag?"#f59e0b":col}`,borderRadius:"6px",padding:"3px 6px",cursor:"pointer",overflow:"hidden",zIndex:5}} onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                  <div style={{fontSize:"10px",fontWeight:700,color:datPend?"#f59e0b":col,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{datPend?"📋 ":sinAnt?"⚠⚠ ":aparto?"💰💰 ":liquido?"✅✅ ":reag?"↻ ":""}{c.hora_inicio} {c.clienta_nombre}</div>
-                  {height>30&&<div style={{fontSize:"9px",color:datPend?"rgba(245,158,11,0.7)":"rgba(0,0,0,0.55)",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{datPend?"Datos pendientes":c.servicio}</div>}
+              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada",done=c.estado==="completada",lyt=ly[c.id]||{col:0,total:1},lLeft=`calc(${lyt.col/lyt.total*100}% + 1px)`,lRight=`calc(${(lyt.total-lyt.col-1)/lyt.total*100}% + 1px)`,bg=datPend?"#f59e0bEE":(done?`${col}88`:`${col}EE`);return(
+                <div key={c.id} onClick={e=>{e.stopPropagation();clearTimeout(hoverTimer.current);setHoverCita(null);setDetalle(c);}} style={{position:"absolute",left:lLeft,right:lRight,top:`${top}px`,height:`${height}px`,background:bg,borderRadius:"5px",padding:"3px 5px",cursor:"pointer",overflow:"hidden",zIndex:5,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}} onMouseEnter={e=>{e.currentTarget.style.filter="brightness(0.88)";const rect=e.currentTarget.getBoundingClientRect();clearTimeout(hoverTimer.current);hoverTimer.current=setTimeout(()=>{setHoverCita(c);setHoverPos({x:rect.right+8,y:rect.top});},900);}} onMouseLeave={e=>{e.currentTarget.style.filter="";clearTimeout(hoverTimer.current);setHoverCita(null);}}>
+                  <div style={{fontSize:"10px",fontWeight:700,color:"#fff",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textShadow:"0 1px 1px rgba(0,0,0,0.25)"}}>{datPend?"📋":sinAnt?"⚠":aparto?"💰":liquido?"✅":reag?"↻":""}{(datPend||sinAnt||aparto||liquido||reag)?" ":""}{c.hora_inicio} {c.clienta_nombre}</div>
+                  {height>28&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.9)",marginTop:"1px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{datPend?"Datos pendientes":c.servicio}</div>}
                 </div>);})}
               {f===hoy()&&(()=>{const n=new Date(),m=(n.getHours()-9)*60+n.getMinutes();if(m<0||m>720)return null;return<div style={{position:"absolute",left:0,right:0,top:`${m*PX_POR_MIN}px`,height:"2px",background:"#ff4444",zIndex:6,pointerEvents:"none"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#ff4444",position:"absolute",left:"-4px",top:"-3px"}}/></div>;})()}
             </div>);})}
         </div>
       </div>
+      {hoverCita&&!detalle&&(()=>{const c=hoverCita,col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada";const vp=window.innerHeight;const cardH=200;const y=hoverPos.y+cardH>vp?hoverPos.y-cardH:hoverPos.y;const x=hoverPos.x+260>window.innerWidth?hoverPos.x-280:hoverPos.x;return(<div style={{position:"fixed",left:`${x}px`,top:`${y}px`,zIndex:9999,pointerEvents:"none",animation:"fadeIn 0.15s ease"}}>
+        <div style={{width:240,background:"rgba(12,12,20,0.97)",border:`1px solid ${col}55`,borderRadius:"12px",padding:"14px 16px",boxShadow:`0 8px 32px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.04)`,backdropFilter:"blur(16px)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}}>
+            <div style={{width:"8px",height:"8px",borderRadius:"50%",background:col,flexShrink:0}}/>
+            <div style={{fontSize:"13px",fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clienta_nombre}</div>
+          </div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",marginBottom:"8px",fontWeight:500}}>{c.servicio}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Horario</span><span style={{color:"#fff",fontWeight:600}}>{c.hora_inicio} – {c.hora_fin}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Sesión</span><span style={{color:"#fff",fontWeight:600}}>#{c.sesion_numero}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Estado</span><span style={{fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?col:"rgba(255,255,255,0.3)"}}>{c.estado==="completada"?"✓ Completada":c.estado==="agendada"?"Agendada":"Cancelada"}</span></div>
+            {(sinAnt||aparto||liquido||reag||datPend)&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:"rgba(255,255,255,0.04)",fontSize:"10px",color:"rgba(255,255,255,0.55)",display:"flex",alignItems:"center",gap:"5px"}}>{datPend?"📋 Datos pendientes":sinAnt?"⚠ Sin anticipo · cobrar al llegar":aparto?"💰 Anticipo — pendiente liquidar":liquido?"✅ Liquidada":reag?"↻ Reagendada":""}</div>}
+          </div>
+          <div style={{marginTop:"8px",paddingTop:"6px",borderTop:"1px solid rgba(255,255,255,0.05)",fontSize:"9px",color:"rgba(255,255,255,0.2)",textAlign:"center",letterSpacing:"0.5px"}}>Haz clic para abrir ficha completa</div>
+        </div>
+      </div>);})()}
       {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorCita(detalle)}44`,color:"#fff"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:"16px"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"3px"}}>CITA</div><div style={{fontSize:"18px",fontWeight:700}}>{detalle.clienta_nombre}</div>{detalle.notas?.startsWith("Reagendada")&&<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"10px",background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.3)",color:"#f59e0b",marginTop:"4px",display:"inline-block"}}>↻ Reagendada</div>}</div><button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button></div>
         <div style={{display:"flex",flexDirection:"column",gap:"9px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",padding:"14px",marginBottom:"12px"}}>
-          {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`],["Sesión",`${detalle.sesion_numero}`]].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500,color:"#fff"}}>{v}</span></div>)}
+          {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`]].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500,color:"#fff"}}>{v}</span></div>)}
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",alignItems:"center"}}>
+            <span style={{color:"rgba(255,255,255,0.4)"}}>Sesión</span>
+            {isAdmin&&detalle.estado==="agendada"?(
+              <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                <input type="number" min="1" max="20" className="inp" value={editSesionNum!=null?editSesionNum:detalle.sesion_numero} onChange={e=>setEditSesionNum(parseInt(e.target.value)||1)} style={{width:"58px",textAlign:"center",fontSize:"13px",fontWeight:700,padding:"3px 6px"}}/>
+                {editSesionNum!=null&&editSesionNum!==detalle.sesion_numero&&<button onClick={()=>guardarSesionNum(detalle,editSesionNum)} disabled={savingSesion} style={{background:"rgba(16,185,129,0.2)",border:"1px solid rgba(16,185,129,0.5)",borderRadius:"6px",color:"#10b981",cursor:"pointer",padding:"3px 10px",fontSize:"11px",fontWeight:700,fontFamily:"inherit"}}>{savingSesion?"...":"✓ Guardar"}</button>}
+              </div>
+            ):(
+              <span style={{fontWeight:500,color:"#fff"}}>{detalle.sesion_numero}</span>
+            )}
+          </div>
+          {isAdmin&&editSesionNum!=null&&editSesionNum>1&&editSesionNum!==detalle.sesion_numero&&<div style={{fontSize:"10px",color:"rgba(73,184,211,0.65)",textAlign:"right",marginTop:"-4px"}}>Las sesiones anteriores (1–{editSesionNum-1}) quedarán como completadas</div>}
         </div>
         <div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
           {detalle.datos_pendientes&&<div style={{padding:"8px 12px",background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",borderRadius:"8px",marginBottom:"8px",display:"flex",alignItems:"center",gap:"8px",fontSize:"11px",color:"#f59e0b",fontWeight:600}}>📋 Datos de equipo pendientes — ingresa los parámetros y guarda</div>}
@@ -932,7 +990,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
           </div>)}
         </div>}
       </div>}
-      {view==="agenda"&&<AgendaCalendar key="ag" session={session} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
+      {view==="agenda"&&<AgendaCalendar key="ag" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
 
       {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)}/>:
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
@@ -1107,10 +1165,42 @@ function POS({session,onSwitchSucursal,isAdmin}){
 const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario/i;
 const ICS_EMOJI_RE=/[\p{Emoji_Presentation}\p{Extended_Pictographic}✅🔁🤖🧾\u200d\ufe0f]/gu;
 const ICS_SES_MAP=[[/\b1[ae]?ra?\b|primera\b|1er\b/,1],[/\b2d[ao]?\b|segunda\b/,2],[/\b3[ae]?ra?\b|tercera?\b/,3],[/\b4t[ao]?\b|cuarta?\b/,4],[/\b5t[ao]?\b|quinta?\b/,5],[/\b6t[ao]?\b|sexta?\b/,6],[/\b7m[ao]?\b|s[eé]ptima?\b/,7],[/\b8v[ao]?\b|octava?\b/,8],[/\b9n[ao]?\b|novena?\b/,9],[/\b10[ao]?\b|d[eé]cima?\b/,10]];
-function icsSesDesc(d){if(!d)return 1;const l=d.toLowerCase();for(const[re,n]of ICS_SES_MAP)if(re.test(l))return n;const m=d.match(/sesi[oó]n\s*#?\s*(\d+)/i);return m?parseInt(m[1]):1;}
-function icsSesSum(s){if(!s)return null;const m=s.match(/\b(\d{1,2})\s*(?:era?|ra?|da?|ta?|va?|ma?)\b/i);return m?parseInt(m[1]):null;}
-function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase();if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilian|bikini\s*brazil|brazilia/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/brazos\s*y\s*piernas/.test(src))return"Brazos y Piernas";if(/piernas/.test(src))return"Piernas";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro/.test(src))return"Rostro";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";return"Servicio";}
-function icsParseDT(dt,useDST){if(!dt)return{date:null,time:null};if(/^\d{8}$/.test(dt))return{date:`${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`,time:null};const m=dt.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}(Z?)$/);if(!m)return{date:null,time:null};const[,Y,Mo,D,H,Mi,isZ]=m;if(isZ==="Z"){const utc=new Date(Date.UTC(+Y,+Mo-1,+D,+H,+Mi));const off=(useDST&&+Mo>=4&&+Mo<=10)?5:6;const local=new Date(utc.getTime()-off*3600000);return{date:`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,"0")}-${String(local.getUTCDate()).padStart(2,"0")}`,time:`${String(local.getUTCHours()).padStart(2,"0")}:${String(local.getUTCMinutes()).padStart(2,"0")}`};}return{date:`${Y}-${Mo}-${D}`,time:`${H}:${Mi}`};}
+function icsSesDesc(d){if(!d)return 1;const l=d.toLowerCase();for(const[re,n]of ICS_SES_MAP)if(re.test(l))return n;const m=d.match(/sesi[oó]n\s*#?\s*(\d+)/i);if(m)return parseInt(m[1]);const m2=d.match(/\b(\d{1,2})\s*[°º]/);if(m2)return parseInt(m2[1]);const m3=l.match(/\b(\d{1,2})a(?:\b|[a-záéíóú])/);return m3?parseInt(m3[1]):1;}
+function icsSesSum(s){if(!s)return null;const m=s.match(/\b(\d{1,2})\s*[°º]/);if(m)return parseInt(m[1]);const m2=s.match(/\b(\d{1,2})\s*(?:era?|ra?|da?|ta?|va?|ma?|a)(?:\b|[a-záéíóú])/i);return m2?parseInt(m2[1]):null;}
+function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilia|bikini\s*brazil|\bbb\b/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/interglut/.test(src))return"Interglútea";if(/menton/.test(src))return"Mentón";if(/brazos\s*y\s*piernas|brazos/.test(src))return"Brazos y Piernas";if(/piernas\s*y\s*pompas?|\bpp\b/.test(src))return"Piernas y Pompas";if(/piernas/.test(src))return"Piernas";if(/\bpies\b|apies/.test(src))return"Pies";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro\s*completo|\brc\b/.test(src))return"Rostro Completo";if(/rostro/.test(src))return"Rostro Completo";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";return"Servicio";}
+// Extrae de la descripción: servicio principal, sesión, servicios extra y ticket(s) Zettle
+// Descripción con formato "N° SERVICIO ... N° SERVICIO2 ..." → un solo resultado con extras
+// Ej: "6° AXILAS Y BIKINI 1° MENTON #6431 1° RC 6° INTERGLUTEA" →
+//   { sesNum:6, servicio:"Axilas y Bikini",
+//     extras:[{sesNum:1,servicio:"Mentón"},{sesNum:1,servicio:"Rostro Completo"},{sesNum:6,servicio:"Interglútea"}],
+//     tickets:"#6431" }
+const DESC_NOISE_RE=/\b(PAGADO|PENDIENTE|ANTICIPO|SIN\s+ANTICIPO|REAGEND\w*|FECHA|\d+MSI|\d+PAGO|BANORTE|BANAMEX|BBVA|BANCOMER|SANTANDER|HSBC|OXXO|TRANSFERENCIA|EFECTIVO|TARJETA|CREDITO|DEBITO|CN|JV|LS|AM|MJ|SR|RO|HB|COBRADO|HECTOR|RODOLFO|NOMBRE\s+\w+)\b/gi;
+function parseDescripcionPares(desc){
+  if(!desc)return null;
+  const d=desc.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  // Extraer ticket(s) Zettle: #NNNN
+  const ticketMatches=[...d.matchAll(/#(\d{3,6})/g)];
+  const tickets=ticketMatches.length?ticketMatches.map(m=>`#${m[1]}`).join(", "):"";
+  // Buscar patrones "N° " o "Ner/Nda/etc "
+  const reOrd=/(\d{1,2})\s*[°º]|(\d{1,2})\s*(?:er|ra?|da?|ta?|va?|ma?|a)\b/gi;
+  const matches=[...d.matchAll(reOrd)];
+  if(!matches.length)return null;
+  const pairs=[];
+  for(let i=0;i<matches.length;i++){
+    const sesNum=parseInt(matches[i][1]||matches[i][2]);
+    const segStart=matches[i].index+matches[i][0].length;
+    const segEnd=i+1<matches.length?matches[i+1].index:d.length;
+    const frag=d.slice(segStart,segEnd).replace(DESC_NOISE_RE,"").replace(/\s+/g," ").trim();
+    if(!frag)continue;
+    const servicio=icsServicio(frag,"");
+    if(servicio!=="Servicio")pairs.push({sesNum,servicio});
+  }
+  if(!pairs.length)return null;
+  const[primero,...extras]=pairs;
+  return{sesNum:primero.sesNum,servicio:primero.servicio,extras:extras.length?extras:null,tickets:tickets||null};
+}
+function icsParseDT(dt,useDST){if(!dt)return{date:null,time:null};if(/^\d{8}$/.test(dt))return{date:`${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`,time:null};const m=dt.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}(Z?)$/);if(!m)return{date:null,time:null};const[,Y,Mo,D,H,Mi,isZ]=m;if(isZ==="Z"){const utc=new Date(Date.UTC(+Y,+Mo-1,+D,+H,+Mi));// México abolió DST en 2023 — desde 2023 siempre UTC-6. Antes: CDT(UTC-5) abr-oct.
+const off=(useDST&&+Y<2023&&+Mo>=4&&+Mo<=10)?5:6;const local=new Date(utc.getTime()-off*3600000);return{date:`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,"0")}-${String(local.getUTCDate()).padStart(2,"0")}`,time:`${String(local.getUTCHours()).padStart(2,"0")}:${String(local.getUTCMinutes()).padStart(2,"0")}`};}return{date:`${Y}-${Mo}-${D}`,time:`${H}:${Mi}`};}
 
 function parseICS(text,opts={}){
   // 1. Unfold continuation lines (RFC 5545 §3.1) — causa principal de datos incompletos
@@ -1135,12 +1225,12 @@ function parseICS(text,opts={}){
     if(ICS_SKIP_RE.test(sl)){skipped.push({summary:rawS,razon:"Entrada administrativa"});continue;}
     // Limpiar summary: quitar emojis, bytes corruptos UTF-8→Latin-1, ordinal de sesión
     let clean=rawS.replace(ICS_EMOJI_RE,"").replace(/[\u00c0-\u00ff]+/g,"");
-    clean=clean.replace(/^\d{1,2}\s*(?:era?|ra?|da?|ta?|va?|ma?)\s*/i,"").replace(/\s+/g," ").trim();
+    clean=clean.replace(/^\d{1,2}\s*[°º]\s*/,"").replace(/^\d{1,2}\s*(?:era?|ra?|da?|ta?|va?|ma?|a)\s*/i,"").replace(/^\d{1,2}a([a-z])/i,"$1").replace(/\s+/g," ").trim();
     if(!clean||clean.length<3){skipped.push({summary:rawS,razon:"Nombre vacío o muy corto"});continue;}
     // Extraer teléfono del final si existe
     const phoneM=clean.match(/(\d[\d\s\-]{6,}\d)\s*$/);
-    let nombre=clean;
-    if(phoneM){const nm=clean.slice(0,clean.lastIndexOf(phoneM[0])).trim();if(nm)nombre=nm;}
+    let nombre=clean;let telefono=null;
+    if(phoneM){const nm=clean.slice(0,clean.lastIndexOf(phoneM[0])).trim();if(nm){nombre=nm;telefono=phoneM[1].replace(/[\s\-]/g,"");}}
     // Fechas con zona horaria correcta
     const dtS=ev["DTSTART"]||"";const dtE=ev["DTEND"]||"";
     const{date,time:horaIni}=icsParseDT(dtS,useDST);
@@ -1149,13 +1239,25 @@ function parseICS(text,opts={}){
     if(date<minDate){skipped.push({summary:rawS,razon:`Anterior a ${minDate}`});continue;}
     // Servicio y número de sesión
     const rawDesc=(ev["DESCRIPTION"]||"").replace(/\\n/g,"\n").replace(/\\\\/g,"\\");
-    const servicio=icsServicio(rawDesc,rawS);
-    const tipo=detectTipo(servicio);
-    const sesNum=icsSesSum(rawS)||icsSesDesc(rawDesc);
-    // Estado: checkmark ✅ = completada, sin checkmark en pasado = cancelada
     const hasCheck=rawS.includes("✅");
     const estado=date<hoy()?(hasCheck?"completada":"cancelada"):"agendada";
-    appointments.push({id:`ics-${appointments.length}`,nombre,servicio,tipo:tipo.id,duracion:tipo.duracion,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion),sesNum,totalSes:8,estado,incluir:estado!=="cancelada"});
+    const reagendada=/reagend/i.test(rawDesc)||rawS.toLowerCase().includes("reagend");
+    // Intentar extraer servicio+sesión+extras+ticket desde descripción (formato "N° SERVICIO")
+    const pares=parseDescripcionPares(rawDesc);
+    let servicio,sesNum,serviciosSesion=null,ticketZettle=null;
+    if(pares){
+      servicio=pares.servicio;sesNum=pares.sesNum;
+      serviciosSesion=pares.extras||null;
+      ticketZettle=pares.tickets||null;
+    }else{
+      servicio=icsServicio(rawDesc,rawS);
+      sesNum=icsSesSum(rawS)||icsSesDesc(rawDesc);
+      // Extraer ticket incluso sin pares de servicios
+      const tm=[...rawDesc.matchAll(/#(\d{3,6})/g)];
+      if(tm.length)ticketZettle=tm.map(m=>`#${m[1]}`).join(", ");
+    }
+    const tipo=detectTipo(servicio);
+    appointments.push({id:`ics-${appointments.length}`,nombre,telefono,servicio,tipo:tipo.id,duracion:tipo.duracion,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion),sesNum,totalSes:8,estado,incluir:estado!=="cancelada",reagendada,serviciosSesion,ticketZettle});
   }
   appointments.sort((a,b)=>a.fecha.localeCompare(b.fecha));
   return{appointments,skipped};
@@ -1171,7 +1273,22 @@ function GCalImport({session,useDST=true}){
   const[step,setStep]=useState(1); // 1=subir, 2=preview, 3=resultado
   const[fileName,setFileName]=useState("");
   const[dragOver,setDragOver]=useState(false);
+  const[progress,setProgress]=useState({fase:"",done:0,total:0});
+  const[deleting,setDeleting]=useState(false);
+  const[minDate,setMinDate]=useState("2020-01-01");
   const fileRef=useRef(null);
+
+  const borrarCalendario=async()=>{
+    if(!window.confirm(`¿Borrar TODAS las citas, paquetes y clientas de ${session.nombre}? Esta acción no se puede deshacer.`))return;
+    setDeleting(true);
+    try{
+      await supabase.from("citas").delete().eq("sucursal_id",session.id);
+      await supabase.from("paquetes").delete().eq("sucursal_id",session.id);
+      await supabase.from("clientas").delete().eq("sucursal_id",session.id);
+      alert("Datos borrados. Ahora puedes volver a importar el calendario.");
+    }catch(e){console.error(e);alert("Error al borrar: "+e.message);}
+    setDeleting(false);
+  };
 
   const procesarArchivo=(file)=>{
     if(!file)return;
@@ -1179,7 +1296,7 @@ function GCalImport({session,useDST=true}){
     const reader=new FileReader();
     reader.onload=(e)=>{
       const text=e.target.result;
-      const{appointments,skipped:sk}=parseICS(text,{useDST,minDate:"2025-01-01"});
+      const{appointments,skipped:sk}=parseICS(text,{useDST,minDate});
       setParsed(appointments);setSkipped(sk);setStep(2);setLoading(false);
     };
     reader.readAsText(file);
@@ -1193,30 +1310,77 @@ function GCalImport({session,useDST=true}){
     if(toImport.length===0)return;
     setImporting(true);setResult(null);
     let clientasCreadas=0,citasCreadas=0,paquetesCreados=0,errores=0;
+
+    // Agrupar por nombre
     const porNombre={};
     toImport.forEach(p=>{if(!porNombre[p.nombre])porNombre[p.nombre]=[];porNombre[p.nombre].push(p);});
-    for(const[nombre,citas] of Object.entries(porNombre)){
-      try{
-        const{data:existing}=await supabase.from("clientas").select("id").eq("nombre",nombre).eq("sucursal_id",session.id).limit(1);
-        let clientaId;
-        if(existing&&existing.length>0){clientaId=existing[0].id;}
-        else{const{data:nc}=await supabase.from("clientas").insert([{nombre,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();clientaId=nc?.[0]?.id;clientasCreadas++;}
+    const nombres=Object.keys(porNombre);
+
+    try{
+      // ── FASE 1: traer todas las clientas existentes en 1 sola query ──────────
+      setProgress({fase:"Buscando clientas existentes...",done:0,total:nombres.length});
+      const{data:existentes=[]}=await supabase.from("clientas").select("id,nombre,telefono").eq("sucursal_id",session.id);
+      const clientaMap=Object.fromEntries((existentes||[]).map(c=>[c.nombre,c]));
+
+      // ── FASE 2: crear clientas nuevas en un solo batch ────────────────────────
+      setProgress({fase:"Creando clientas nuevas...",done:0,total:nombres.length});
+      const nuevas=nombres.filter(n=>!clientaMap[n]).map(n=>({
+        nombre:n,
+        telefono:porNombre[n].find(c=>c.telefono)?.telefono||null,
+        sucursal_id:session.id,sucursal_nombre:session.nombre
+      }));
+      if(nuevas.length>0){
+        const{data:creadas}=await supabase.from("clientas").insert(nuevas).select();
+        (creadas||[]).forEach(c=>{clientaMap[c.nombre]=c;clientasCreadas++;});
+      }
+      // Actualizar teléfono de existentes que no tenían
+      const teleUpdates=nombres.filter(n=>{const e=clientaMap[n];const t=porNombre[n].find(c=>c.telefono)?.telefono;return e&&!e.telefono&&t;});
+      await Promise.all(teleUpdates.map(n=>supabase.from("clientas").update({telefono:porNombre[n].find(c=>c.telefono).telefono}).eq("id",clientaMap[n].id)));
+
+      // ── FASE 3: crear todos los paquetes en un solo batch ────────────────────
+      setProgress({fase:"Creando paquetes...",done:0,total:nombres.length});
+      const paqRows=[];
+      for(const nombre of nombres){
+        const clientaId=clientaMap[nombre]?.id;if(!clientaId)continue;
         const porServicio={};
-        citas.forEach(c=>{if(!porServicio[c.servicio])porServicio[c.servicio]=[];porServicio[c.servicio].push(c);});
+        porNombre[nombre].forEach(c=>{if(!porServicio[c.servicio])porServicio[c.servicio]=[];porServicio[c.servicio].push(c);});
         for(const[servicio,sesiones] of Object.entries(porServicio)){
-          const maxSes=Math.max(...sesiones.map(s=>s.totalSes));
-          const sesUsadas=sesiones.filter(s=>s.estado==="completada").length;
-          const{data:paq}=await supabase.from("paquetes").insert([{clienta_id:clientaId,clienta_nombre:nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio,total_sesiones:maxSes,sesiones_usadas:sesUsadas,precio:0,fecha_compra:sesiones[0].fecha,activo:sesUsadas<maxSes}]).select();
-          const paqId=paq?.[0]?.id;paquetesCreados++;
-          for(const c of sesiones){
-            await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:"Importado de Google Calendar (.ics)"}]);
-            citasCreadas++;
-          }
+          const sesUsadasByCount=sesiones.filter(s=>s.estado==="completada").length;
+          const agsSes=sesiones.filter(s=>s.estado==="agendada");
+          // Si la próxima sesión agendada es la 6a, significa que 5 ya se hicieron
+          const sesUsadasByNum=agsSes.length>0?Math.min(...agsSes.map(s=>s.sesNum))-1:0;
+          const sesUsadas=Math.max(sesUsadasByCount,sesUsadasByNum,0);
+          const totalSes=Math.max(...sesiones.map(s=>s.sesNum),8);
+          paqRows.push({clienta_id:clientaId,clienta_nombre:nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio,total_sesiones:totalSes,sesiones_usadas:sesUsadas,precio:0,fecha_compra:sesiones[0].fecha,activo:sesUsadas<totalSes,_key:`${nombre}||${servicio}`});
         }
-      }catch(e){console.error(e);errores++;}
-    }
+      }
+      const{data:paqCreados=[]}=await supabase.from("paquetes").insert(paqRows.map(({_key,...r})=>r)).select();
+      paquetesCreados=paqCreados?.length||0;
+      // Mapear paquete_id por nombre+servicio
+      const paqMap={};
+      (paqCreados||[]).forEach((p,i)=>{paqMap[paqRows[i]._key]=p.id;});
+
+      // ── FASE 4: insertar citas en chunks de 100 ──────────────────────────────
+      const citaRows=[];
+      for(const nombre of nombres){
+        const clientaId=clientaMap[nombre]?.id;if(!clientaId)continue;
+        const porServicio={};
+        porNombre[nombre].forEach(c=>{if(!porServicio[c.servicio])porServicio[c.servicio]=[];porServicio[c.servicio].push(c);});
+        for(const[servicio,sesiones] of Object.entries(porServicio)){
+          const paqId=paqMap[`${nombre}||${servicio}`];
+          sesiones.forEach(c=>citaRows.push({clienta_id:clientaId,clienta_nombre:nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:c.reagendada?"Reagendada - Importado de Google Calendar (.ics)":"Importado de Google Calendar (.ics)",...(c.ticketZettle?{ticket_zettle:c.ticketZettle}:{}),...(c.serviciosSesion?{servicios_sesion:c.serviciosSesion}:{})}));
+        }
+      }
+      const CHUNK=100;
+      for(let i=0;i<citaRows.length;i+=CHUNK){
+        setProgress({fase:"Guardando citas...",done:i,total:citaRows.length});
+        const{error}=await supabase.from("citas").insert(citaRows.slice(i,i+CHUNK));
+        if(error)errores++;else citasCreadas+=Math.min(CHUNK,citaRows.length-i);
+      }
+    }catch(e){console.error(e);errores++;}
+
     setResult({clientas:clientasCreadas,citas:citasCreadas,paquetes:paquetesCreados,errores});
-    setStep(3);setImporting(false);
+    setStep(3);setImporting(false);setProgress({fase:"",done:0,total:0});
   };
 
   const toggleEvento=(id)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,incluir:!p.incluir}:p));
@@ -1230,7 +1394,8 @@ function GCalImport({session,useDST=true}){
     <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
         <div style={{fontSize:"22px"}}>📥</div>
-        <div><div style={{fontSize:"16px",fontWeight:700}}>Importar desde Google Calendar</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Sube el archivo .ics exportado de tu calendario · Sucursal: <span style={{color:"#49B8D3"}}>{session.nombre}</span></div></div>
+        <div style={{flex:1}}><div style={{fontSize:"16px",fontWeight:700}}>Importar desde Google Calendar</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Sube el archivo .ics exportado de tu calendario · Sucursal: <span style={{color:"#49B8D3"}}>{session.nombre}</span></div></div>
+        <button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px",borderColor:"rgba(239,68,68,0.3)",color:"rgba(239,68,68,0.7)"}} onClick={borrarCalendario} disabled={deleting}>{deleting?"Borrando...":"🗑 Borrar datos"}</button>
       </div>
 
       {/* Pasos */}
@@ -1254,6 +1419,11 @@ function GCalImport({session,useDST=true}){
           <div className="btn-blue" style={{display:"inline-block",padding:"10px 24px",fontSize:"13px"}}>Seleccionar archivo .ics</div>
         </div>
         <input ref={fileRef} type="file" accept=".ics" onChange={onFileChange} style={{display:"none"}}/>
+        <div className="glass" style={{padding:"12px 16px",marginTop:"12px",display:"flex",alignItems:"center",gap:"12px"}}>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",whiteSpace:"nowrap"}}>Importar desde:</div>
+          <input type="date" value={minDate} onChange={e=>setMinDate(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:"#fff",fontSize:"12px",padding:"4px 8px",cursor:"pointer"}}/>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Solo se importarán citas a partir de esta fecha</div>
+        </div>
         <div className="glass" style={{padding:"16px 20px",marginTop:"16px"}}>
           <div style={{fontSize:"11px",fontWeight:600,marginBottom:"8px"}}>¿Cómo exportar desde Google Calendar?</div>
           <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",lineHeight:1.6}}>
@@ -1306,9 +1476,18 @@ function GCalImport({session,useDST=true}){
             <div style={{fontSize:"10px",fontWeight:600,color:p.estado==="completada"?"#10b981":p.estado==="cancelada"?"rgba(255,255,255,0.2)":"#49B8D3"}}>{p.estado==="completada"?"✅ Hecha":p.estado==="cancelada"?"✗ Cancelada":"📅 Agendada"}</div>
           </div>)}
         </div>
-        <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
+        {importing&&<div style={{marginTop:"16px",padding:"12px 16px",background:"rgba(39,33,232,0.08)",borderRadius:"10px",border:"1px solid rgba(39,33,232,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+            <div style={{fontSize:"12px",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{progress.fase||"Importando..."}</div>
+            {progress.total>0&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)"}}>{progress.done}/{progress.total}</div>}
+          </div>
+          {progress.total>0&&<div style={{height:"4px",background:"rgba(255,255,255,0.08)",borderRadius:"2px",overflow:"hidden"}}>
+            <div style={{height:"100%",background:"#2721E8",borderRadius:"2px",width:`${Math.round(progress.done/progress.total*100)}%`,transition:"width 0.3s"}}/>
+          </div>}
+        </div>}
+        <div style={{display:"flex",gap:"10px",marginTop:"12px"}}>
           <button className="btn-ghost" style={{flex:1}} onClick={()=>{setStep(1);setParsed([]);setSkipped([]);setShowSkipped(false);setFileName("");}}>← Otro archivo</button>
-          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||parsed.filter(p=>p.incluir).length===0}>{importing?"Importando...":"✓ Importar "+parsed.filter(p=>p.incluir).length+" eventos → "+session.nombre}</button>
+          <button className="btn-blue" style={{flex:2,padding:"13px",fontSize:"14px"}} onClick={importar} disabled={importing||parsed.filter(p=>p.incluir).length===0}>{importing?`Importando ${progress.done}/${progress.total}...`:"✓ Importar "+parsed.filter(p=>p.incluir).length+" eventos → "+session.nombre}</button>
         </div>
       </div>}
 
@@ -2521,7 +2700,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
     try{
-      const since=desde,until=hasta,fields="adset_name,spend,actions,impressions,clicks,reach";
+      const since=desde,until=(hasta===hoy()?ayer():hasta),fields="adset_name,spend,actions,impressions,clicks,reach";
       // Fetch agregado
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
       // Fetch diario
@@ -2568,7 +2747,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
       // Fetch desde Meta API
       const[y,m]=ym.split("-").map(Number);
       const since=`${ym}-01`;
-      const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
+      const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:ayer();
       const fields="adset_name,spend,actions,impressions,clicks,reach";
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
       const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
@@ -2631,6 +2810,112 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
       setMetaHistorial(results);
     }catch(e){}
     setLoadingHist(false);
+  };
+  const exportarReporteMeta=()=>{
+    if(!metaDataMes)return;
+    const[mY,mM]=mesSel.split("-").map(Number);
+    const mesLbl=new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+    const fechaCorte=ayer();
+    const fechaGen=new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
+    const fmtPeso=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
+    const fmtNum=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
+    const colorMap={Coapa:"#2721E8",Valle:"#49B8D3",Oriente:"#a855f7",Polanco:"#f97316",Metepec:"#10b981"};
+    const porSucAll=SUCURSALES_NAMES.map(n=>{const sp=metaDataMes.porSucursal?.[n]?.spend||0;const ms=metaDataMes.porSucursal?.[n]?.mensajes||0;return{nombre:n,spend:sp,mensajes:ms,cpm:ms>0?sp/ms:0};});
+    const sorted=[...porSucAll].filter(s=>s.spend>0||s.mensajes>0).sort((a,b)=>b.spend-a.spend);
+    const totalSpend=metaDataMes.spend;const totalMsgs=metaDataMes.mensajes;const totalCPM=totalMsgs>0?totalSpend/totalMsgs:0;
+    const maxSpend=Math.max(...sorted.map(s=>s.spend),1);
+    const masEficiente=sorted.filter(s=>s.mensajes>0).sort((a,b)=>a.cpm-b.cpm)[0];
+    const menosEficiente=sorted.filter(s=>s.mensajes>0).sort((a,b)=>b.cpm-a.cpm)[0];
+    const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte Meta Ads CIRE · ${mesLbl}</title><style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Inter',sans-serif;background:#fff;color:#1a1a2e;font-size:11px;line-height:1.4;}
+    @page{size:letter;margin:16mm 15mm;}
+    .page{max-width:700px;margin:0 auto;}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #2721E8;margin-bottom:18px;}
+    .logo-title{font-size:24px;font-weight:800;color:#2721E8;letter-spacing:-0.5px;}
+    .logo-sub{font-size:10px;color:#888;margin-top:1px;letter-spacing:1px;text-transform:uppercase;}
+    .badge{display:inline-block;background:#2721E8;color:#fff;font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:1.5px;text-transform:uppercase;margin-top:5px;}
+    .report-meta{text-align:right;}
+    .report-title{font-size:14px;font-weight:700;}
+    .report-sub{font-size:9px;color:#888;margin-top:2px;}
+    .section-title{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#999;margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid #eee;}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+    .kpi{background:#f7f8ff;border:1px solid #e4e6ff;border-radius:8px;padding:11px 13px;}
+    .kpi-label{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:5px;}
+    .kpi-value{font-size:21px;font-weight:800;}
+    .kpi-sub{font-size:8px;color:#bbb;margin-top:2px;}
+    .table{width:100%;border-collapse:collapse;margin-bottom:18px;}
+    .table th{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding:7px 9px;background:#f7f8ff;border-bottom:2px solid #e4e6ff;text-align:left;}
+    .table th.r,.table td.r{text-align:right;}
+    .table td{padding:9px 9px;border-bottom:1px solid #f2f2f2;vertical-align:middle;}
+    .table tr:last-child td{border-bottom:none;}
+    .table tfoot td{background:#f7f8ff;font-weight:700;border-top:2px solid #e4e6ff;font-size:11px;}
+    .suc-name{display:flex;align-items:center;gap:7px;font-weight:600;}
+    .suc-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+    .bar-wrap{width:100%;height:5px;background:#f0f0f0;border-radius:3px;margin-top:4px;}
+    .bar-fill{height:100%;border-radius:3px;}
+    .pct-badge{display:inline-block;font-size:8px;font-weight:700;padding:2px 5px;border-radius:10px;}
+    .eff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;}
+    .eff-card{padding:11px 13px;border-radius:8px;border:1px solid;}
+    .eff-label{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;}
+    .eff-name{font-size:15px;font-weight:800;margin-bottom:2px;}
+    .eff-val{font-size:11px;font-weight:600;}
+    .eff-msgs{font-size:8px;margin-top:2px;}
+    .nota{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:9px 11px;margin-bottom:16px;font-size:9px;color:#92400e;line-height:1.6;}
+    .footer{border-top:1px solid #eee;padding-top:9px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;}
+    .footer-text{font-size:8px;color:#ccc;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body><div class="page">
+    <div class="header">
+      <div><div class="logo-title">CIRE</div><div class="logo-sub">Sistema de Gestión</div><div class="badge">Confidencial</div></div>
+      <div class="report-meta">
+        <div class="report-title">Reporte de Inversión Meta Ads</div>
+        <div class="report-sub">Período: ${mesLbl.charAt(0).toUpperCase()+mesLbl.slice(1)}</div>
+        <div class="report-sub">Corte de datos: ${new Date(fechaCorte+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"})}</div>
+        <div class="report-sub">Generado: ${fechaGen}</div>
+      </div>
+    </div>
+    <div class="nota">Este reporte refleja la inversión publicitaria en Meta Ads cargada a la cuenta corporativa durante el período indicado. Los importes por sucursal corresponden al costo de los mensajes y prospectos generados para cada unidad, y sirven como base para la distribución interna del gasto.</div>
+    <div class="section-title">Resumen Ejecutivo</div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">Total Invertido</div><div class="kpi-value" style="color:#2721E8">${fmtPeso(totalSpend)}</div><div class="kpi-sub">Gasto total Meta Ads</div></div>
+      <div class="kpi"><div class="kpi-label">Mensajes Generados</div><div class="kpi-value" style="color:#a855f7">${fmtNum(totalMsgs)}</div><div class="kpi-sub">Conversaciones iniciadas</div></div>
+      <div class="kpi"><div class="kpi-label">Costo por Mensaje</div><div class="kpi-value" style="color:#f97316">${fmtPeso(totalCPM)}</div><div class="kpi-sub">Promedio general</div></div>
+    </div>
+    <div class="section-title">Distribución por Sucursal — Base de Cobro</div>
+    <table class="table"><thead><tr>
+      <th>Sucursal</th><th class="r">Inversión</th><th class="r">% del Total</th><th class="r">Mensajes</th><th class="r">Costo / Mensaje</th>
+    </tr></thead><tbody>
+    ${sorted.map(s=>{const pct=totalSpend>0?(s.spend/totalSpend*100):0;const color=colorMap[s.nombre]||"#2721E8";const barW=maxSpend>0?(s.spend/maxSpend*100):0;const cpmColor=s.cpm<totalCPM?"#10b981":s.cpm>totalCPM*1.5?"#ef4444":"#f97316";
+    return`<tr><td><div class="suc-name"><div class="suc-dot" style="background:${color}"></div>${s.nombre}</div><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${color}80"></div></div></td><td class="r"><strong>${fmtPeso(s.spend)}</strong></td><td class="r"><span class="pct-badge" style="background:${color}18;color:${color}">${pct.toFixed(1)}%</span></td><td class="r">${fmtNum(s.mensajes)}</td><td class="r" style="font-weight:700;color:${cpmColor}">${s.mensajes>0?fmtPeso(s.cpm):"—"}</td></tr>`;
+    }).join("")}
+    </tbody><tfoot><tr>
+      <td>TOTAL</td><td class="r">${fmtPeso(totalSpend)}</td><td class="r">100%</td><td class="r">${fmtNum(totalMsgs)}</td><td class="r">${fmtPeso(totalCPM)}</td>
+    </tr></tfoot></table>
+    ${masEficiente&&menosEficiente&&masEficiente.nombre!==menosEficiente.nombre?`
+    <div class="section-title">Análisis de Eficiencia · Costo por Mensaje</div>
+    <div class="eff">
+      <div class="eff-card" style="background:#f0fdf4;border-color:#86efac">
+        <div class="eff-label" style="color:#166534">Mejor rendimiento</div>
+        <div class="eff-name" style="color:${colorMap[masEficiente.nombre]}">${masEficiente.nombre}</div>
+        <div class="eff-val" style="color:#166534">${fmtPeso(masEficiente.cpm)} por mensaje</div>
+        <div class="eff-msgs" style="color:#4ade80">${fmtNum(masEficiente.mensajes)} mensajes · ${fmtPeso(masEficiente.spend)} invertido</div>
+      </div>
+      <div class="eff-card" style="background:#fff7ed;border-color:#fdba74">
+        <div class="eff-label" style="color:#9a3412">Mayor costo por mensaje</div>
+        <div class="eff-name" style="color:${colorMap[menosEficiente.nombre]}">${menosEficiente.nombre}</div>
+        <div class="eff-val" style="color:#9a3412">${fmtPeso(menosEficiente.cpm)} por mensaje</div>
+        <div class="eff-msgs" style="color:#fb923c">${fmtNum(menosEficiente.mensajes)} mensajes · ${fmtPeso(menosEficiente.spend)} invertido</div>
+      </div>
+    </div>`:""}
+    <div class="footer">
+      <div class="footer-text">CIRE Sistema de Gestión — Documento de uso interno y confidencial</div>
+      <div class="footer-text">Fuente: Meta Business Suite · ${fechaGen}</div>
+    </div>
+    </div><script>window.onload=()=>{window.print();}<\/script></body></html>`;
+    const w=window.open("","_blank");
+    if(w){w.document.write(html);w.document.close();}
   };
   useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel]);
   useEffect(()=>{cargarMetaMes(mesSel);},[mesSel]);
@@ -2922,11 +3207,12 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
 
         {/* ═══ META ADS ═══ */}
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-          {/* Barra de acciones: solo Sincronizar */}
-          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+          {/* Barra de acciones */}
+          <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
             {loadingMetaMes
               ?<div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",color:"rgba(255,255,255,0.4)",padding:"6px 12px",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",background:"rgba(255,255,255,0.03)"}}><div className="meta-spinner" style={{width:"14px",height:"14px",borderWidth:"2px"}}/> Sincronizando...</div>
               :<button className="btn-ghost" style={{fontSize:"11px",padding:"6px 12px"}} onClick={()=>cargarMetaMes(mesSel,true)} title="Sincronizar desde Meta API">↻ Sincronizar</button>}
+            {metaDataMes&&!loadingMetaMes&&<button onClick={exportarReporteMeta} style={{fontSize:"11px",padding:"6px 14px",borderRadius:"8px",border:"1px solid rgba(168,85,247,0.4)",background:"rgba(168,85,247,0.1)",color:"#a855f7",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:"6px"}} title="Exportar reporte PDF para cobro a sucursales">⬇ Exportar reporte</button>}
           </div>
           {/* Contenedor con overlay de carga */}
           <div style={{position:"relative"}}>

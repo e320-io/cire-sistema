@@ -31,8 +31,8 @@ SELECT cron.schedule(
   '0 9 * * *',                            -- 9 AM UTC = 3 AM México (CST)
   $$
   SELECT net.http_post(
-    url     := 'https://TU_PROJECT_REF.supabase.co/functions/v1/sync-zettle?sucursal=metepec',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer TU_ANON_KEY"}'::jsonb,
+    url     := 'https://jsiobnixoibpanhnbxvj.supabase.co/functions/v1/sync-zettle?sucursal=metepec',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzaW9ibml4b2licGFuaG5ieHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODQ4ODQsImV4cCI6MjA4ODc2MDg4NH0.BC4H563Odhnb6ZJB89sRBaTSF4LE7SX7Oh6gkNjvT7w"}'::jsonb,
     body    := '{}'::jsonb
   );
   $$
