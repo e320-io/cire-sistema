@@ -622,7 +622,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const[semana,setSemana]=useState(semanaD(hoy()));const[citas,setCitas]=useState([]);const[detalle,setDetalle]=useState(null);const[saving,setSaving]=useState(false);
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
   const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
-  const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});const[ticketZettle,setTicketZettle]=useState("");
+  const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});const[ticketZettle,setTicketZettle]=useState("");const[fechaTicketAg,setFechaTicketAg]=useState(hoy());
   const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);const[modalReagendar,setModalReagendar]=useState(false);const[citaReagendar,setCitaReagendar]=useState(null);const[fechaRe,setFechaRe]=useState("");const[horaRe,setHoraRe]=useState("");const[modalSinDatos,setModalSinDatos]=useState(false);const[citaSinDatos,setCitaSinDatos]=useState(null);const[datosPendientesMode,setDatosPendientesMode]=useState(false);const[confirmDelCita,setConfirmDelCita]=useState(false);
   const[hoverCita,setHoverCita]=useState(null);const[hoverPos,setHoverPos]=useState({x:0,y:0});const hoverTimer=useRef(null);
   const[modalPerdida,setModalPerdida]=useState(false);const[citaPerdida,setCitaPerdida]=useState(null);const[razonPerdida,setRazonPerdida]=useState("");
@@ -703,7 +703,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const paqPrecio=paq?.precio||0;
       const restante=paqPrecio-anticoMonto;
       setCitaCobro({cita,paqPrecio,anticoMonto,restante,paq});
-      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");
+      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());
       setShowCobro(true);
     }else{completar(cita);}
   };
@@ -715,7 +715,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
       const totalFinal=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
       const tzVal=ticketZettle.trim()?(ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim()):null;
       await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,...(tzVal?{ticket_zettle:tzVal}:{})}).eq("id",cita.id);
       setShowCobro(false);setCitaCobro(null);
@@ -919,7 +919,12 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             </div>
           ))}
           {pagosAg[pagosAg.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagosAg.length===1?0:pagosAg.reduce((s,p)=>s+p.monto,0);setPagosAg(pagosAg.length===1?[{...pagosAg[0],monto:Math.round(restante/2)},{metodo:"",monto:restante-Math.round(restante/2)}]:[...pagosAg,{metodo:"",monto:Math.max(0,restante-suma)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px",marginBottom:"12px"}}>+ Agregar otro método de pago</button>}
-          <div style={{marginTop:"12px",marginBottom:"8px"}}>
+          <div style={{marginTop:"12px",padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px",marginBottom:"8px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div>
+            <input type="date" className="inp" value={fechaTicketAg} max={hoy()} onChange={e=>setFechaTicketAg(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>
+            {fechaTicketAg!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicketAg+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}
+          </div>
+          <div style={{marginBottom:"8px"}}>
             <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>TICKET ZETTLE (opcional)</div>
             <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px"}}/>
             <div style={{fontSize:"9px",color:"rgba(255,255,255,0.2)",marginTop:"3px"}}>Número de ticket generado manualmente en Zettle</div>
@@ -1124,7 +1129,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const[termSel,setTermSel]=useState({}); // {pagoIdx: terminalNombre}
   const[terminalesPOS,setTerminalesPOS]=useState([]);
   const[fechaTicket,setFechaTicket]=useState(hoy()); // fecha del ticket (admin puede cambiar para retroactivos)
-  const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);const[notifDatos,setNotifDatos]=useState([]);const[showNotif,setShowNotif]=useState(false);const[confirmDelCli,setConfirmDelCli]=useState(null);const[confirmDelTicket,setConfirmDelTicket]=useState(null);const[historialFecha,setHistorialFecha]=useState(hoy());
+  const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);const[notifDatos,setNotifDatos]=useState([]);const[showNotif,setShowNotif]=useState(false);const[confirmDelCli,setConfirmDelCli]=useState(null);const[confirmDelTicket,setConfirmDelTicket]=useState(null);const[historialFecha,setHistorialFecha]=useState(hoy());const[ticketDetalle,setTicketDetalle]=useState(null);
 
   const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
   const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");
@@ -1161,7 +1166,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
+    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
     const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
@@ -1180,7 +1185,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
+    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
     const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}]);
@@ -1195,7 +1200,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
+    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
     const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
@@ -1292,8 +1297,28 @@ function POS({session,onSwitchSucursal,isAdmin}){
         </div>
         {loadingT&&<div style={{color:"rgba(255,255,255,0.3)",textAlign:"center",padding:"40px"}}>Cargando...</div>}
         {!loadingT&&tickets.length===0&&<div style={{color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"40px",fontSize:"13px"}}>Sin tickets ese día</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tickets.map(t=><div key={t.id} className="glass" style={{padding:"16px 20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div><div style={{fontSize:"13px",fontWeight:500}}>{(t.servicios||[]).join(", ")}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{t.metodo_pago}{t.descuento>0?` · ${t.descuento}% desc`:""}</div></div><div style={{display:"flex",alignItems:"center",gap:"12px"}}><div style={{fontSize:"20px",fontWeight:700,color:"#49B8D3"}}>{fmt(t.total)}</div>{confirmDelTicket===t.id?<div style={{display:"flex",gap:"4px"}}><button onClick={()=>setConfirmDelTicket(null)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"6px",color:"rgba(255,255,255,0.4)",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit"}}>No</button><button onClick={()=>eliminarTicket(t.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button></div>:<button onClick={()=>setConfirmDelTicket(t.id)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.3)",cursor:"pointer",padding:"4px 6px",fontSize:"14px",lineHeight:1}} title="Eliminar ticket">🗑</button>}</div></div></div>)}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tickets.map(t=><div key={t.id} className="glass" style={{padding:"16px 20px",cursor:"pointer"}} onClick={e=>{if(e.target.closest("[data-nodrop]"))return;setTicketDetalle(t);}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>{t.clienta_nombre&&<div style={{fontSize:"11px",fontWeight:600,color:"#a78bfa",background:"rgba(139,92,246,0.12)",border:"1px solid rgba(139,92,246,0.25)",borderRadius:"20px",padding:"1px 8px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"160px"}}>👤 {t.clienta_nombre}</div>}</div><div style={{fontSize:"13px",fontWeight:500}}>{(t.servicios||[]).join(", ")}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{t.metodo_pago}{t.descuento>0?` · ${t.descuento}% desc`:""}</div></div><div style={{display:"flex",alignItems:"center",gap:"12px"}}><div style={{fontSize:"20px",fontWeight:700,color:"#49B8D3"}}>{fmt(t.total)}</div><div data-nodrop="1" onClick={e=>e.stopPropagation()}>{confirmDelTicket===t.id?<div style={{display:"flex",gap:"4px"}}><button onClick={()=>setConfirmDelTicket(null)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"6px",color:"rgba(255,255,255,0.4)",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit"}}>No</button><button onClick={()=>eliminarTicket(t.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button></div>:<button onClick={()=>setConfirmDelTicket(t.id)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.3)",cursor:"pointer",padding:"4px 6px",fontSize:"14px",lineHeight:1}} title="Eliminar ticket">🗑</button>}</div></div></div></div>)}</div>
         {tickets.length>0&&<div style={{marginTop:"16px",padding:"16px 20px",background:"rgba(39,33,232,0.08)",border:"1px solid rgba(39,33,232,0.2)",borderRadius:"12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"13px",color:"rgba(255,255,255,0.5)"}}>{tickets.length} tickets</div><div style={{fontSize:"20px",fontWeight:700}}>{fmt(totalHoy)}</div></div>}
+      </div>}
+
+      {ticketDetalle&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setTicketDetalle(null)}>
+        <div style={{width:"100%",maxWidth:"480px",background:"#111",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"20px 20px 0 0",padding:"24px",display:"flex",flexDirection:"column",gap:"16px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>DETALLE DE PAGO</div>
+            <button onClick={()=>setTicketDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"20px",lineHeight:1}}>×</button>
+          </div>
+          {ticketDetalle.clienta_nombre?<div style={{background:"rgba(139,92,246,0.1)",border:"1px solid rgba(139,92,246,0.3)",borderRadius:"12px",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",letterSpacing:"1px",marginBottom:"4px"}}>CLIENTA</div><div style={{fontSize:"16px",fontWeight:700,color:"#c4b5fd"}}>👤 {ticketDetalle.clienta_nombre}</div></div>
+            {ticketDetalle.clienta_id&&<button onClick={()=>{setTicketDetalle(null);setView("clientas");setFichaId(ticketDetalle.clienta_id);}} style={{background:"rgba(139,92,246,0.2)",border:"1px solid rgba(139,92,246,0.5)",borderRadius:"10px",color:"#a78bfa",cursor:"pointer",padding:"8px 16px",fontSize:"12px",fontWeight:600,fontFamily:"inherit"}}>Ver ficha →</button>}
+          </div>:<div style={{background:"rgba(255,255,255,0.04)",borderRadius:"12px",padding:"14px 16px"}}><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Sin clienta asignada</div></div>}
+          <div style={{background:"rgba(255,255,255,0.04)",borderRadius:"12px",padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Hora</div><div style={{fontSize:"13px"}}>{new Date(ticketDetalle.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Servicios</div><div style={{fontSize:"13px",textAlign:"right"}}>{(ticketDetalle.servicios||[]).join(", ")}</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Método de pago</div><div style={{fontSize:"13px"}}>{ticketDetalle.metodo_pago}</div></div>
+            {ticketDetalle.descuento>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>Descuento</div><div style={{fontSize:"13px",color:"#10b981"}}>{ticketDetalle.descuento}%</div></div>}
+            <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:"8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)"}}>Total</div><div style={{fontSize:"24px",fontWeight:700,color:"#49B8D3"}}>{fmt(ticketDetalle.total)}</div></div>
+          </div>
+        </div>
       </div>}
 
       {view==="pos"&&<div style={{flex:1,display:"grid",gridTemplateColumns:showAgenda&&fechaCita&&!esDom?"380px 1fr 380px":"1fr 380px",overflow:"hidden"}}>
