@@ -76,8 +76,9 @@ const TERMINALES_DEFAULT=[
 const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
 const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
 const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
-const hoy=()=>new Date().toISOString().slice(0,10);
-const ayer=()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);};
+const cdmx=(d=new Date())=>d.toLocaleDateString("en-CA",{timeZone:"America/Mexico_City"});
+const hoy=()=>cdmx();
+const ayer=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);};
 const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(data?.[0]?.ticket_num||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
 const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();
@@ -542,7 +543,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
       {/* REAGENDAR CITA ABIERTA */}
       {reagendarAbierta&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita abierta</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sesión {reagendarAbierta.sesion_numero} · {reagendarAbierta.servicio}</div></div>
-        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRAb} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaRAb(e.target.value);setHoraRAb("");}} style={{colorScheme:"dark"}}/></div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRAb} onChange={e=>{setFechaRAb(e.target.value);setHoraRAb("");}} style={{colorScheme:"dark"}}/></div>
         {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRAb} onSelectHora={h=>setHoraRAb(h)} horaSeleccionada={horaRAb} duracion={getDuracionServicio(reagendarAbierta.servicio,reagendarAbierta.tipo_servicio)??TIPOS_SVC.find(t=>t.id===reagendarAbierta.tipo_servicio)?.duracion??60}/></div>}
         {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setReagendarAbierta(null);setFechaRAb("");setHoraRAb("");}}>Cancelar</button><button className="btn-ghost" style={{flex:2,padding:"12px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontWeight:600,fontSize:"13px"}} disabled={!fechaRAb||!horaRAb||savingReag||new Date(fechaRAb+"T12:00:00").getDay()===0} onClick={reagendarDesdeAbierta}>{savingReag?"Reagendando...":"↻ Confirmar reagendamiento"}</button></div>
@@ -948,7 +949,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
 
       {modalSig&&citaComp&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(16,185,129,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>📅</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>¡Sesión completada!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>¿Agendar siguiente sesión de {citaComp.clienta_nombre}?</div><div style={{fontSize:"12px",color:"#10b981",marginTop:"6px"}}>Sesión {citaComp.paquete.sesiones_usadas+1} de {citaComp.paquete.total_sesiones}</div></div>
-        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSig} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaSig(e.target.value);setHoraSig("");}} style={{colorScheme:"dark"}}/></div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSig} onChange={e=>{setFechaSig(e.target.value);setHoraSig("");}} style={{colorScheme:"dark"}}/></div>
         {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>SELECCIONA HORA (toca un espacio libre)</div><MiniAgendaDia session={session} fecha={fechaSig} onSelectHora={h=>setHoraSig(h)} horaSeleccionada={horaSig} duracion={getDuracionServicio(citaComp.servicio,citaComp.tipo_servicio)??TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio)?.duracion??60}/></div>}
         {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalSig(false);setCitaComp(null);}}>No por ahora</button><button className="btn-blue" style={{flex:2,padding:"12px"}} disabled={!fechaSig||!horaSig||saving||new Date(fechaSig+"T12:00:00").getDay()===0} onClick={agSig}>{saving?"Agendando...":"✓ Agendar siguiente"}</button></div>
@@ -956,7 +957,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
 
       {modalReagendar&&citaReagendar&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sesión {citaReagendar.sesion_numero} de {citaReagendar.clienta_nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.25)",marginTop:"4px"}}>Fecha actual: {new Date(citaReagendar.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {citaReagendar.hora_inicio}</div></div>
-        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRe} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaRe(e.target.value);setHoraRe("");}} style={{colorScheme:"dark"}}/></div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRe} onChange={e=>{setFechaRe(e.target.value);setHoraRe("");}} style={{colorScheme:"dark"}}/></div>
         {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRe} onSelectHora={h=>setHoraRe(h)} horaSeleccionada={horaRe} duracion={getDuracionServicio(citaReagendar.servicio,citaReagendar.tipo_servicio)??TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion??60}/></div>}
         {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalReagendar(false);setCitaReagendar(null);}}>Cancelar</button><button className="btn-ghost" style={{flex:2,padding:"12px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontWeight:600,fontSize:"13px"}} disabled={!fechaRe||!horaRe||saving||new Date(fechaRe+"T12:00:00").getDay()===0} onClick={reagendar}>{saving?"Reagendando...":"↻ Confirmar reagendamiento"}</button></div>
@@ -1040,7 +1041,7 @@ function AjustesTerminales({session}){
 // ══════════════════════════════════════════════════════════════════════════════
 function ConfirmacionesManana({session}){
   const[citas,setCitas]=useState([]);const[loading,setLoading]=useState(true);
-  const manana=()=>{const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);};
+  const manana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);};
   const cargar=async()=>{
     setLoading(true);
     const fecha=manana();
@@ -1386,7 +1387,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
             </div>}
             {/* 3 Agendar */}
             {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:aOk?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:aOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:aOk?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
-              <input type="date" className="inp" value={fechaCita} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark",marginBottom:"6px"}}/>
+              <input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark",marginBottom:"6px"}}/>
               {fechaCita&&!esDom&&<div>
                 <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginBottom:"6px",borderColor:showAgenda?"#2721E8":"rgba(255,255,255,0.1)",color:showAgenda?"#fff":"rgba(255,255,255,0.4)"}} onClick={()=>setShowAgenda(!showAgenda)}>{showAgenda?"📅 Viendo agenda":"📅 Ver agenda del día"}</button>
                 {!showAgenda&&<input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark"}}/>}
@@ -2775,7 +2776,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const antYM=(ym)=>{const[y,m]=ym.split("-").map(Number);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,"0")}`;};
   const rango=(ym)=>{const[y,m]=ym.split("-").map(Number);return{desde:`${ym}-01`,hasta:new Date(y,m,0).toISOString().slice(0,10)};};
   const etiq=(ym)=>new Date(`${ym}-15`).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-  const hoyYM=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
+  const hoyYM=()=>cdmx().slice(0,7);
   const listaMeses=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
 
   const[periodo,setPeriodo]=useState(hoyYM());
@@ -3097,7 +3098,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 // ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD — Vista ejecutiva para dueño de negocio
 // ══════════════════════════════════════════════════════════════════════════════
-const inicioSemana=()=>{const d=new Date(),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
+const inicioSemana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00"),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
 function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
