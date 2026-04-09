@@ -88,31 +88,69 @@ const CATALOGO=[
   {categoria:"Combos Láser",items:[{nombre:"Full Body (8 ses)",precio:10000,msi:[3,6,9]},{nombre:"Combo Rostro (8 ses)",precio:9000,msi:[3,6,9]},{nombre:"Combo Sexy (8 ses)",precio:8000,msi:[3,6,9]},{nombre:"Combo Playa (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Piernas (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Bikini (8 ses)",precio:5500,msi:[3,6]},{nombre:"Combo Axilas (8 ses)",precio:5500,msi:[3,6]}]},
   {categoria:"Zonas Individuales",items:[{nombre:"Piernas Completas (8 ses)",precio:3500,msi:[3]},{nombre:"Medias Piernas (8 ses)",precio:2500,msi:[3]},{nombre:"Brazos (8 ses)",precio:3500,msi:[3]},{nombre:"Medios Brazos (8 ses)",precio:2500,msi:[3]},{nombre:"Axilas (8 ses)",precio:1500,msi:[3]},{nombre:"Espalda Completa (8 ses)",precio:4000,msi:[3]},{nombre:"Media Espalda (8 ses)",precio:2500,msi:[3]},{nombre:"Glúteos (8 ses)",precio:2500,msi:[3]},{nombre:"Zona Interglútea (8 ses)",precio:1500,msi:[3]},{nombre:"Abdomen (8 ses)",precio:2500,msi:[3]},{nombre:"Línea Abdomen (8 ses)",precio:1500,msi:[3]},{nombre:"Pecho (8 ses)",precio:2500,msi:[3]}]},
   {categoria:"Facial Láser",items:[{nombre:"Rostro Completo (8 ses)",precio:2500,msi:[3]},{nombre:"Medio Rostro (8 ses)",precio:2000,msi:[3]},{nombre:"Bigote/Mentón/Patillas (8s)",precio:1000,msi:[3]},{nombre:"Bikini Brazilian (8 ses)",precio:3500,msi:[3]},{nombre:"French Bikini (8 ses)",precio:3000,msi:[3]},{nombre:"Sexy Bikini (8 ses)",precio:2500,msi:[3]},{nombre:"Bikini Básico (8 ses)",precio:2000,msi:[3]}]},
-  {categoria:"Faciales",items:[{nombre:"Baby Clean (1 ses)",precio:549,msi:[]},{nombre:"FullFace (1 ses)",precio:849,msi:[]},{nombre:"5 ses FullFace",precio:3500,msi:[3]},{nombre:"10 ses FullFace",precio:6000,msi:[3]}]},
+  {categoria:"Faciales",items:[{nombre:"Baby Clean (1 ses)",precio:549,msi:[]},{nombre:"FullFace (1 ses)",precio:849,msi:[]},{nombre:"6 ses FullFace",precio:3500,msi:[3]},{nombre:"10 ses FullFace",precio:6000,msi:[3]}]},
   {categoria:"HIFU 4D",items:[{nombre:"HIFU 1 persona",precio:3000,msi:[3]},{nombre:"HIFU 2 personas",precio:5000,msi:[3]}]},
   {categoria:"Corporal",items:[{nombre:"Moldeo 1ª sesión",precio:699,msi:[]},{nombre:"Moldeo Subsecuente",precio:999,msi:[]},{nombre:"6 ses Moldeo",precio:3999,msi:[3]},{nombre:"12 ses Moldeo + Facial",precio:6999,msi:[3]},{nombre:"Anticelulítico 1ª ses",precio:699,msi:[]},{nombre:"6 ses Anticelulítico",precio:3999,msi:[3]},{nombre:"Moldeo Brasileño 1ª ses",precio:699,msi:[]},{nombre:"6 ses Moldeo Brasileño",precio:3999,msi:[3]},{nombre:"Aparatología 1 zona",precio:649,msi:[]}]},
   {categoria:"Post Operatorio",items:[{nombre:"Post Op 1ª ses",precio:999,msi:[]},{nombre:"10 ses Post Op",precio:9999,msi:[3]},{nombre:"15 ses Post Op",precio:13999,msi:[3]},{nombre:"20 ses Post Op + Facial",precio:17999,msi:[3]}]},
 ];
-const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#2721E8"},{id:"facial_baby",label:"Baby Clean",duracion:60,color:"#49B8D3"},{id:"facial_full",label:"FullFace",duracion:90,color:"#49B8D3"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#a855f7"},{id:"hifu",label:"HIFU 4D",duracion:90,color:"#f97316"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"}];
+const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Baby Clean",duracion:60,color:"#E67C73"},{id:"facial_full",label:"FullFace",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"HIFU 4D",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"}];
+// Tiempos reales por zona según tabla de tiempos (minutos)
+const TIEMPOS_ZONA={
+  laser:{
+    "bikini basico":15,"sexy bikini":15,"french bikini":30,"bikini brazilian":30,
+    "crack":15,"coxis":15,"gluteos":20,"medias piernas":20,"piernas completas":40,
+    "pies":15,"combo abdomen pecho":30,"abdomen":15,"brazos completos":30,"brazos":30,
+    "medios brazos":20,"axilas":15,"espalda completa":30,"media espalda":20,
+    "hombros":15,"linea de abdomen":15,"linea abdomen":15,"manos":15,"pecho":20,"pezones":15,
+    "rostro completo":30,"medio rostro":15,"barba":15,"bigote":15,"entreceja":15,
+    "frente":15,"mejillas":15,"menton":15,"patillas":15,"cuello":15,"nariz":15,"nuca":15,"orejas":15,
+    "combo axilas":30,"combo bikini":30,"combo piernas":45,"combo playa":45,
+    "combo sexy":45,"combo rostro":45,"cuerpo completo":60,
+  },
+  cera:{
+    "bikini basico":15,"sexy bikini":15,"french bikini":30,"bikini brazilian":30,
+    "crack":15,"coxis":15,"gluteos":30,"medias piernas":30,"piernas completas":30,
+    "pies":15,"combo abdomen pecho":30,"abdomen":15,"brazos completos":30,"brazos":30,
+    "medios brazos":15,"axilas":15,"espalda completa":15,"media espalda":15,
+    "hombros":15,"linea de abdomen":15,"linea abdomen":15,"manos":15,"pecho":15,"pezones":15,
+    "barba":15,"bigote":15,"diseno de cejas":30,"entreceja":15,"frente":15,
+    "mantenimiento de cejas":30,"medio rostro":30,"mejillas":15,"menton":15,"patillas":15,
+    "rostro completo":30,"nariz":15,"nuca":15,"orejas":15,
+    "combo sexy":60,"combo playa":60,"combo piernas":60,"cuerpo completo":180,
+  }
+};
+const getDuracionServicio=(nombre,tipoId)=>{
+  const mapa=TIEMPOS_ZONA[tipoId];if(!mapa)return null;
+  const n=normName(nombre.replace(/\([^)]*\)/gi,""));
+  const entries=Object.entries(mapa).sort((a,b)=>b[0].length-a[0].length);
+  for(const[key,min]of entries){if(n.includes(key))return min;}
+  return null;
+};
 const HORARIOS={1:{a:"10:00",c:"20:00"},2:{a:"10:00",c:"20:00"},3:{a:"10:00",c:"20:00"},4:{a:"10:00",c:"20:00"},5:{a:"10:00",c:"20:00"},6:{a:"09:00",c:"16:00"},0:null};
 const DIAS_L=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const HORAS=Array.from({length:12},(_,i)=>i+9);
 const PX_POR_MIN=64/60;
 const colorT=(t)=>TIPOS_SVC.find(x=>x.id===t)?.color||"#2721E8";
-// Colores estilo Google Calendar: índigo=HIFU/facial, rojo=nueva(ses.1), azul=sesión contratada
+// Colores estilo Google Calendar: azul fuerte=HIFU, rosa=Facial, morado=Moldeo, verde=Cera, rojo=1ª ses, azul=Láser
 const colorCita=(c)=>{
+  if(c.estado==="perdida")return"#eab308";
   if(c.datos_pendientes&&c.estado==="completada")return"#f59e0b";
-  if(["hifu","facial_baby","facial_full"].includes(c.tipo_servicio))return"#3F51B5";
+  if(c.tipo_servicio==="hifu")return"#3F51B5";
+  if(["facial_baby","facial_full"].includes(c.tipo_servicio))return"#E67C73";
+  if(c.tipo_servicio==="corporal")return"#8E24AA";
+  if(c.tipo_servicio==="cera")return"#33B679";
   if(c.sesion_numero===1)return"#D50000";
   return"#039BE5";
 };
-const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];return TIPOS_SVC[0];};
+const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];return TIPOS_SVC[0];};
 const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);const f=hh*60+mm+dur;return`${String(Math.floor(f/60)).padStart(2,"0")}:${String(f%60).padStart(2,"0")}`;};
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
-const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","Corporales"];
+const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","Corporales","Mantenimiento","Personalizado","Cera"];
+const ZONAS_CERA=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","Ingles"];
 const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();if(f==="Combos")return n.includes("combo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","línea abdomen","glúteos","zona interg"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","medias piernas"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french","sexy bikini"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("baby clean")||n.includes("fullface")||n.includes("hifu");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog"].some(k=>n.includes(k));return true;};
 const MESES_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
+const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Pezones","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
+const ZONAS_PACK=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico"];
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MINI AGENDA — vista inline del día para sidebar POS
@@ -131,18 +169,18 @@ function MiniAgendaDia({session,fecha,onSelectHora,horaSeleccionada,duracion}){
         <span>{citas.length} cita{citas.length!==1?"s":""}</span>
       </div>
       <div style={{maxHeight:"260px",overflowY:"auto"}}>
-        {hrs.map(hr=>{const s0=`${String(hr).padStart(2,"0")}:00`,s30=`${String(hr).padStart(2,"0")}:30`;
+        {hrs.map(hr=>{const pad=String(hr).padStart(2,"0");const s0=`${pad}:00`,s15=`${pad}:15`,s30=`${pad}:30`,s45=`${pad}:45`;
           const citasHr=citas.filter(c=>{const[ch]=c.hora_inicio.split(":").map(Number);return ch===hr;});
           return(<div key={hr} style={{display:"flex",borderBottom:"1px solid #f0f0f0"}}>
             <div style={{width:"42px",padding:"4px 6px",fontSize:"9px",color:"#666",textAlign:"right",flexShrink:0,paddingTop:"6px"}}>{hr>12?`${hr-12}pm`:hr===12?"12pm":`${hr}am`}</div>
             <div style={{flex:1,minHeight:"44px",position:"relative"}}>
-              {[s0,s30].map((slot,si)=>{const sel=horaSeleccionada===slot;return(
-                <div key={slot} onClick={()=>onSelectHora(slot)} style={{height:"22px",cursor:"pointer",background:sel?"rgba(39,33,232,0.12)":"transparent",borderLeft:sel?"2px solid #2721E8":"2px solid transparent",transition:"all 0.1s",display:"flex",alignItems:"center",paddingLeft:"4px"}}
+              {[s0,s15,s30,s45].map((slot,si)=>{const sel=horaSeleccionada===slot;return(
+                <div key={slot} onClick={()=>onSelectHora(slot)} style={{height:"11px",cursor:"pointer",background:sel?"rgba(39,33,232,0.12)":"transparent",borderLeft:sel?"2px solid #2721E8":"2px solid transparent",borderTop:si===2?"1px dashed #eee":"none",transition:"all 0.1s",display:"flex",alignItems:"center",paddingLeft:"4px"}}
                   onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="rgba(0,0,0,0.04)";}} onMouseLeave={e=>{if(!sel)e.currentTarget.style.background=sel?"rgba(39,33,232,0.12)":"transparent";}}>
                   {sel&&<span style={{fontSize:"9px",color:"#2721E8",fontWeight:600}}>{slot}</span>}
                 </div>);
               })}
-              {citasHr.map(c=>{const[,cm]=c.hora_inicio.split(":").map(Number);const top=cm<30?1:23;const hPx=Math.max(c.duracion_min*(44/60)-2,14);const col=colorCita(c);
+              {citasHr.map(c=>{const[,cm]=c.hora_inicio.split(":").map(Number);const top=Math.round((cm/60)*44)+1;const durReal=c.hora_fin?(()=>{const[fh,fm]=c.hora_fin.split(":").map(Number);const[ih,im]=c.hora_inicio.split(":").map(Number);return(fh*60+fm)-(ih*60+im);})():(c.duracion_min||60);const hPx=Math.max(durReal*(44/60)-2,10);const col=colorCita(c);
                 return(<div key={c.id} style={{position:"absolute",left:"28px",right:"2px",top:`${top}px`,height:`${hPx}px`,background:`${col}22`,border:`1px solid ${col}55`,borderRadius:"4px",padding:"1px 4px",pointerEvents:"none",overflow:"hidden",zIndex:2}}>
                   <div style={{fontSize:"8px",fontWeight:600,color:col,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.hora_inicio} {c.clienta_nombre}</div>
                 </div>);
@@ -159,12 +197,14 @@ function MiniAgendaDia({session,fecha,onSelectHora,horaSeleccionada,duracion}){
 // ══════════════════════════════════════════════════════════════════════════════
 // FICHA CLIENTA
 // ══════════════════════════════════════════════════════════════════════════════
-function FichaClienta({clientaId,session,onClose}){
+function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const[clienta,setClienta]=useState(null);const[paquetes,setPaquetes]=useState([]);const[citasH,setCitasH]=useState([]);const[loading,setLoading]=useState(true);
   const[editMode,setEditMode]=useState(false);const[saving,setSaving]=useState(false);
   const[editNombre,setEditNombre]=useState("");const[editTel,setEditTel]=useState("");const[editNac,setEditNac]=useState("");const[editComo,setEditComo]=useState("");
-  const[editPaquetes,setEditPaquetes]=useState([]);const[deletingCita,setDeletingCita]=useState(null);
+  const[editPaquetes,setEditPaquetes]=useState([]);const[deletingCita,setDeletingCita]=useState(null);const[confirmDelPaq,setConfirmDelPaq]=useState(null);const[newPaqForm,setNewPaqForm]=useState(null);const[savingNewPaq,setSavingNewPaq]=useState(false);
+  const[editingTotalId,setEditingTotalId]=useState(null);const[newTotalVal,setNewTotalVal]=useState("");
   const[editCitasParams,setEditCitasParams]=useState([]);const[zonaNewMap,setZonaNewMap]=useState({});const[valNewMap,setValNewMap]=useState({});
+  const[reagendarAbierta,setReagendarAbierta]=useState(null);const[fechaRAb,setFechaRAb]=useState("");const[horaRAb,setHoraRAb]=useState("");const[savingReag,setSavingReag]=useState(false);
 
   const cargar=async()=>{setLoading(true);const{data:c}=await supabase.from("clientas").select("*").eq("id",clientaId).single();const{data:p}=await supabase.from("paquetes").select("*").eq("clienta_id",clientaId).order("fecha_compra",{ascending:false});const{data:ci}=await supabase.from("citas").select("*").eq("clienta_id",clientaId).order("fecha",{ascending:false});setClienta(c);setPaquetes(p||[]);setCitasH(ci||[]);setLoading(false);};
   useEffect(()=>{cargar();},[clientaId]);
@@ -177,6 +217,7 @@ function FichaClienta({clientaId,session,onClose}){
     setZonaNewMap({});setValNewMap({});
     setEditMode(true);
   };
+  const guardarTotalSesiones=async(paqId)=>{const tot=parseInt(newTotalVal);if(isNaN(tot)||tot<1)return;const paq=paquetes.find(p=>p.id===paqId);const activo=paq?paq.sesiones_usadas<tot:true;await supabase.from("paquetes").update({total_sesiones:tot,activo}).eq("id",paqId);setEditingTotalId(null);setNewTotalVal("");await cargar();};
   const guardarEdit=async()=>{setSaving(true);try{
     await supabase.from("clientas").update({nombre:editNombre.trim(),telefono:editTel.trim(),fecha_nacimiento:editNac||null,como_nos_conocio:editComo.trim()}).eq("id",clientaId);
     for(const ep of editPaquetes){
@@ -203,10 +244,14 @@ function FichaClienta({clientaId,session,onClose}){
   const removeParam=(citaId,idx)=>{setEditCitasParams(prev=>prev.map(ec=>ec.id!==citaId?ec:{...ec,paramsEdit:ec.paramsEdit.filter((_,i)=>i!==idx)}));};
   const addParam=(citaId)=>{const z=zonaNewMap[citaId]||"";const v=valNewMap[citaId]||"";if(!z||!v.trim())return;setEditCitasParams(prev=>prev.map(ec=>ec.id!==citaId?ec:{...ec,paramsEdit:[...ec.paramsEdit,{zona:z,valores:v.trim()}]}));setZonaNewMap(m=>({...m,[citaId]:""}));setValNewMap(m=>({...m,[citaId]:""}));};
   const updatePaq=(i,campo,valor)=>{setEditPaquetes(prev=>prev.map((ep,idx)=>idx!==i?ep:{...ep,[campo]:valor}));};
+  const eliminarPaquete=async(paqId)=>{setConfirmDelPaq(null);try{await supabase.from("citas").update({paquete_id:null}).eq("paquete_id",paqId);await supabase.from("paquetes").delete().eq("id",paqId);setEditPaquetes(prev=>prev.filter(p=>p.id!==paqId));await cargar();}catch(e){console.error(e);}};
+  const agregarPaquete=async()=>{if(!newPaqForm?.servicio)return;setSavingNewPaq(true);try{const ms=newPaqForm.servicio.match(/(\d+)[ªa°]?\s*ses/i);const tot=newPaqForm.totalEdit?parseInt(newPaqForm.totalEdit):(ms?parseInt(ms[1]):8);const ses=parseInt(newPaqForm.sesEdit||"0")||0;const pre=parseInt(newPaqForm.precioEdit||"0")||0;const{data:pD,error}=await supabase.from("paquetes").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:newPaqForm.servicio,total_sesiones:tot,sesiones_usadas:ses,precio:pre,fecha_compra:hoy(),activo:ses<tot}]).select();if(error)throw error;setNewPaqForm(null);await cargar();}catch(e){console.error(e);}setSavingNewPaq(false);};
+  const reagendarDesdeAbierta=async()=>{if(!reagendarAbierta||!fechaRAb||!horaRAb)return;setSavingReag(true);try{const tipoRA=TIPOS_SVC.find(t=>t.id===reagendarAbierta.tipo_servicio);const dur=getDuracionServicio(reagendarAbierta.servicio,reagendarAbierta.tipo_servicio)??tipoRA?.duracion??60;await supabase.from("citas").update({estado:"agendada",fecha:fechaRAb,hora_inicio:horaRAb,hora_fin:horaFin(horaRAb,dur)}).eq("id",reagendarAbierta.id);setReagendarAbierta(null);setFechaRAb("");setHoraRAb("");await cargar();}catch(e){console.error(e);}setSavingReag(false);};
 
   if(loading)return<div style={{padding:"40px",textAlign:"center",color:"rgba(255,255,255,0.3)"}}>Cargando ficha...</div>;
   if(!clienta)return<div style={{padding:"40px",textAlign:"center",color:"rgba(255,255,255,0.3)"}}>No encontrada</div>;
   const prox=citasH.find(c=>c.estado==="agendada");
+  const abiertas=citasH.filter(c=>c.estado==="abierta");
 
   if(editMode)return(
     <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
@@ -226,16 +271,17 @@ function FichaClienta({clientaId,session,onClose}){
         </div>
       </div>
 
-      {editPaquetes.length>0&&<div className="glass" style={{padding:"18px",marginBottom:"16px"}}>
+      <div className="glass" style={{padding:"18px",marginBottom:"16px"}}>
         <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"12px"}}>PAQUETES</div>
         {editPaquetes.map((ep,i)=><div key={ep.id} style={{marginBottom:"14px",padding:"14px",background:"rgba(0,0,0,0.2)",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.06)"}}>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-            <div>
+            <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+              <div style={{flex:1}}>
               <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SERVICIO / PAQUETE</div>
               <select className="inp" value={ep.servicioEdit} onChange={e=>{
                 const nombre=e.target.value;
                 const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);
-                const ses=nombre.match(/(\d+)\s*ses/i)?.[1];
+                const ses=nombre.match(/(\d+)[ªa°]?\s*ses/i)?.[1];
                 setEditPaquetes(prev=>prev.map((p,idx)=>idx!==i?p:{...p,servicioEdit:nombre,precioEdit:item?String(item.precio):p.precioEdit,totalEdit:ses?ses:p.totalEdit}));
               }} style={{fontSize:"13px"}}>
                 {CATALOGO.map(cat=>(
@@ -244,16 +290,52 @@ function FichaClienta({clientaId,session,onClose}){
                   </optgroup>
                 ))}
               </select>
+              </div>
+              {confirmDelPaq===ep.id
+                ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",flexShrink:0}}>
+                    <div style={{fontSize:"10px",color:"#ef4444",textAlign:"center",lineHeight:"1.3"}}>¿Borrar<br/>paquete?</div>
+                    <div style={{display:"flex",gap:"4px"}}>
+                      <button onClick={()=>eliminarPaquete(ep.id)} style={{background:"rgba(239,68,68,0.2)",border:"1px solid #ef4444",color:"#ef4444",borderRadius:"6px",cursor:"pointer",fontSize:"10px",padding:"3px 8px",fontWeight:700}}>Sí</button>
+                      <button onClick={()=>setConfirmDelPaq(null)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.5)",borderRadius:"6px",cursor:"pointer",fontSize:"10px",padding:"3px 8px"}}>No</button>
+                    </div>
+                  </div>
+                :<button onClick={()=>setConfirmDelPaq(ep.id)} style={{background:"none",border:"1px solid rgba(239,68,68,0.25)",color:"rgba(239,68,68,0.5)",borderRadius:"6px",cursor:"pointer",fontSize:"11px",padding:"6px 10px",flexShrink:0,alignSelf:"flex-end"}} title="Eliminar paquete">🗑</button>
+              }
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px"}}>
-              <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>TOTAL SESIONES</div><input type="number" className="inp" value={ep.totalEdit} readOnly style={{textAlign:"center",fontSize:"14px",fontWeight:700,opacity:0.6,cursor:"not-allowed"}}/></div>
+              <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.5)",marginBottom:"4px"}}>TOTAL SESIONES ✎</div><input type="number" min="1" className="inp" value={ep.totalEdit} onChange={e=>updatePaq(i,"totalEdit",e.target.value)} style={{textAlign:"center",fontSize:"14px",fontWeight:700}}/></div>
               <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>PRECIO $</div><input type="number" className="inp" value={ep.precioEdit} readOnly style={{fontSize:"13px",opacity:0.6,cursor:"not-allowed"}}/></div>
               <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SES. USADAS</div><input type="number" className="inp" value={ep.sesEdit} min="0" max={ep.totalEdit||ep.total_sesiones} onChange={e=>updatePaq(i,"sesEdit",e.target.value)} style={{textAlign:"center",fontSize:"14px",fontWeight:700}}/></div>
             </div>
             {(ep.servicioEdit!==ep.servicio||ep.totalEdit!==String(ep.total_sesiones)||ep.precioEdit!==String(ep.precio)||ep.sesEdit!==String(ep.sesiones_usadas))&&<div style={{fontSize:"11px",color:"#f59e0b"}}>⚠ Hay cambios pendientes en este paquete</div>}
           </div>
         </div>)}
-      </div>}
+        {/* Formulario nuevo paquete */}
+        {newPaqForm
+          ?<div style={{padding:"14px",background:"rgba(39,33,232,0.08)",borderRadius:"10px",border:"1px solid rgba(39,33,232,0.3)",marginBottom:"8px"}}>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"10px",letterSpacing:"1px"}}>NUEVO PAQUETE</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+              <div>
+                <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SERVICIO</div>
+                <select className="inp" value={newPaqForm.servicio||""} onChange={e=>{const nombre=e.target.value;const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);const ms=nombre.match(/(\d+)[ªa°]?\s*ses/i);setNewPaqForm(f=>({...f,servicio:nombre,precioEdit:item?String(item.precio):f.precioEdit,totalEdit:ms?ms[1]:f.totalEdit}));}} style={{fontSize:"13px"}}>
+                  <option value="">Seleccionar servicio...</option>
+                  {CATALOGO.map(cat=><optgroup key={cat.categoria} label={cat.categoria}>{cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}</optgroup>)}
+                </select>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px"}}>
+                <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.5)",marginBottom:"4px"}}>TOTAL SESIONES</div><input type="number" min="1" className="inp" value={newPaqForm.totalEdit||""} onChange={e=>setNewPaqForm(f=>({...f,totalEdit:e.target.value}))} style={{textAlign:"center",fontSize:"14px",fontWeight:700}}/></div>
+                <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>PRECIO $</div><input type="number" className="inp" value={newPaqForm.precioEdit||""} onChange={e=>setNewPaqForm(f=>({...f,precioEdit:e.target.value}))} style={{fontSize:"13px"}}/></div>
+                <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>SES. USADAS</div><input type="number" className="inp" value={newPaqForm.sesEdit||"0"} min="0" onChange={e=>setNewPaqForm(f=>({...f,sesEdit:e.target.value}))} style={{textAlign:"center",fontSize:"14px",fontWeight:700}}/></div>
+              </div>
+              <div style={{display:"flex",gap:"8px"}}>
+                <button onClick={agregarPaquete} disabled={!newPaqForm.servicio||savingNewPaq} style={{flex:1,padding:"8px",borderRadius:"8px",background:"#2721E8",border:"none",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:700,opacity:(!newPaqForm.servicio||savingNewPaq)?0.5:1}}>{savingNewPaq?"Guardando...":"+ Agregar paquete"}</button>
+                <button onClick={()=>setNewPaqForm(null)} style={{padding:"8px 16px",borderRadius:"8px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:"12px"}}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+          :<button onClick={()=>setNewPaqForm({servicio:"",totalEdit:"8",sesEdit:"0",precioEdit:""})} style={{width:"100%",padding:"10px",borderRadius:"8px",background:"rgba(39,33,232,0.1)",border:"1px dashed rgba(39,33,232,0.4)",color:"rgba(165,180,252,0.7)",cursor:"pointer",fontSize:"12px",fontWeight:600}}>+ Agregar paquete</button>
+        }
+      </div>
 
       {editCitasParams.length>0&&<div className="glass" style={{padding:"18px",marginBottom:"16px"}}>
         <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"12px"}}>PARÁMETROS DE EQUIPO — POTENCIAS POR SESIÓN</div>
@@ -317,118 +399,203 @@ function FichaClienta({clientaId,session,onClose}){
     </div>
   );
 
+  const SH=({children,count})=>(
+    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"}}>
+      <div style={{fontSize:"12px",fontWeight:700,letterSpacing:"1.5px",color:"rgba(255,255,255,0.55)",textTransform:"uppercase"}}>{children}</div>
+      {count!=null&&<div style={{fontSize:"11px",fontWeight:600,color:"rgba(255,255,255,0.25)",background:"rgba(255,255,255,0.06)",borderRadius:"20px",padding:"1px 8px"}}>{count}</div>}
+    </div>
+  );
   return(
-    <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:"#fff"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"16px"}}>
-        {onClose&&<button className="btn-ghost" onClick={onClose} style={{fontSize:"11px"}}>← Volver</button>}
+    <div style={{padding:"24px 28px",overflowY:"auto",flex:1,color:"#fff"}}>
+      {/* TOP BAR */}
+      <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"24px"}}>
+        {onClose&&<button className="btn-ghost" onClick={onClose} style={{fontSize:"12px",padding:"8px 16px"}}>← Volver</button>}
         <div style={{flex:1}}/>
-        <button className="btn-ghost" onClick={abrirEdit} style={{fontSize:"12px",borderColor:"rgba(39,33,232,0.4)",color:"#a5b4fc",padding:"7px 16px"}}>✏ Editar ficha</button>
+        <button className="btn-ghost" onClick={abrirEdit} style={{fontSize:"12px",borderColor:"rgba(39,33,232,0.4)",color:"#a5b4fc",padding:"8px 18px"}}>✏ Editar ficha</button>
       </div>
-      <div style={{display:"flex",gap:"20px",marginBottom:"24px",alignItems:"flex-start"}}>
-        <div style={{width:"56px",height:"56px",borderRadius:"50%",background:"rgba(39,33,232,0.2)",border:"1px solid rgba(39,33,232,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"22px",fontWeight:700,color:"#2721E8",flexShrink:0}}>{clienta.nombre?.charAt(0)?.toUpperCase()||"?"}</div>
+
+      {/* HEADER CLIENTE */}
+      <div style={{display:"flex",gap:"20px",marginBottom:"28px",alignItems:"center"}}>
+        <div style={{width:"72px",height:"72px",borderRadius:"50%",background:"rgba(39,33,232,0.25)",border:"2px solid rgba(39,33,232,0.5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"28px",fontWeight:700,color:"#818cf8",flexShrink:0}}>{clienta.nombre?.charAt(0)?.toUpperCase()||"?"}</div>
         <div style={{flex:1}}>
-          <div style={{fontSize:"20px",fontWeight:700,marginBottom:"4px"}}>{clienta.nombre}</div>
-          <div style={{display:"flex",gap:"16px",fontSize:"12px",color:"rgba(255,255,255,0.4)",flexWrap:"wrap"}}>
+          <div style={{fontSize:"24px",fontWeight:700,marginBottom:"6px",lineHeight:1.2}}>{clienta.nombre}</div>
+          <div style={{display:"flex",gap:"16px",fontSize:"13px",color:"rgba(255,255,255,0.6)",flexWrap:"wrap",marginBottom:"4px"}}>
             {clienta.telefono&&<span>📱 {clienta.telefono}</span>}
             {clienta.fecha_nacimiento&&<span>🎂 {new Date(clienta.fecha_nacimiento+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</span>}
             {clienta.como_nos_conocio&&<span>📣 {clienta.como_nos_conocio}</span>}
           </div>
-          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.2)",marginTop:"4px"}}>Desde {new Date(clienta.created_at).toLocaleDateString("es-MX",{month:"short",year:"numeric"})} · {clienta.sucursal_nombre}</div>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)"}}>Desde {new Date(clienta.created_at).toLocaleDateString("es-MX",{month:"short",year:"numeric"})} · {clienta.sucursal_nombre}</div>
         </div>
       </div>
-      {prox&&<div className="glass" style={{padding:"16px",marginBottom:"16px",borderColor:"rgba(39,33,232,0.3)"}}>
-        <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"8px"}}>PRÓXIMA CITA</div>
+
+      {/* PRÓXIMA CITA */}
+      {prox&&<div className="glass" style={{padding:"18px 20px",marginBottom:"24px",borderColor:"rgba(73,184,211,0.35)",background:"rgba(73,184,211,0.05)"}}>
+        <SH>Próxima cita</SH>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontSize:"14px",fontWeight:600}}>{prox.servicio}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",marginTop:"2px"}}>{new Date(prox.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {prox.hora_inicio}</div></div>
-          <div style={{fontSize:"12px",fontWeight:600,color:"#49B8D3"}}>Sesión {prox.sesion_numero}</div>
+          <div>
+            <div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>{prox.servicio}</div>
+            <div style={{fontSize:"13px",color:"rgba(255,255,255,0.55)",textTransform:"capitalize"}}>{new Date(prox.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {prox.hora_inicio}</div>
+          </div>
+          <div style={{fontSize:"20px",fontWeight:700,color:"#49B8D3"}}>S{prox.sesion_numero}</div>
         </div>
       </div>}
-      <div style={{marginBottom:"20px"}}>
-        <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>PAQUETES ({paquetes.length})</div>
-        {paquetes.map(p=><div key={p.id} className="glass" style={{padding:"14px",marginBottom:"8px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}><div style={{fontSize:"13px",fontWeight:600}}>{p.servicio}</div><div style={{fontSize:"11px",color:p.activo?"#10b981":"rgba(255,255,255,0.3)",fontWeight:600}}>{p.activo?"Activo":"Completado"}</div></div>
-          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"6px"}}>Sesión {p.sesiones_usadas} de {p.total_sesiones}</div>
-          <div style={{height:"4px",background:"rgba(255,255,255,0.06)",borderRadius:"2px"}}><div style={{width:`${(p.sesiones_usadas/p.total_sesiones)*100}%`,height:"100%",background:p.activo?"#49B8D3":"#10b981",borderRadius:"2px"}}/></div>
-        </div>)}
-        {paquetes.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.15)"}}>Sin paquetes</div>}
+
+      {/* CITAS ABIERTAS */}
+      {abiertas.length>0&&<div className="glass" style={{padding:"18px 20px",marginBottom:"24px",borderColor:"rgba(245,158,11,0.4)",background:"rgba(245,158,11,0.04)"}}>
+        <SH>Pendiente de reagendar</SH>
+        {abiertas.map(c=>(
+          <div key={c.id} style={{marginBottom:"12px",padding:"12px 14px",background:"rgba(0,0,0,0.2)",borderRadius:"10px",border:"1px solid rgba(245,158,11,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"10px"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"14px",fontWeight:700,marginBottom:"3px"}}>{c.servicio}</div>
+                <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",marginBottom:c.razon_perdida?"6px":"0"}}>Sesión {c.sesion_numero} · Fecha original: {new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</div>
+                {c.razon_perdida&&<div style={{fontSize:"12px",color:"rgba(255,200,50,0.8)",fontStyle:"italic",lineHeight:1.4}}>"{c.razon_perdida}"</div>}
+              </div>
+              <button className="btn-ghost" style={{color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontSize:"12px",padding:"8px 14px",whiteSpace:"nowrap",flexShrink:0}} onClick={()=>{setReagendarAbierta(c);setFechaRAb("");setHoraRAb("");}}>↻ Reagendar</button>
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {/* PAQUETES */}
+      <div style={{marginBottom:"28px"}}>
+        <SH count={paquetes.length}>Paquetes</SH>
+        {paquetes.map(p=>{const isManten=/mantenimiento/i.test(p.servicio);const isZonas=/Pack Zonas?:/i.test(p.servicio);const barColor=isManten?(p.activo?"#f59e0b":"#10b981"):(p.activo?"#49B8D3":"#10b981");const pct=Math.min((p.sesiones_usadas/p.total_sesiones)*100,100);return(<div key={p.id} className="glass" style={{padding:"18px 20px",marginBottom:"10px",borderColor:isManten?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+              <div style={{fontSize:"15px",fontWeight:700}}>{p.servicio}</div>
+              {isManten&&<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"10px",background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.35)",color:"#f59e0b",fontWeight:700}}>MANTEN.</div>}
+            </div>
+            <div style={{fontSize:"13px",fontWeight:700,color:p.activo?"#10b981":"rgba(255,255,255,0.35)"}}>{p.activo?"Activo":"Completado"}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isZonas?"0":"8px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+              <div style={{fontSize:"13px",color:"rgba(255,255,255,0.55)"}}>Sesión {p.sesiones_usadas} de {p.total_sesiones}</div>
+              {editingTotalId===p.id?(
+                <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+                  <input type="number" min="1" className="inp" value={newTotalVal} onChange={e=>setNewTotalVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")guardarTotalSesiones(p.id);if(e.key==="Escape"){setEditingTotalId(null);setNewTotalVal("");}}} style={{width:"60px",fontSize:"13px",padding:"3px 8px",textAlign:"center"}} autoFocus placeholder={String(p.total_sesiones)}/>
+                  <button onClick={()=>guardarTotalSesiones(p.id)} style={{fontSize:"11px",padding:"3px 10px",borderRadius:"6px",background:"#10b981",border:"none",color:"#fff",cursor:"pointer",fontWeight:700}}>OK</button>
+                  <button onClick={()=>{setEditingTotalId(null);setNewTotalVal("");}} style={{fontSize:"11px",padding:"3px 8px",borderRadius:"6px",background:"rgba(255,255,255,0.1)",border:"none",color:"rgba(255,255,255,0.6)",cursor:"pointer"}}>✕</button>
+                </div>
+              ):(
+                <button onClick={()=>{setEditingTotalId(p.id);setNewTotalVal(String(p.total_sesiones));}} style={{fontSize:"10px",padding:"2px 8px",borderRadius:"6px",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",cursor:"pointer"}} title="Ajustar total de sesiones">✎ Total</button>
+              )}
+            </div>
+            {!isZonas&&<div style={{fontSize:"13px",fontWeight:600,color:barColor}}>{pct.toFixed(0)}%</div>}
+          </div>
+          {!isZonas&&<div style={{height:"6px",background:"rgba(255,255,255,0.08)",borderRadius:"3px"}}><div style={{width:`${pct}%`,height:"100%",background:barColor,borderRadius:"3px",transition:"width 0.3s"}}/></div>}
+        </div>);})}
+        {paquetes.length===0&&<div style={{fontSize:"14px",color:"rgba(255,255,255,0.25)",padding:"16px 0"}}>Sin paquetes registrados</div>}
       </div>
+
+      {/* AVANCE POR ZONA */}
       {paquetes.map(paq=>{
         const totalReq=paq.total_sesiones||8;
         const citasPaq=citasH.filter(c=>c.paquete_id===paq.id&&c.parametros_equipo?.length>0).sort((a,b)=>a.sesion_numero-b.sesion_numero);
-        if(!citasPaq.length)return null;
-        const zonas=[...new Set(citasPaq.flatMap(c=>(c.parametros_equipo||[]).map(p=>p.zona)))];
-        // Por zona: lista de registros {sesion, fecha, valores, status, razon}
+        const zonasDelNombre=(()=>{const m=paq.servicio?.match(/Pack Zonas?:\s*(.+?)\s*\(\d+\s*ses\)/i);if(!m)return[];return m[1].split(",").map(z=>z.trim()).filter(Boolean);})();
+        const zonasDeEquipo=[...new Set(citasPaq.flatMap(c=>(c.parametros_equipo||[]).map(p=>p.zona)))];
+        const zonas=[...new Set([...zonasDelNombre,...zonasDeEquipo])];
+        if(!zonas.length)return null;
         const zonData={};
-        zonas.forEach(zona=>{
-          zonData[zona]=citasPaq.map(c=>{
-            const param=(c.parametros_equipo||[]).find(p=>p.zona===zona);
-            if(!param)return null;
-            return{sesion:c.sesion_numero,fecha:c.fecha,valores:param.valores,status:param.status||null,razon:param.razon||""};
-          }).filter(Boolean);
-        });
-        return(<div key={paq.id} style={{marginBottom:"24px"}}>
-          <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"12px"}}>AVANCE POR ZONA — {paq.servicio}</div>
+        zonas.forEach(zona=>{zonData[zona]=citasPaq.map(c=>{const param=(c.parametros_equipo||[]).find(p=>p.zona===zona);if(!param)return null;return{sesion:c.sesion_numero,fecha:c.fecha,valores:param.valores,status:param.status||null,razon:param.razon||""};}).filter(Boolean);});
+        return(<div key={paq.id} style={{marginBottom:"28px"}}>
+          <SH>Avance por zona — {paq.servicio}</SH>
           {zonas.map(zona=>{
             const registros=zonData[zona];
             const completadas=registros.filter(r=>r.status==="completado").length;
             const noCompletadas=registros.filter(r=>r.status==="pendiente"||r.status==="perdida");
             const pct=Math.min(completadas/totalReq,1);
             const barColor=completadas===totalReq?"#10b981":completadas>0?"#49B8D3":"rgba(255,255,255,0.15)";
-            return(<div key={zona} style={{marginBottom:"10px",background:"rgba(255,255,255,0.03)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(255,255,255,0.07)"}}>
-              {/* Cabecera de zona */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
-                <div style={{fontSize:"12px",fontWeight:600,color:"rgba(255,255,255,0.85)"}}>{zona}</div>
-                <div style={{fontSize:"11px",fontWeight:700,color:completadas===totalReq?"#10b981":completadas>0?"#49B8D3":"rgba(255,255,255,0.3)"}}>{completadas}/{totalReq} <span style={{fontWeight:400,fontSize:"9px",color:"rgba(255,255,255,0.3)"}}>completadas</span></div>
+            return(<div key={zona} style={{marginBottom:"12px",background:"rgba(255,255,255,0.04)",borderRadius:"12px",padding:"16px",border:"1px solid rgba(255,255,255,0.08)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+                <div style={{fontSize:"14px",fontWeight:600}}>{zona}</div>
+                <div style={{fontSize:"13px",fontWeight:700,color:completadas===totalReq?"#10b981":completadas>0?"#49B8D3":"rgba(255,255,255,0.35)"}}>{completadas}/{totalReq} <span style={{fontWeight:400,fontSize:"11px",color:"rgba(255,255,255,0.35)"}}>completadas</span></div>
               </div>
-              {/* Barra de progreso */}
-              <div style={{height:"5px",background:"rgba(255,255,255,0.07)",borderRadius:"3px",marginBottom:"10px",overflow:"hidden"}}>
-                <div style={{width:`${pct*100}%`,height:"100%",background:barColor,borderRadius:"3px",transition:"width 0.3s"}}/>
+              <div style={{height:"6px",background:"rgba(255,255,255,0.08)",borderRadius:"3px",marginBottom:"12px",overflow:"hidden"}}><div style={{width:`${pct*100}%`,height:"100%",background:barColor,borderRadius:"3px",transition:"width 0.3s"}}/></div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:noCompletadas.length>0?"12px":"0"}}>
+                {registros.map(r=>{const sc=r.status==="completado"?"#10b981":r.status==="pendiente"?"#f59e0b":r.status==="perdida"?"#ef4444":"rgba(255,255,255,0.3)";const sbg=r.status==="completado"?"rgba(16,185,129,0.12)":r.status==="pendiente"?"rgba(245,158,11,0.12)":r.status==="perdida"?"rgba(239,68,68,0.12)":"rgba(255,255,255,0.05)";const icon=r.status==="completado"?"✓":r.status==="pendiente"?"⏸":r.status==="perdida"?"✕":"·";return(<div key={r.sesion} style={{display:"flex",alignItems:"center",gap:"5px",background:sbg,border:`1px solid ${sc}44`,borderRadius:"8px",padding:"5px 10px"}}><span style={{fontSize:"11px",color:sc,fontWeight:700}}>{icon}</span><span style={{fontSize:"11px",color:"rgba(255,255,255,0.65)"}}>S{r.sesion}</span>{r.valores&&<span style={{fontSize:"10px",color:"rgba(255,255,255,0.4)",fontFamily:"monospace"}}>{r.valores}</span>}</div>);})}
               </div>
-              {/* Chips de sesiones */}
-              <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:noCompletadas.length>0?"10px":"0"}}>
-                {registros.map(r=>{
-                  const sc=r.status==="completado"?"#10b981":r.status==="pendiente"?"#f59e0b":r.status==="perdida"?"#ef4444":"rgba(255,255,255,0.3)";
-                  const sbg=r.status==="completado"?"rgba(16,185,129,0.12)":r.status==="pendiente"?"rgba(245,158,11,0.12)":r.status==="perdida"?"rgba(239,68,68,0.12)":"rgba(255,255,255,0.05)";
-                  const icon=r.status==="completado"?"✓":r.status==="pendiente"?"⏸":r.status==="perdida"?"✕":"·";
-                  return(<div key={r.sesion} style={{display:"flex",alignItems:"center",gap:"4px",background:sbg,border:`1px solid ${sc}44`,borderRadius:"6px",padding:"4px 8px"}}>
-                    <span style={{fontSize:"10px",color:sc,fontWeight:700}}>{icon}</span>
-                    <span style={{fontSize:"10px",color:"rgba(255,255,255,0.6)"}}>S{r.sesion}</span>
-                    {r.valores&&<span style={{fontSize:"9px",color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>{r.valores}</span>}
-                  </div>);})}
-              </div>
-              {/* Comentarios de sesiones no completadas */}
-              {noCompletadas.map(r=>(
-                <div key={r.sesion} style={{marginTop:"6px",padding:"7px 10px",background:r.status==="perdida"?"rgba(239,68,68,0.07)":"rgba(245,158,11,0.07)",border:`1px solid ${r.status==="perdida"?"rgba(239,68,68,0.25)":"rgba(245,158,11,0.25)"}`,borderRadius:"7px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:r.razon?"4px":"0"}}>
-                    <span style={{fontSize:"9px",fontWeight:700,color:r.status==="perdida"?"#ef4444":"#f59e0b",textTransform:"uppercase",letterSpacing:"0.5px"}}>{r.status==="perdida"?"✕ Perdida":"⏸ Pendiente"}</span>
-                    <span style={{fontSize:"9px",color:"rgba(255,255,255,0.3)"}}>Ses. {r.sesion} · {new Date(r.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span>
-                  </div>
-                  {r.razon&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.55)",fontStyle:"italic"}}>"{r.razon}"</div>}
-                </div>
-              ))}
+              {noCompletadas.map(r=>(<div key={r.sesion} style={{marginTop:"6px",padding:"10px 12px",background:r.status==="perdida"?"rgba(239,68,68,0.07)":"rgba(245,158,11,0.07)",border:`1px solid ${r.status==="perdida"?"rgba(239,68,68,0.25)":"rgba(245,158,11,0.25)"}`,borderRadius:"8px"}}><div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:r.razon?"5px":"0"}}><span style={{fontSize:"10px",fontWeight:700,color:r.status==="perdida"?"#ef4444":"#f59e0b",textTransform:"uppercase",letterSpacing:"0.5px"}}>{r.status==="perdida"?"✕ Perdida":"⏸ Pendiente"}</span><span style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Ses. {r.sesion} · {new Date(r.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>{r.razon&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.6)",fontStyle:"italic"}}>"{r.razon}"</div>}</div>))}
             </div>);
           })}
         </div>);
       })}
-      <div>
-        <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"10px"}}>HISTORIAL ({citasH.filter(c=>c.estado==="completada").length} completadas)</div>
-        {citasH.map(c=><div key={c.id} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-          <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
-            <div style={{width:"6px",height:"6px",borderRadius:"50%",background:c.estado==="completada"?"#10b981":c.estado==="agendada"?colorCita(c):"rgba(255,255,255,0.15)",marginTop:"6px",flexShrink:0}}/>
-            <div style={{flex:1}}><div style={{fontSize:"12px",fontWeight:500}}>{c.servicio} <span style={{color:"rgba(255,255,255,0.3)"}}>· S{c.sesion_numero}</span></div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} · {c.hora_inicio}</div></div>
-            <div style={{fontSize:"10px",fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?"#49B8D3":"rgba(255,255,255,0.2)"}}>{c.estado==="completada"?"✓":c.estado==="agendada"?"Próx.":"✕"}</div>
-          </div>
-        </div>)}
-        {citasH.length===0&&<div style={{fontSize:"12px",color:"rgba(255,255,255,0.15)"}}>Sin sesiones</div>}
+
+      {/* HISTORIAL DE SESIONES */}
+      <div style={{marginBottom:"28px"}}>
+        <SH count={citasH.filter(c=>c.estado==="completada").length+" completadas"}>Historial</SH>
+        {citasH.map(c=>{
+          const esComp=c.estado==="completada",esProx=c.estado==="agendada",esAb=c.estado==="abierta",esPerd=c.estado==="perdida";
+          return(<div key={c.id} style={{display:"flex",gap:"14px",alignItems:"center",padding:"12px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+            <div style={{width:"8px",height:"8px",borderRadius:"50%",background:esComp?"#10b981":esProx?colorCita(c):esAb?"#f59e0b":esPerd?"#eab308":"rgba(255,255,255,0.15)",flexShrink:0}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:"14px",fontWeight:600,marginBottom:"2px"}}>{c.servicio} <span style={{color:"rgba(255,255,255,0.35)",fontWeight:400}}>· S{c.sesion_numero}</span></div>
+              <div style={{fontSize:"12px",color:"rgba(255,255,255,0.45)"}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})} · {c.hora_inicio}</div>
+              {esPerd&&c.razon_perdida&&<div style={{fontSize:"11px",color:"rgba(234,179,8,0.7)",marginTop:"2px"}}>✗ {c.razon_perdida}</div>}
+            </div>
+            <div style={{fontSize:"12px",fontWeight:700,color:esComp?"#10b981":esProx?"#49B8D3":esAb?"#f59e0b":esPerd?"#eab308":"rgba(255,255,255,0.2)"}}>{esComp?"✓":esProx?"Próx.":esAb?"📅":esPerd?"✗":"✕"}</div>
+          </div>);
+        })}
+        {citasH.length===0&&<div style={{fontSize:"14px",color:"rgba(255,255,255,0.2)",padding:"16px 0"}}>Sin sesiones</div>}
       </div>
+
+      {/* REAGENDAR CITA ABIERTA */}
+      {reagendarAbierta&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
+        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita abierta</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sesión {reagendarAbierta.sesion_numero} · {reagendarAbierta.servicio}</div></div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRAb} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaRAb(e.target.value);setHoraRAb("");}} style={{colorScheme:"dark"}}/></div>
+        {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRAb} onSelectHora={h=>setHoraRAb(h)} horaSeleccionada={horaRAb} duracion={getDuracionServicio(reagendarAbierta.servicio,reagendarAbierta.tipo_servicio)??TIPOS_SVC.find(t=>t.id===reagendarAbierta.tipo_servicio)?.duracion??60}/></div>}
+        {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
+        <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setReagendarAbierta(null);setFechaRAb("");setHoraRAb("");}}>Cancelar</button><button className="btn-ghost" style={{flex:2,padding:"12px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontWeight:600,fontSize:"13px"}} disabled={!fechaRAb||!horaRAb||savingReag||new Date(fechaRAb+"T12:00:00").getDay()===0} onClick={reagendarDesdeAbierta}>{savingReag?"Reagendando...":"↻ Confirmar reagendamiento"}</button></div>
+      </div></div>}
+
+      {/* HISTORIAL DE PAGOS */}
+      {(()=>{
+        const entradas=citasH.flatMap(c=>{
+          const res=[];
+          // Anticipo guardado en campos dedicados (flujo nuevo)
+          if(c.anticipo_metodo)res.push({key:`${c.id}-ant`,fecha:c.fecha,hora:c.hora_inicio,tipo:"anticipo",metodo:c.anticipo_metodo,monto:c.anticipo_monto,ticket:c.anticipo_ticket,servicio:c.servicio,sesion:c.sesion_numero});
+          // Liquidación
+          if(c.es_cobro&&c.metodo_pago)res.push({key:`${c.id}-liq`,fecha:c.fecha,hora:c.hora_inicio,tipo:"liquidacion",metodo:c.metodo_pago,monto:c.total_pagado,ticket:c.ticket_zettle,servicio:c.servicio,sesion:c.sesion_numero});
+          // Backward compat: anticipo guardado en metodo_pago antes de tener anticipo_metodo
+          if(!c.anticipo_metodo&&!c.es_cobro&&c.metodo_pago)res.push({key:`${c.id}-ant`,fecha:c.fecha,hora:c.hora_inicio,tipo:"anticipo",metodo:c.metodo_pago,monto:c.total_pagado,ticket:c.ticket_zettle,servicio:c.servicio,sesion:c.sesion_numero});
+          return res;
+        }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
+        if(!entradas.length)return null;
+        return(<div style={{marginBottom:"28px"}}>
+          <SH count={entradas.length}>Historial de pagos</SH>
+          {entradas.map(e=>{const esAnt=e.tipo==="anticipo";return(
+            <div key={e.key} style={{padding:"16px 18px",marginBottom:"10px",background:esAnt?"rgba(249,115,22,0.07)":"rgba(16,185,129,0.07)",border:`1px solid ${esAnt?"rgba(249,115,22,0.25)":"rgba(16,185,129,0.2)"}`,borderRadius:"12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                  <div style={{fontSize:"18px",fontWeight:700,color:esAnt?"#f97316":"#10b981"}}>{e.monto?fmt(e.monto):"—"}</div>
+                  <div style={{fontSize:"10px",fontWeight:700,letterSpacing:"0.5px",padding:"3px 8px",borderRadius:"8px",background:esAnt?"rgba(249,115,22,0.15)":"rgba(16,185,129,0.15)",color:esAnt?"#f97316":"#10b981"}}>{esAnt?"ANTICIPO":"LIQUIDACIÓN"}</div>
+                </div>
+                {e.ticket&&<div style={{fontSize:"13px",color:"rgba(255,255,255,0.6)",fontFamily:"monospace",fontWeight:700,background:"rgba(255,255,255,0.07)",borderRadius:"6px",padding:"3px 10px"}}>{e.ticket}</div>}
+              </div>
+              <div style={{fontSize:"13px",fontWeight:600,color:"rgba(255,255,255,0.8)",marginBottom:"4px"}}>{e.metodo}</div>
+              <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)"}}>{new Date(e.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})} · {e.servicio} S{e.sesion}</div>
+            </div>
+          );})}
+        </div>);
+      })()}
     </div>
   );
 }
 
+// Agrupa citas del mismo cliente a la misma hora en un solo bloque visual
+function groupCitasConcurrentes(citas){
+  const seen={};const result=[];
+  for(const c of citas){
+    const key=`${c.clienta_id||c.clienta_nombre}||${c.hora_inicio.slice(0,5)}`;
+    if(!seen[key]){seen[key]={...c,_extras:[]};result.push(seen[key]);}
+    else{seen[key]._extras.push(c);}
+  }
+  return result;
+}
 // Calcula posiciones de columna para citas solapadas en el mismo día
 function layoutCitas(citas){
   const getMin=c=>{const[h,m]=c.hora_inicio.split(":").map(Number);return h*60+m;};
-  const getEnd=c=>getMin(c)+(c.duracion_min||60);
+  const getEnd=c=>{if(c.hora_fin){const[h,m]=c.hora_fin.split(":").map(Number);return h*60+m;}return getMin(c)+(c.duracion_min||60);};
   const sorted=[...citas].sort((a,b)=>a.hora_inicio.localeCompare(b.hora_inicio));
   const cols=[];
   const asgn=sorted.map(c=>{const s=getMin(c);let ci=0;while(ci<cols.length&&cols[ci]>s)ci++;if(ci===cols.length)cols.push(0);cols[ci]=getEnd(c);return{id:c.id,col:ci};});
@@ -444,9 +611,10 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const[semana,setSemana]=useState(semanaD(hoy()));const[citas,setCitas]=useState([]);const[detalle,setDetalle]=useState(null);const[saving,setSaving]=useState(false);
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
   const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
-  const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});
+  const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});const[ticketZettle,setTicketZettle]=useState("");
   const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);const[modalReagendar,setModalReagendar]=useState(false);const[citaReagendar,setCitaReagendar]=useState(null);const[fechaRe,setFechaRe]=useState("");const[horaRe,setHoraRe]=useState("");const[modalSinDatos,setModalSinDatos]=useState(false);const[citaSinDatos,setCitaSinDatos]=useState(null);const[datosPendientesMode,setDatosPendientesMode]=useState(false);const[confirmDelCita,setConfirmDelCita]=useState(false);
   const[hoverCita,setHoverCita]=useState(null);const[hoverPos,setHoverPos]=useState({x:0,y:0});const hoverTimer=useRef(null);
+  const[modalPerdida,setModalPerdida]=useState(false);const[citaPerdida,setCitaPerdida]=useState(null);const[razonPerdida,setRazonPerdida]=useState("");
   const[editSesionNum,setEditSesionNum]=useState(null);const[savingSesion,setSavingSesion]=useState(false);
   const mRef=useRef(true);useEffect(()=>{mRef.current=true;return()=>{mRef.current=false;};},[]);
   const cargar=async()=>{const{data}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).gte("fecha",semana[0]).lte("fecha",semana[5]).order("hora_inicio");if(data)setCitas(data);};
@@ -459,6 +627,16 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
     const upd={estado:"completada",datos_pendientes:isDatPend};
     if(parametrosEdit.length>0)upd.parametros_equipo=parametrosEdit;
     await supabase.from("citas").update(upd).eq("id",cita.id);
+    // Completar también citas agrupadas (mismo cliente, misma hora)
+    if(cita._extras?.length){
+      for(const extra of cita._extras){
+        await supabase.from("citas").update({estado:"completada",datos_pendientes:isDatPend}).eq("id",extra.id);
+        if(extra.paquete_id){
+          const{data:paqE}=await supabase.from("paquetes").select("*").eq("id",extra.paquete_id).single();
+          if(paqE){const nsE=paqE.sesiones_usadas+1;await supabase.from("paquetes").update({sesiones_usadas:nsE,activo:nsE<paqE.total_sesiones}).eq("id",paqE.id);}
+        }
+      }
+    }
     setDatosPendientesMode(false);setDetalle(null);
     if(cita.paquete_id&&mRef.current){
       const{data:paq}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
@@ -469,11 +647,13 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
     if(mRef.current)cargar();
   };
   const agSig=async()=>{if(!fechaSig||!horaSig||!citaComp)return;setSaving(true);try{
-    const dur=TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio)?.duracion||60;const sN=citaComp.paquete.sesiones_usadas+1;
+    const tipoCC=TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio);const dur=getDuracionServicio(citaComp.servicio,citaComp.tipo_servicio)??tipoCC?.duracion??60;const sN=citaComp.paquete.sesiones_usadas+1;
     await supabase.from("citas").insert([{clienta_id:citaComp.clienta_id,clienta_nombre:citaComp.clienta_nombre,paquete_id:citaComp.paquete_id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:citaComp.servicio,tipo_servicio:citaComp.tipo_servicio,duracion_min:dur,fecha:fechaSig,hora_inicio:horaSig,hora_fin:horaFin(horaSig,dur),sesion_numero:sN,es_cobro:false,estado:"agendada",notas:"Agendada tras completar sesión"}]);
     setModalSig(false);setCitaComp(null);cargar();
   }catch(e){console.error(e);}setSaving(false);};
   const cancelar=async(id,pId,sU)=>{await supabase.from("citas").update({estado:"cancelada"}).eq("id",id);if(pId)await supabase.from("paquetes").update({sesiones_usadas:Math.max(0,sU-1),activo:true}).eq("id",pId);setDetalle(null);cargar();};
+  const marcarPerdida=async()=>{if(!citaPerdida||!razonPerdida.trim())return;await supabase.from("citas").update({estado:"perdida",razon_perdida:razonPerdida.trim()}).eq("id",citaPerdida.id);setModalPerdida(false);setCitaPerdida(null);setRazonPerdida("");setDetalle(null);cargar();};
+  const marcarAbierta=async()=>{if(!citaPerdida)return;const upd={estado:"abierta"};if(razonPerdida.trim())upd.razon_perdida=razonPerdida.trim();await supabase.from("citas").update(upd).eq("id",citaPerdida.id);setModalPerdida(false);setCitaPerdida(null);setRazonPerdida("");setDetalle(null);cargar();};
   const guardarSesionNum=async(cita,nSes)=>{
     if(!nSes||nSes<1||nSes===cita.sesion_numero)return;
     setSavingSesion(true);
@@ -490,7 +670,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   };
   const eliminarCita=async()=>{if(!detalle)return;await supabase.from("citas").delete().eq("id",detalle.id);if(detalle.paquete_id&&detalle.estado==="completada"){const{data:paq}=await supabase.from("paquetes").select("*").eq("id",detalle.paquete_id).single();if(paq){const ns=Math.max(0,paq.sesiones_usadas-1);await supabase.from("paquetes").update({sesiones_usadas:ns,activo:true}).eq("id",paq.id);}}setDetalle(null);setConfirmDelCita(false);cargar();};
   const reagendar=async()=>{if(!fechaRe||!horaRe||!citaReagendar)return;setSaving(true);try{
-    const dur=TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion||60;
+    const tipoCR=TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio);const dur=getDuracionServicio(citaReagendar.servicio,citaReagendar.tipo_servicio)??tipoCR?.duracion??60;
     await supabase.from("citas").update({estado:"cancelada"}).eq("id",citaReagendar.id);
     await supabase.from("citas").insert([{clienta_id:citaReagendar.clienta_id,clienta_nombre:citaReagendar.clienta_nombre,paquete_id:citaReagendar.paquete_id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:citaReagendar.servicio,tipo_servicio:citaReagendar.tipo_servicio,duracion_min:dur,fecha:fechaRe,hora_inicio:horaRe,hora_fin:horaFin(horaRe,dur),sesion_numero:citaReagendar.sesion_numero,es_cobro:citaReagendar.es_cobro,estado:"agendada",notas:`Reagendada · Antes: ${citaReagendar.fecha} ${citaReagendar.hora_inicio}`+(citaReagendar.notas?` · ${citaReagendar.notas}`:"")}]);
     setModalReagendar(false);setCitaReagendar(null);setDetalle(null);cargar();
@@ -512,7 +692,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const paqPrecio=paq?.precio||0;
       const restante=paqPrecio-anticoMonto;
       setCitaCobro({cita,paqPrecio,anticoMonto,restante,paq});
-      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);
+      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");
       setShowCobro(true);
     }else{completar(cita);}
   };
@@ -524,15 +704,16 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
       const totalFinal=pagosAg.length===1?Math.round(restante*(1-descuentoAg/100)):pagosAg.reduce((s,p)=>s+p.monto,0);
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:hoy()}]);
-      await supabase.from("citas").update({es_cobro:true}).eq("id",cita.id);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
+      const tzVal=ticketZettle.trim()?(ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim()):null;
+      await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,...(tzVal?{ticket_zettle:tzVal}:{})}).eq("id",cita.id);
       setShowCobro(false);setCitaCobro(null);
       await completar(cita);
     }catch(e){console.error(e);}setSavingCobro(false);
   };
   const semAnt=()=>{const d=new Date(semana[0]+"T12:00:00");d.setDate(d.getDate()-7);setSemana(semanaD(d.toISOString().slice(0,10)));};
   const semSig=()=>{const d=new Date(semana[0]+"T12:00:00");d.setDate(d.getDate()+7);setSemana(semanaD(d.toISOString().slice(0,10)));};
-  const cdDia=(f)=>citas.filter(c=>c.fecha===f&&c.estado!=="cancelada");
+  const cdDia=(f)=>citas.filter(c=>c.fecha===f&&c.estado!=="cancelada"&&c.estado!=="abierta");
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)",background:"#fff",color:"#111"}}>
       <div style={{padding:"12px 20px",borderBottom:"1px solid #e0e0e0",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -542,7 +723,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           <button onClick={semSig} style={{background:"none",border:"1px solid #ccc",borderRadius:"8px",color:"#333",cursor:"pointer",padding:"6px 10px",fontSize:"14px"}}>›</button>
           <div style={{fontSize:"16px",fontWeight:600,textTransform:"capitalize",color:"#111"}}>{new Date(semana[0]+"T12:00:00").toLocaleDateString("es-MX",{month:"long",year:"numeric"})}</div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>{TIPOS_SVC.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"#555"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:t.color}}/>{t.label}</div>)}</div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>{[{color:"#039BE5",label:"Láser"},{color:"#3F51B5",label:"HIFU 4D"},{color:"#E67C73",label:"Facial"},{color:"#8E24AA",label:"Moldeo"},{color:"#33B679",label:"Cera"},{color:"#10b981",label:"Post Op"},{color:"#D50000",label:"1ª sesión"}].map(t=><div key={t.label} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"#555"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:t.color}}/>{t.label}</div>)}</div>
       </div>
       <div style={{flex:1,overflowY:"auto",overflowX:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"52px repeat(6,1fr)",borderBottom:"1px solid #e0e0e0",position:"sticky",top:0,background:"#fff",zIndex:10}}>
@@ -555,13 +736,15 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:"52px repeat(6,1fr)",position:"relative"}}>
           <div>{HORAS.map(h=><div key={h} style={{height:"64px",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:"8px",paddingTop:"2px"}}><span style={{fontSize:"10px",color:"#999"}}>{h>12?`${h-12}pm`:h===12?"12pm":`${h}am`}</span></div>)}</div>
-          {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f),ly=layoutCitas(cd);return(
+          {semana.map(f=>{const d=new Date(f+"T12:00:00").getDay(),a=HORARIOS[d]!==null,cd=cdDia(f),cdG=groupCitasConcurrentes(cd),ly=layoutCitas(cdG);return(
             <div key={f} style={{borderLeft:"1px solid #e8e8e8",position:"relative",opacity:a?1:0.3}}>
               {HORAS.map(h=><div key={h} style={{height:"64px",borderBottom:"1px solid #f0f0f0"}}/>)}
-              {cd.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,height=Math.max(c.duracion_min*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada",done=c.estado==="completada",lyt=ly[c.id]||{col:0,total:1},lLeft=`calc(${lyt.col/lyt.total*100}% + 1px)`,lRight=`calc(${(lyt.total-lyt.col-1)/lyt.total*100}% + 1px)`,bg=datPend?"#f59e0bEE":(done?`${col}88`:`${col}EE`);return(
+              {cdG.map(c=>{const[ch,cm]=c.hora_inicio.split(":").map(Number),top=(ch-9)*64+cm*PX_POR_MIN,_durMin=c.hora_fin?(()=>{const[fh,fm]=c.hora_fin.split(":").map(Number);return(fh*60+fm)-(ch*60+cm);})():(c.duracion_min||60),height=Math.max(_durMin*PX_POR_MIN-2,20),col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada",done=c.estado==="completada",lyt=ly[c.id]||{col:0,total:1},lLeft=`calc(${lyt.col/lyt.total*100}% + 1px)`,lRight=`calc(${(lyt.total-lyt.col-1)/lyt.total*100}% + 1px)`,bg=c.estado==="perdida"?"#eab308CC":datPend?"#f59e0bEE":(done?`${col}88`:`${col}EE`);
+              const todosServs=[c.servicio,...(c._extras||[]).map(e=>e.servicio)];
+              return(
                 <div key={c.id} onClick={e=>{e.stopPropagation();clearTimeout(hoverTimer.current);setHoverCita(null);setDetalle(c);}} style={{position:"absolute",left:lLeft,right:lRight,top:`${top}px`,height:`${height}px`,background:bg,borderRadius:"5px",padding:"3px 5px",cursor:"pointer",overflow:"hidden",zIndex:5,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}} onMouseEnter={e=>{e.currentTarget.style.filter="brightness(0.88)";const rect=e.currentTarget.getBoundingClientRect();clearTimeout(hoverTimer.current);hoverTimer.current=setTimeout(()=>{setHoverCita(c);setHoverPos({x:rect.right+8,y:rect.top});},900);}} onMouseLeave={e=>{e.currentTarget.style.filter="";clearTimeout(hoverTimer.current);setHoverCita(null);}}>
-                  <div style={{fontSize:"10px",fontWeight:700,color:"#fff",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textShadow:"0 1px 1px rgba(0,0,0,0.25)"}}>{datPend?"📋":sinAnt?"⚠":aparto?"💰":liquido?"✅":reag?"↻":""}{(datPend||sinAnt||aparto||liquido||reag)?" ":""}{c.hora_inicio} {c.clienta_nombre}</div>
-                  {height>28&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.9)",marginTop:"1px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{datPend?"Datos pendientes":c.servicio}</div>}
+                  <div style={{fontSize:"10px",fontWeight:700,color:"#fff",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textShadow:"0 1px 1px rgba(0,0,0,0.25)"}}>{c.estado==="perdida"?"✗":datPend?"📋":sinAnt?"⚠":aparto?"💰":liquido?"✅":reag?"↻":""}{(c.estado==="perdida"||datPend||sinAnt||aparto||liquido||reag)?" ":""}{c.hora_inicio} {c.clienta_nombre}</div>
+                  {height>28&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.9)",marginTop:"1px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.estado==="perdida"?"No se presentó":datPend?"Datos pendientes":todosServs.join(" + ")}</div>}
                 </div>);})}
               {f===hoy()&&(()=>{const n=new Date(),m=(n.getHours()-9)*60+n.getMinutes();if(m<0||m>720)return null;return<div style={{position:"absolute",left:0,right:0,top:`${m*PX_POR_MIN}px`,height:"2px",background:"#ff4444",zIndex:6,pointerEvents:"none"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#ff4444",position:"absolute",left:"-4px",top:"-3px"}}/></div>;})()}
             </div>);})}
@@ -573,11 +756,16 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             <div style={{width:"8px",height:"8px",borderRadius:"50%",background:col,flexShrink:0}}/>
             <div style={{fontSize:"13px",fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clienta_nombre}</div>
           </div>
-          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",marginBottom:"8px",fontWeight:500}}>{c.servicio}</div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",marginBottom:c.servicios_sesion?.length>0?"4px":"8px",fontWeight:500}}>{c.servicio}</div>
+          {c.servicios_sesion?.length>0&&<div style={{fontSize:"10px",color:"rgba(255,255,255,0.35)",marginBottom:"8px"}}>+ {c.servicios_sesion.map(s=>s.servicio).join(" · ")}</div>}
           <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Horario</span><span style={{color:"#fff",fontWeight:600}}>{c.hora_inicio} – {c.hora_fin}</span></div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Sesión</span><span style={{color:"#fff",fontWeight:600}}>#{c.sesion_numero}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Estado</span><span style={{fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?col:"rgba(255,255,255,0.3)"}}>{c.estado==="completada"?"✓ Completada":c.estado==="agendada"?"Agendada":"Cancelada"}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Estado</span><span style={{fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?col:c.estado==="perdida"?"#eab308":"rgba(255,255,255,0.3)"}}>{c.estado==="completada"?"✓ Completada":c.estado==="agendada"?"Agendada":c.estado==="perdida"?"✗ No se presentó":"Cancelada"}</span></div>
+            {c.estado==="perdida"&&c.razon_perdida&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Motivo</span><span style={{fontWeight:500,color:"rgba(234,179,8,0.8)",maxWidth:"140px",textAlign:"right"}}>{c.razon_perdida}</span></div>}
+            {c.agendado_por&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Agendó</span><span style={{color:"rgba(255,255,255,0.7)",fontWeight:500}}>{c.agendado_por}</span></div>}
+            {c.metodo_pago&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Pago</span><span style={{color:"#10b981",fontWeight:600}}>{c.metodo_pago}</span></div>}
+            {c.ticket_zettle&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Ticket</span><span style={{color:"rgba(255,255,255,0.7)",fontWeight:600,fontFamily:"monospace"}}>{c.ticket_zettle}</span></div>}
             {(sinAnt||aparto||liquido||reag||datPend)&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:"rgba(255,255,255,0.04)",fontSize:"10px",color:"rgba(255,255,255,0.55)",display:"flex",alignItems:"center",gap:"5px"}}>{datPend?"📋 Datos pendientes":sinAnt?"⚠ Sin anticipo · cobrar al llegar":aparto?"💰 Anticipo — pendiente liquidar":liquido?"✅ Liquidada":reag?"↻ Reagendada":""}</div>}
           </div>
           <div style={{marginTop:"8px",paddingTop:"6px",borderTop:"1px solid rgba(255,255,255,0.05)",fontSize:"9px",color:"rgba(255,255,255,0.2)",textAlign:"center",letterSpacing:"0.5px"}}>Haz clic para abrir ficha completa</div>
@@ -586,7 +774,16 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorCita(detalle)}44`,color:"#fff"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:"16px"}}><div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"3px"}}>CITA</div><div style={{fontSize:"18px",fontWeight:700}}>{detalle.clienta_nombre}</div>{detalle.notas?.startsWith("Reagendada")&&<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"10px",background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.3)",color:"#f59e0b",marginTop:"4px",display:"inline-block"}}>↻ Reagendada</div>}</div><button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:"22px"}}>×</button></div>
         <div style={{display:"flex",flexDirection:"column",gap:"9px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",padding:"14px",marginBottom:"12px"}}>
-          {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`]].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500,color:"#fff"}}>{v}</span></div>)}
+          {[["Servicio",detalle.servicio],["Fecha",new Date(detalle.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})],["Horario",`${detalle.hora_inicio} – ${detalle.hora_fin}`],...(detalle.agendado_por?[["Agendó",detalle.agendado_por]]:[] )].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{fontWeight:500,color:"#fff"}}>{v}</span></div>)}
+          {(detalle._extras?.length>0||detalle.servicios_sesion?.length>0)&&[
+            ...(detalle._extras||[]).map(e=>({servicio:e.servicio,sesNum:e.sesion_numero})),
+            ...(detalle.servicios_sesion||[])
+          ].map((s,i)=>(
+            <div key={`ss-${i}`} style={{display:"flex",justifyContent:"space-between",fontSize:"13px"}}>
+              <span style={{color:"rgba(255,255,255,0.4)"}}>+ Servicio</span>
+              <span style={{fontWeight:500,color:"#fff"}}>{s.servicio} · S{s.sesNum}</span>
+            </div>
+          ))}
           <div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",alignItems:"center"}}>
             <span style={{color:"rgba(255,255,255,0.4)"}}>Sesión</span>
             {isAdmin&&detalle.estado==="agendada"?(
@@ -651,9 +848,10 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         {detalle.notas?.match(/Anticipo \$(\d+)/)&&!detalle.es_cobro&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>💰 {detalle.notas.match(/Anticipo \$\d+ \w+/)?.[0]} pagado · <span style={{fontWeight:700}}>pendiente de liquidar</span></div>}
         {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}
         <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
-          {detalle.estado==="agendada"&&<><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button>{!detalle.notas?.startsWith("Reagendada")&&<button className="btn-ghost" style={{flex:1,color:"#f59e0b",borderColor:"rgba(245,158,11,0.3)"}} onClick={()=>{setCitaReagendar(detalle);setFechaRe("");setHoraRe("");setModalReagendar(true);}}>↻ Reagendar</button>}<button className="btn-blue" style={{flex:2}} onClick={()=>intentarCompletar(detalle)}>✓ Completada</button></> }
-          {detalle.estado==="completada"&&!detalle.datos_pendientes&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"#10b981",fontWeight:600}}>✓ Completada</div>}
+          {detalle.estado==="agendada"&&<div style={{display:"flex",flexDirection:"column",gap:"8px",width:"100%"}}><div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button><button className="btn-ghost" style={{flex:1,color:"#eab308",borderColor:"rgba(234,179,8,0.3)"}} onClick={()=>{setCitaPerdida(detalle);setRazonPerdida("");setModalPerdida(true);}}>✗ No vino</button>{!detalle.notas?.startsWith("Reagendada")&&<button className="btn-ghost" style={{flex:1,color:"#f59e0b",borderColor:"rgba(245,158,11,0.3)"}} onClick={()=>{setCitaReagendar(detalle);setFechaRe("");setHoraRe("");setModalReagendar(true);}}>↻ Reagendar</button>}</div><button className="btn-blue" style={{width:"100%",padding:"12px"}} onClick={()=>intentarCompletar(detalle)}>✓ Completada</button></div>}
+          {detalle.estado==="completada"&&!detalle.datos_pendientes&&<div style={{width:"100%"}}><div style={{textAlign:"center",fontSize:"13px",color:"#10b981",fontWeight:600,marginBottom:detalle.metodo_pago?"8px":"0"}}>✓ Completada</div>{detalle.metodo_pago&&<div style={{display:"flex",flexDirection:"column",gap:"5px",padding:"10px 12px",background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px"}}><div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Pago</span><span style={{color:"#10b981",fontWeight:600}}>{detalle.metodo_pago}</span></div>{detalle.ticket_zettle&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:"rgba(255,255,255,0.35)"}}>Ticket</span><span style={{color:"rgba(255,255,255,0.7)",fontWeight:600,fontFamily:"monospace"}}>{detalle.ticket_zettle}</span></div>}</div>}</div>}
           {detalle.estado==="completada"&&detalle.datos_pendientes&&<div style={{textAlign:"center",width:"100%",fontSize:"12px",color:"#f59e0b",fontWeight:600,padding:"8px",background:"rgba(245,158,11,0.08)",borderRadius:"8px",border:"1px solid rgba(245,158,11,0.25)"}}>📋 Completada · Datos de equipo pendientes</div>}
+          {detalle.estado==="perdida"&&<div style={{width:"100%"}}><div style={{textAlign:"center",fontSize:"13px",color:"#eab308",fontWeight:700,marginBottom:"8px"}}>✗ No se presentó</div>{detalle.razon_perdida&&<div style={{padding:"8px 12px",background:"rgba(234,179,8,0.08)",border:"1px solid rgba(234,179,8,0.2)",borderRadius:"8px",fontSize:"12px",color:"rgba(255,255,255,0.6)",marginBottom:"8px"}}>{detalle.razon_perdida}</div>}<button className="btn-ghost" style={{width:"100%",color:"#f59e0b",borderColor:"rgba(245,158,11,0.3)"}} onClick={()=>{setCitaReagendar(detalle);setFechaRe("");setHoraRe("");setModalReagendar(true);}}>↻ Reagendar</button></div>}
           {detalle.estado==="cancelada"&&<div style={{textAlign:"center",width:"100%",fontSize:"13px",color:"rgba(255,255,255,0.3)"}}>Cancelada</div>}
         </div>
         {detalle.clienta_id&&<button className="btn-ghost" style={{width:"100%",fontSize:"11px"}} onClick={()=>{setDetalle(null);onVerFicha&&onVerFicha(detalle.clienta_id);}}>Ver ficha de {detalle.clienta_nombre}</button>}
@@ -710,22 +908,56 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             </div>
           ))}
           {pagosAg[pagosAg.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagosAg.length===1?0:pagosAg.reduce((s,p)=>s+p.monto,0);setPagosAg(pagosAg.length===1?[{...pagosAg[0],monto:Math.round(restante/2)},{metodo:"",monto:restante-Math.round(restante/2)}]:[...pagosAg,{metodo:"",monto:Math.max(0,restante-suma)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px",marginBottom:"12px"}}>+ Agregar otro método de pago</button>}
+          <div style={{marginTop:"12px",marginBottom:"8px"}}>
+            <div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>TICKET ZETTLE (opcional)</div>
+            <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px"}}/>
+            <div style={{fontSize:"9px",color:"rgba(255,255,255,0.2)",marginTop:"3px"}}>Número de ticket generado manualmente en Zettle</div>
+          </div>
           <div style={{display:"flex",gap:"10px",marginTop:"8px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
         </div></div>);
       })()}
 
+      {modalPerdida&&citaPerdida&&<div className="overlay"><div className="glass" style={{width:440,padding:"28px",borderColor:"rgba(234,179,8,0.35)",color:"#fff"}}>
+        <div style={{fontSize:"16px",fontWeight:700,textAlign:"center",marginBottom:"3px"}}>¿Qué pasó con la cita?</div>
+        <div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)",textAlign:"center",marginBottom:"20px"}}>{citaPerdida.clienta_nombre} · Ses. {citaPerdida.sesion_numero} · {citaPerdida.hora_inicio}</div>
+
+        {/* OPCIÓN 1: DEJÓ ABIERTA */}
+        <div style={{padding:"16px",background:"rgba(245,158,11,0.07)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:"12px",marginBottom:"14px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"#f59e0b",marginBottom:"4px"}}>📅 Avisó que no viene</div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.45)",marginBottom:"10px",lineHeight:1.5}}>La sesión <strong style={{color:"#fff"}}>no se pierde</strong>. Desaparece del calendario y queda en su ficha para reagendar cuando vuelva a escribir.</div>
+          <textarea className="inp" value={razonPerdida} onChange={e=>setRazonPerdida(e.target.value)} style={{fontSize:"11px",padding:"7px 10px",resize:"vertical",height:"52px",marginBottom:"10px",width:"100%",boxSizing:"border-box"}} placeholder="Comentario (opcional): ej. Avisó por WA que tiene junta, quiere la próxima semana..."/>
+          <button onClick={marcarAbierta} style={{width:"100%",padding:"11px",background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.5)",borderRadius:"9px",color:"#f59e0b",fontFamily:"inherit",fontSize:"13px",fontWeight:700,cursor:"pointer"}}>📅 Dejar abierta (sin perder sesión)</button>
+        </div>
+
+        {/* SEPARADOR */}
+        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}><div style={{flex:1,height:"1px",background:"rgba(255,255,255,0.08)"}}/><span style={{fontSize:"10px",color:"rgba(255,255,255,0.2)",letterSpacing:"1px"}}>O</span><div style={{flex:1,height:"1px",background:"rgba(255,255,255,0.08)"}}/></div>
+
+        {/* OPCIÓN 2: SESIÓN PERDIDA */}
+        <div style={{padding:"16px",background:"rgba(234,179,8,0.05)",border:"1px solid rgba(234,179,8,0.2)",borderRadius:"12px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"#eab308",marginBottom:"4px"}}>✗ No se presentó sin avisar</div>
+          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.35)",marginBottom:"10px"}}>Queda marcada en amarillo en el calendario. Registra el motivo:</div>
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
+            {["No avisó","Avisó muy tarde","Canceló el día","Emergencia"].map(r=><button key={r} onClick={()=>setRazonPerdida(r)} style={{padding:"5px 9px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:razonPerdida===r?"rgba(234,179,8,0.2)":"transparent",borderColor:razonPerdida===r?"#eab308":"rgba(255,255,255,0.1)",color:razonPerdida===r?"#eab308":"rgba(255,255,255,0.35)",transition:"all 0.15s"}}>{r}</button>)}
+          </div>
+          <textarea className="inp" value={razonPerdida} onChange={e=>setRazonPerdida(e.target.value)} style={{fontSize:"11px",padding:"7px 10px",resize:"vertical",height:"52px",marginBottom:"10px",width:"100%",boxSizing:"border-box"}} placeholder="Comentario adicional (opcional si ya seleccionaste motivo)..."/>
+          <button disabled={!razonPerdida.trim()} onClick={marcarPerdida} style={{width:"100%",padding:"11px",background:razonPerdida.trim()?"rgba(234,179,8,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${razonPerdida.trim()?"rgba(234,179,8,0.5)":"rgba(255,255,255,0.07)"}`,borderRadius:"9px",color:razonPerdida.trim()?"#eab308":"rgba(255,255,255,0.15)",fontFamily:"inherit",fontSize:"13px",fontWeight:700,cursor:razonPerdida.trim()?"pointer":"default",transition:"all 0.2s"}}>✗ Marcar como perdida</button>
+        </div>
+
+        <button className="btn-ghost" style={{width:"100%",marginTop:"12px",fontSize:"12px"}} onClick={()=>{setModalPerdida(false);setCitaPerdida(null);setRazonPerdida("");}}>Cancelar</button>
+      </div></div>}
+
       {modalSig&&citaComp&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(16,185,129,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>📅</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>¡Sesión completada!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>¿Agendar siguiente sesión de {citaComp.clienta_nombre}?</div><div style={{fontSize:"12px",color:"#10b981",marginTop:"6px"}}>Sesión {citaComp.paquete.sesiones_usadas+1} de {citaComp.paquete.total_sesiones}</div></div>
-        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSig} min={hoy()} onChange={e=>{setFechaSig(e.target.value);setHoraSig("");}} style={{colorScheme:"dark"}}/></div>
-        {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>SELECCIONA HORA (toca un espacio libre)</div><MiniAgendaDia session={session} fecha={fechaSig} onSelectHora={h=>setHoraSig(h)} horaSeleccionada={horaSig} duracion={TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio)?.duracion||60}/></div>}
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSig} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaSig(e.target.value);setHoraSig("");}} style={{colorScheme:"dark"}}/></div>
+        {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>SELECCIONA HORA (toca un espacio libre)</div><MiniAgendaDia session={session} fecha={fechaSig} onSelectHora={h=>setHoraSig(h)} horaSeleccionada={horaSig} duracion={getDuracionServicio(citaComp.servicio,citaComp.tipo_servicio)??TIPOS_SVC.find(t=>t.id===citaComp.tipo_servicio)?.duracion??60}/></div>}
         {fechaSig&&new Date(fechaSig+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalSig(false);setCitaComp(null);}}>No por ahora</button><button className="btn-blue" style={{flex:2,padding:"12px"}} disabled={!fechaSig||!horaSig||saving||new Date(fechaSig+"T12:00:00").getDay()===0} onClick={agSig}>{saving?"Agendando...":"✓ Agendar siguiente"}</button></div>
       </div></div>}
 
       {modalReagendar&&citaReagendar&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita</div><div style={{fontSize:"13px",color:"rgba(255,255,255,0.4)"}}>Sesión {citaReagendar.sesion_numero} de {citaReagendar.clienta_nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.25)",marginTop:"4px"}}>Fecha actual: {new Date(citaReagendar.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {citaReagendar.hora_inicio}</div></div>
-        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRe} min={hoy()} onChange={e=>{setFechaRe(e.target.value);setHoraRe("");}} style={{colorScheme:"dark"}}/></div>
-        {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRe} onSelectHora={h=>setHoraRe(h)} horaSeleccionada={horaRe} duracion={TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion||60}/></div>}
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRe} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaRe(e.target.value);setHoraRe("");}} style={{colorScheme:"dark"}}/></div>
+        {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRe} onSelectHora={h=>setHoraRe(h)} horaSeleccionada={horaRe} duracion={getDuracionServicio(citaReagendar.servicio,citaReagendar.tipo_servicio)??TIPOS_SVC.find(t=>t.id===citaReagendar.tipo_servicio)?.duracion??60}/></div>}
         {fechaRe&&new Date(fechaRe+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         <div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalReagendar(false);setCitaReagendar(null);}}>Cancelar</button><button className="btn-ghost" style={{flex:2,padding:"12px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontWeight:600,fontSize:"13px"}} disabled={!fechaRe||!horaRe||saving||new Date(fechaRe+"T12:00:00").getDay()===0} onClick={reagendar}>{saving?"Reagendando...":"↻ Confirmar reagendamiento"}</button></div>
       </div></div>}
@@ -876,17 +1108,22 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);
   const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");
   const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo"
+  const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
   const[pagos,setPagos]=useState([{metodo:"",monto:0}]); // multi-pago en modal cobro
   const[termSel,setTermSel]=useState({}); // {pagoIdx: terminalNombre}
   const[terminalesPOS,setTerminalesPOS]=useState([]);
-  const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);const[notifDatos,setNotifDatos]=useState([]);const[showNotif,setShowNotif]=useState(false);const[confirmDelCli,setConfirmDelCli]=useState(null);
+  const[fechaTicket,setFechaTicket]=useState(hoy()); // fecha del ticket (admin puede cambiar para retroactivos)
+  const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);const[notifDatos,setNotifDatos]=useState([]);const[showNotif,setShowNotif]=useState(false);const[confirmDelCli,setConfirmDelCli]=useState(null);const[confirmDelTicket,setConfirmDelTicket]=useState(null);const[historialFecha,setHistorialFecha]=useState(hoy());
 
   const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
+  const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");
+  const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
   const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito([]):setCarrito([{...item,qty:1}]);};
   const total=carrito.length>0?carrito[0].precio:0;const totalCD=Math.round(total*(1-descuento/100));const msiD=carrito.length>0?(carrito[0].msi||[]):[];
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
+  const duracionCita=carrito.length>0?(getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
   const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&aOk;
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
@@ -894,9 +1131,13 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setPagos([{metodo:"",monto:0}]);setTermSel({});setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasPrecio("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
 
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
+  const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
+  const agregarZonas=()=>{if(!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio)return;const lista=zonasSeleccionadas.slice(0,3).join(", ")+(zonasSeleccionadas.length>3?` +${zonasSeleccionadas.length-3}`:"");const nombre=`Pack Zonas: ${lista} (${zonasSesiones} ses)`;sel({nombre,precio:Number(zonasPrecio),msi:[3],categoria:"Personalizado"});setShowZonasForm(false);};
+  const toggleCeraZona=(z)=>setCeraZonas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
+  const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;sel({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
 
   const cerrar=async()=>{setSaving(true);setErrGuardar("");try{
     const item=carrito[0];
@@ -905,15 +1146,15 @@ function POS({session,onSwitchSucursal,isAdmin}){
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpago=pagos.length===1?(pagos[0].metodo+(msiSel>0?` ${msiSel}MSI`:"")+( ["Débito","Crédito"].includes(pagos[0].metodo)&&termSel[0]?` · ${termSel[0]}`:"")):pagos.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSel[i]?` · ${termSel[i]}`:""} ${fmt(p.monto)}`).join(" + ");
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:hoy()}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
+    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
-    setShowConfirm(false);setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+    const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
   const cerrarAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
@@ -923,15 +1164,16 @@ function POS({session,onSwitchSucursal,isAdmin}){
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpAnticipo=anticoOpt==="transferencia"?"Transferencia":"Efectivo";
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:hoy()}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
+    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`}]);
+    const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
-    setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+    const fTk=fechaTicket;setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
   const agendarSinAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
@@ -940,16 +1182,26 @@ function POS({session,onSwitchSucursal,isAdmin}){
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     let pId=null;
-    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)\s*ses/);const tot=ms?parseInt(ms[1]):8;
+    if(item.nombre.includes("ses")){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i);const tot=ms?parseInt(ms[1]):1;
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:tipoSvc.duracion,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,tipoSvc.duracion),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
+    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
     setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
-  const cargarT=async(sid)=>{setLoadingT(true);const{data}=await supabase.from("tickets").select("*").eq("sucursal_id",sid).eq("fecha",hoy()).order("created_at",{ascending:false});if(data)setTickets(data);setLoadingT(false);};
+  const cargarT=async(sid,fecha)=>{setLoadingT(true);const f=fecha||hoy();const{data}=await supabase.from("tickets").select("*").eq("sucursal_id",sid).eq("fecha",f).order("created_at",{ascending:false});if(data)setTickets(data);setLoadingT(false);};
+  const eliminarTicket=async(id)=>{await supabase.from("tickets").delete().eq("id",id);setConfirmDelTicket(null);cargarT(session.id,historialFecha);};
+  const cambiarDiaHistorial=(delta)=>{const d=new Date(historialFecha+"T12:00:00");d.setDate(d.getDate()+delta);const nueva=d.toISOString().slice(0,10);setHistorialFecha(nueva);setConfirmDelTicket(null);cargarT(session.id,nueva);};
   const cargarCli=async(q)=>{setLoadingCli(true);let qr=supabase.from("clientas").select("*").eq("sucursal_id",session.id).order("created_at",{ascending:false}).limit(50);if(q)qr=qr.ilike("nombre",`%${q}%`);const{data}=await qr;setClientas(data||[]);setLoadingCli(false);};
-  const eliminarClienta=async(id)=>{await supabase.from("clientas").delete().eq("id",id);setConfirmDelCli(null);cargarCli(cliBusq);};
+  const eliminarClienta=async(id)=>{
+    try{
+      await supabase.from("citas").delete().eq("clienta_id",id);
+      await supabase.from("paquetes").delete().eq("clienta_id",id);
+      const{error}=await supabase.from("clientas").delete().eq("id",id);
+      if(error)throw error;
+    }catch(e){alert("Error al eliminar: "+e.message);}
+    setConfirmDelCli(null);cargarCli(cliBusq);
+  };
   useEffect(()=>{(async()=>{try{const{data,error}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");if(!error&&data?.length>0)setTerminalesPOS(data);else setTerminalesPOS(TERMINALES_DEFAULT);}catch(e){setTerminalesPOS(TERMINALES_DEFAULT);}})();},[session.id]);
   useEffect(()=>{(async()=>{try{const{data}=await supabase.from("citas").select("id,clienta_nombre,servicio,sesion_numero,fecha,hora_inicio,clienta_id").eq("sucursal_id",session.id).eq("datos_pendientes",true).eq("estado","completada").order("fecha",{ascending:false}).limit(30);setNotifDatos(data||[]);}catch(e){}})();},[session.id,view]);
   const totalHoy=tickets.reduce((s,t)=>s+Number(t.total),0);
@@ -963,7 +1215,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)",fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
             {["pos","agenda","confirmar","clientas","historial","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)",position:"relative"}}
-              onClick={()=>{setView(v);setFichaId(null);if(v==="historial")cargarT(session.id);if(v==="clientas")cargarCli("");}}>
+              onClick={()=>{setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
               {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
@@ -992,7 +1244,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
       </div>}
       {view==="agenda"&&<AgendaCalendar key="ag" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
 
-      {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)}/>:
+      {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)} isAdmin={isAdmin}/>:
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
           <div style={{display:"flex",gap:"12px",marginBottom:"16px",alignItems:"center"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>CLIENTAS · {session.nombre}</div><div style={{flex:1}}/><input className="inp" placeholder="Buscar por nombre..." value={cliBusq} onChange={e=>{setCliBusq(e.target.value);cargarCli(e.target.value);}} style={{maxWidth:"280px",padding:"8px 14px",fontSize:"12px"}}/></div>
           {loadingCli&&<div style={{textAlign:"center",padding:"40px",color:"rgba(255,255,255,0.3)"}}>Cargando...</div>}
@@ -1015,29 +1267,37 @@ function POS({session,onSwitchSucursal,isAdmin}){
       {view==="confirmar"&&<ConfirmacionesManana session={session}/>}
 
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
-        <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>HISTORIAL · {session.nombre}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)"}}>HISTORIAL · {session.nombre}</div>
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <button onClick={()=>cambiarDiaHistorial(-1)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",color:"rgba(255,255,255,0.6)",cursor:"pointer",padding:"6px 12px",fontSize:"16px",lineHeight:1,fontFamily:"inherit"}}>‹</button>
+            <div style={{fontSize:"13px",fontWeight:500,minWidth:"130px",textAlign:"center"}}>
+              {historialFecha===hoy()?"Hoy":new Date(historialFecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})}
+            </div>
+            <button onClick={()=>cambiarDiaHistorial(1)} disabled={historialFecha>=hoy()} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",color:historialFecha>=hoy()?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.6)",cursor:historialFecha>=hoy()?"default":"pointer",padding:"6px 12px",fontSize:"16px",lineHeight:1,fontFamily:"inherit"}}>›</button>
+          </div>
+        </div>
         {loadingT&&<div style={{color:"rgba(255,255,255,0.3)",textAlign:"center",padding:"40px"}}>Cargando...</div>}
-        {!loadingT&&tickets.length===0&&<div style={{color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"40px",fontSize:"13px"}}>Sin tickets hoy</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tickets.map(t=><div key={t.id} className="glass" style={{padding:"16px 20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div><div style={{fontSize:"13px",fontWeight:500}}>{(t.servicios||[]).join(", ")}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{t.metodo_pago}{t.descuento>0?` · ${t.descuento}% desc`:""}</div></div><div style={{fontSize:"20px",fontWeight:700,color:"#49B8D3"}}>{fmt(t.total)}</div></div></div>)}</div>
+        {!loadingT&&tickets.length===0&&<div style={{color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"40px",fontSize:"13px"}}>Sin tickets ese día</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tickets.map(t=><div key={t.id} className="glass" style={{padding:"16px 20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"4px"}}>{new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div><div style={{fontSize:"13px",fontWeight:500}}>{(t.servicios||[]).join(", ")}</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.3)",marginTop:"4px"}}>{t.metodo_pago}{t.descuento>0?` · ${t.descuento}% desc`:""}</div></div><div style={{display:"flex",alignItems:"center",gap:"12px"}}><div style={{fontSize:"20px",fontWeight:700,color:"#49B8D3"}}>{fmt(t.total)}</div>{confirmDelTicket===t.id?<div style={{display:"flex",gap:"4px"}}><button onClick={()=>setConfirmDelTicket(null)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"6px",color:"rgba(255,255,255,0.4)",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit"}}>No</button><button onClick={()=>eliminarTicket(t.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button></div>:<button onClick={()=>setConfirmDelTicket(t.id)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.3)",cursor:"pointer",padding:"4px 6px",fontSize:"14px",lineHeight:1}} title="Eliminar ticket">🗑</button>}</div></div></div>)}</div>
         {tickets.length>0&&<div style={{marginTop:"16px",padding:"16px 20px",background:"rgba(39,33,232,0.08)",border:"1px solid rgba(39,33,232,0.2)",borderRadius:"12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"13px",color:"rgba(255,255,255,0.5)"}}>{tickets.length} tickets</div><div style={{fontSize:"20px",fontWeight:700}}>{fmt(totalHoy)}</div></div>}
       </div>}
 
       {view==="pos"&&<div style={{flex:1,display:"grid",gridTemplateColumns:showAgenda&&fechaCita&&!esDom?"380px 1fr 380px":"1fr 380px",overflow:"hidden"}}>
         {showAgenda&&fechaCita&&!esDom&&<div style={{borderRight:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",background:"rgba(0,0,0,0.15)",overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:"11px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)"}}>AGENDA DEL DÍA</div><button onClick={()=>setShowAgenda(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:"16px"}}>×</button></div>
-          <div style={{flex:1,overflow:"auto"}}><MiniAgendaDia session={session} fecha={fechaCita} onSelectHora={h=>setHoraCita(h)} horaSeleccionada={horaCita} duracion={tipoSvc.duracion}/></div>
+          <div style={{flex:1,overflow:"auto"}}><MiniAgendaDia session={session} fecha={fechaCita} onSelectHora={h=>setHoraCita(h)} horaSeleccionada={horaCita} duracion={duracionCita}/></div>
         </div>}
 
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{padding:"12px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
-            <div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{FILTROS.map(f=><button key={f} onClick={()=>setFiltro(f)} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",background:filtro===f?"#2721E8":"transparent",borderColor:filtro===f?"#2721E8":"rgba(255,255,255,0.12)",color:filtro===f?"#fff":"rgba(255,255,255,0.45)"}}>{f}</button>)}</div>
-            <input className="inp" placeholder="Buscar servicio..." value={busq} onChange={e=>setBusq(e.target.value)} style={{padding:"8px 14px",fontSize:"12px"}}/>
+            <div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{FILTROS.map(f=><button key={f} onClick={()=>{setFiltro(f);if(f==="Mantenimiento"){setShowMantForm(true);setShowZonasForm(false);setShowCeraForm(false);}else if(f==="Personalizado"){setShowZonasForm(true);setShowMantForm(false);setShowCeraForm(false);}else if(f==="Cera"){setShowCeraForm(true);setShowMantForm(false);setShowZonasForm(false);}else{setShowMantForm(false);setShowZonasForm(false);setShowCeraForm(false);}}} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",background:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):"transparent",borderColor:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):"rgba(255,255,255,0.12)",color:filtro===f?"#fff":"rgba(255,255,255,0.45)"}}>{f}</button>)}</div>
+            {filtro!=="Mantenimiento"&&filtro!=="Personalizado"&&filtro!=="Cera"&&<input className="inp" placeholder="Buscar servicio..." value={busq} onChange={e=>setBusq(e.target.value)} style={{padding:"8px 14px",fontSize:"12px"}}/>}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
-            <div style={{marginBottom:"12px"}}>
-              {!showMantForm?<div onClick={()=>{if(carrito.length>0)setCarrito([]);setShowMantForm(true);}} style={{padding:"12px 16px",background:"rgba(249,115,22,0.07)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"12px",cursor:"pointer",display:"flex",alignItems:"center",gap:"10px",transition:"all 0.15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(249,115,22,0.6)"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(249,115,22,0.3)"}><div style={{fontSize:"18px"}}>🔧</div><div><div style={{fontSize:"12px",fontWeight:600,color:"#f97316"}}>Sesiones de Mantenimiento</div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.35)"}}>Láser · precio y sesiones manuales</div></div><div style={{marginLeft:"auto",fontSize:"10px",color:"rgba(249,115,22,0.5)",fontWeight:600}}>MANUAL →</div></div>:
+            {filtro==="Mantenimiento"?(
               <div style={{padding:"14px 16px",background:"rgba(249,115,22,0.06)",border:"1px solid rgba(249,115,22,0.4)",borderRadius:"12px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}><div style={{fontSize:"10px",fontWeight:700,color:"#f97316",letterSpacing:"1.5px"}}>🔧 SESIONES DE MANTENIMIENTO</div><button onClick={()=>setShowMantForm(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:"18px",lineHeight:1}}>×</button></div>
+                <div style={{fontSize:"10px",fontWeight:700,color:"#f97316",letterSpacing:"1.5px",marginBottom:"10px"}}>🔧 SESIONES DE MANTENIMIENTO</div>
                 <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                   <div><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>ZONA / DESCRIPCIÓN</div><input className="inp" placeholder="Ej. Piernas Completas, Bikini Brazilian..." value={mantZona} onChange={e=>setMantZona(e.target.value)} style={{fontSize:"12px",padding:"8px 12px"}}/></div>
                   <div style={{display:"flex",gap:"8px"}}>
@@ -1047,18 +1307,49 @@ function POS({session,onSwitchSucursal,isAdmin}){
                   {mantZona&&mantSesiones&&mantPrecio&&<div style={{padding:"7px 10px",background:"rgba(249,115,22,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Mant. {mantZona.trim()} ({mantSesiones} ses)» — {fmt(Number(mantPrecio))}</div>}
                   <button onClick={agregarMantenimiento} disabled={!mantZona.trim()||!mantSesiones||!mantPrecio} className="btn-blue" style={{background:!mantZona.trim()||!mantSesiones||!mantPrecio?"rgba(249,115,22,0.2)":"#f97316",border:"none",width:"100%",padding:"9px",fontSize:"12px",fontWeight:700,cursor:!mantZona.trim()||!mantSesiones||!mantPrecio?"default":"pointer"}}>✓ Agregar mantenimiento al ticket</button>
                 </div>
-              </div>}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
-            {itemsFilt.map(item=>{const ec=carrito.find(x=>x.nombre===item.nombre);const cat=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");return(
-              <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${ec?"rgba(39,33,232,0.5)":"rgba(255,255,255,0.08)"}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background="rgba(255,255,255,0.06)";}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)";}}>
-                <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
-                <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
-                <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(item.precio)}</div>
-                {item.msi?.length>0&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
-                {ec&&<div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700}}>✓</div>}
-              </div>);})}
-          </div></div>
+              </div>
+            ):filtro==="Personalizado"?(
+              <div style={{padding:"14px 16px",background:"rgba(139,92,246,0.06)",border:"1px solid rgba(139,92,246,0.4)",borderRadius:"12px"}}>
+                <div style={{fontSize:"10px",fontWeight:700,color:"#a78bfa",letterSpacing:"1.5px",marginBottom:"10px"}}>✨ PAQUETE PERSONALIZADO POR ZONAS</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+                  <div><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>ZONAS ({zonasSeleccionadas.length} seleccionadas)</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>{ZONAS_PACK.map(z=>{const sel=zonasSeleccionadas.includes(z);return(<button key={z} onClick={()=>toggleZona(z)} style={{padding:"4px 10px",borderRadius:"20px",border:`1px solid ${sel?"rgba(139,92,246,0.7)":"rgba(255,255,255,0.1)"}`,fontSize:"10px",fontWeight:sel?600:400,cursor:"pointer",background:sel?"rgba(139,92,246,0.2)":"transparent",color:sel?"#c4b5fd":"rgba(255,255,255,0.4)",transition:"all 0.1s"}}>{z}</button>);})}</div>
+                  </div>
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <div style={{flex:"0 0 90px"}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>SESIONES</div><input type="number" className="inp" placeholder="Nº" value={zonasSesiones} onChange={e=>setZonasSesiones(e.target.value)} min="1" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
+                    <div style={{flex:1}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>PRECIO $</div><input type="number" className="inp" placeholder="0" value={zonasPrecio} onChange={e=>setZonasPrecio(e.target.value)} min="0" style={{fontSize:"12px",padding:"8px 12px"}}/></div>
+                  </div>
+                  {zonasSeleccionadas.length>0&&zonasSesiones&&zonasPrecio&&<div style={{padding:"7px 10px",background:"rgba(139,92,246,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Pack: {zonasSeleccionadas.join(", ")} ({zonasSesiones} ses)» — {fmt(Number(zonasPrecio))}</div>}
+                  <button onClick={agregarZonas} disabled={!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio} className="btn-blue" style={{background:!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio?"rgba(139,92,246,0.2)":"#7c3aed",border:"none",width:"100%",padding:"9px",fontSize:"12px",fontWeight:700,cursor:!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio?"default":"pointer"}}>✓ Agregar paquete al ticket</button>
+                </div>
+              </div>
+            ):filtro==="Cera"?(
+              <div style={{padding:"14px 16px",background:"rgba(8,145,178,0.06)",border:"1px solid rgba(8,145,178,0.4)",borderRadius:"12px"}}>
+                <div style={{fontSize:"10px",fontWeight:700,color:"#22d3ee",letterSpacing:"1.5px",marginBottom:"10px"}}>🪒 CERA — SESIÓN ÚNICA</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+                  <div><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"6px",letterSpacing:"1px"}}>ZONAS ({ceraZonas.length} seleccionadas)</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>{ZONAS_CERA.map(z=>{const s=ceraZonas.includes(z);return(<button key={z} onClick={()=>toggleCeraZona(z)} style={{padding:"4px 10px",borderRadius:"20px",border:`1px solid ${s?"rgba(8,145,178,0.7)":"rgba(255,255,255,0.1)"}`,fontSize:"10px",fontWeight:s?600:400,cursor:"pointer",background:s?"rgba(8,145,178,0.2)":"transparent",color:s?"#67e8f9":"rgba(255,255,255,0.4)",transition:"all 0.1s"}}>{z}</button>);})}</div>
+                  </div>
+                  <div><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>PRECIO $</div><input type="number" className="inp" placeholder="0" value={ceraPrecio} onChange={e=>setCeraPrecio(e.target.value)} min="0" style={{fontSize:"12px",padding:"8px 12px"}}/></div>
+                  {ceraZonas.length>0&&ceraPrecio&&<div style={{padding:"7px 10px",background:"rgba(8,145,178,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Cera: {ceraZonas.join(", ")}» — {fmt(Number(ceraPrecio))}</div>}
+                  <button onClick={agregarCera} disabled={!ceraZonas.length||!ceraPrecio} className="btn-blue" style={{background:!ceraZonas.length||!ceraPrecio?"rgba(8,145,178,0.2)":"#0891b2",border:"none",width:"100%",padding:"9px",fontSize:"12px",fontWeight:700,cursor:!ceraZonas.length||!ceraPrecio?"default":"pointer"}}>✓ Agregar cera al ticket</button>
+                </div>
+              </div>
+            ):(
+              <>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
+              {itemsFilt.map(item=>{const ec=carrito.find(x=>x.nombre===item.nombre);const cat=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");return(
+                <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${ec?"rgba(39,33,232,0.5)":"rgba(255,255,255,0.08)"}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background="rgba(255,255,255,0.06)";}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)";}}>
+                  <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
+                  <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
+                  <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(item.precio)}</div>
+                  {item.msi?.length>0&&<div style={{fontSize:"9px",color:"rgba(255,255,255,0.25)",marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
+                  {ec&&<div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700}}>✓</div>}
+                </div>);})}
+              </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* SIDEBAR */}
@@ -1095,11 +1386,11 @@ function POS({session,onSwitchSucursal,isAdmin}){
             </div>}
             {/* 3 Agendar */}
             {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:aOk?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:aOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:aOk?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
-              <input type="date" className="inp" value={fechaCita} min={hoy()} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark",marginBottom:"6px"}}/>
+              <input type="date" className="inp" value={fechaCita} min={isAdmin?undefined:hoy()} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark",marginBottom:"6px"}}/>
               {fechaCita&&!esDom&&<div>
                 <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginBottom:"6px",borderColor:showAgenda?"#2721E8":"rgba(255,255,255,0.1)",color:showAgenda?"#fff":"rgba(255,255,255,0.4)"}} onClick={()=>setShowAgenda(!showAgenda)}>{showAgenda?"📅 Viendo agenda":"📅 Ver agenda del día"}</button>
                 {!showAgenda&&<input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark"}}/>}
-                {aOk&&<div style={{padding:"8px 10px",background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#10b981"}}>✓ {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,tipoSvc.duracion)} · {tipoSvc.label}</div>}
+                {aOk&&<div style={{padding:"8px 10px",background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#10b981"}}>✓ {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,duracionCita)} · {tipoSvc.label}</div>}
               </div>}
               {esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
             </div>}
@@ -1107,16 +1398,20 @@ function POS({session,onSwitchSucursal,isAdmin}){
             {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:anticoOpt!=="no"?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>4</div>ANTICIPO</div>
               <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
                 {[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"}].map(o=>(
-                  <button key={o.v} onClick={()=>setAnticoOpt(o.v)} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.05)":"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.18)":"#10b981":"rgba(255,255,255,0.08)",color:anticoOpt===o.v?"#fff":"rgba(255,255,255,0.35)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <button key={o.v} onClick={()=>{setAnticoOpt(o.v);if(o.v==="no")setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.05)":"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?"rgba(255,255,255,0.18)":"#10b981":"rgba(255,255,255,0.08)",color:anticoOpt===o.v?"#fff":"rgba(255,255,255,0.35)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?"rgba(255,255,255,0.4)":"#10b981"}}>✓</span>}
                   </button>))}
+                {anticoOpt!=="no"&&<div style={{marginTop:"4px"}}>
+                  <div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>TICKET ZETTLE (opcional)</div>
+                  <input className="inp" value={ticketZettleAnticipo} onChange={e=>setTicketZettleAnticipo(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px",letterSpacing:"0.5px"}}/>
+                </div>}
               </div>
             </div>}
           </div>
           {todo&&!esDom&&<div style={{padding:"12px 18px",borderTop:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
             {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"10px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
             {anticoOpt!=="no"
-              ?<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":"✓ Registrar anticipo $250 + cita"}</button>
+              ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>{isAdmin&&<div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET (ADMIN)</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div>}<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":"✓ Registrar anticipo $250 + cita"}</button></div>
               :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>
                 <button className="btn-ghost" style={{width:"100%",padding:"10px",fontSize:"12px",color:"rgba(255,255,255,0.45)"}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(total)} ahora</button>
@@ -1128,7 +1423,8 @@ function POS({session,onSwitchSucursal,isAdmin}){
       {showConfirm&&<div className="overlay"><div className="glass" style={{width:460,padding:"28px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>CONFIRMAR COBRO</div>
         <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
-          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{fontSize:"12px",fontWeight:600,marginBottom:"4px"}}>{carrito[0]?.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,tipoSvc.duracion)}</div></div>
+          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{fontSize:"12px",fontWeight:600,marginBottom:"4px"}}>{carrito[0]?.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,duracionCita)}</div></div>
+          {isAdmin&&<div style={{padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET (ADMIN)</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"10px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}</div>}
           {/* Multi-pago */}
           <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
             {pagos.map((p,i)=>(
@@ -1164,10 +1460,16 @@ function POS({session,onSwitchSucursal,isAdmin}){
 // Helpers para parseo robusto de ICS
 const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario/i;
 const ICS_EMOJI_RE=/[\p{Emoji_Presentation}\p{Extended_Pictographic}✅🔁🤖🧾\u200d\ufe0f]/gu;
+// Mapas de iniciales → nombre completo por sucursal
+const PERSONAL_MAPS={
+  Metepec:{"MB":"Mariana B.","LR":"Liliana R."},
+  Valle:{"EA":"Evelin Amezcua","CN":"Carla Navarro","JV":"Jazmin Vázquez"},
+  Polanco:{"CN":"Carla Navarro","JV":"Jazmin Vázquez"},
+};
 const ICS_SES_MAP=[[/\b1[ae]?ra?\b|primera\b|1er\b/,1],[/\b2d[ao]?\b|segunda\b/,2],[/\b3[ae]?ra?\b|tercera?\b/,3],[/\b4t[ao]?\b|cuarta?\b/,4],[/\b5t[ao]?\b|quinta?\b/,5],[/\b6t[ao]?\b|sexta?\b/,6],[/\b7m[ao]?\b|s[eé]ptima?\b/,7],[/\b8v[ao]?\b|octava?\b/,8],[/\b9n[ao]?\b|novena?\b/,9],[/\b10[ao]?\b|d[eé]cima?\b/,10]];
 function icsSesDesc(d){if(!d)return 1;const l=d.toLowerCase();for(const[re,n]of ICS_SES_MAP)if(re.test(l))return n;const m=d.match(/sesi[oó]n\s*#?\s*(\d+)/i);if(m)return parseInt(m[1]);const m2=d.match(/\b(\d{1,2})\s*[°º]/);if(m2)return parseInt(m2[1]);const m3=l.match(/\b(\d{1,2})a(?:\b|[a-záéíóú])/);return m3?parseInt(m3[1]):1;}
 function icsSesSum(s){if(!s)return null;const m=s.match(/\b(\d{1,2})\s*[°º]/);if(m)return parseInt(m[1]);const m2=s.match(/\b(\d{1,2})\s*(?:era?|ra?|da?|ta?|va?|ma?|a)(?:\b|[a-záéíóú])/i);return m2?parseInt(m2[1]):null;}
-function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilia|bikini\s*brazil|\bbb\b/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/interglut/.test(src))return"Interglútea";if(/menton/.test(src))return"Mentón";if(/brazos\s*y\s*piernas|brazos/.test(src))return"Brazos y Piernas";if(/piernas\s*y\s*pompas?|\bpp\b/.test(src))return"Piernas y Pompas";if(/piernas/.test(src))return"Piernas";if(/\bpies\b|apies/.test(src))return"Pies";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro\s*completo|\brc\b/.test(src))return"Rostro Completo";if(/rostro/.test(src))return"Rostro Completo";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";return"Servicio";}
+function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilia|bikini\s*brazil|\bbb\b/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/interglut/.test(src))return"Interglútea";if(/menton/.test(src))return"Mentón";if(/brazos\s*y\s*piernas|brazos/.test(src))return"Brazos y Piernas";if(/piernas\s*y\s*pompas?|\bpp\b/.test(src))return"Piernas y Pompas";if(/piernas/.test(src))return"Piernas";if(/\bpies\b|apies/.test(src))return"Pies";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro\s*completo|\brc\b/.test(src))return"Rostro Completo";if(/rostro/.test(src))return"Rostro Completo";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";if(/\bbigote\b/.test(src))return"Bigote";if(/\bespalda\b/.test(src))return"Espalda";return"Servicio";}
 // Extrae de la descripción: servicio principal, sesión, servicios extra y ticket(s) Zettle
 // Descripción con formato "N° SERVICIO ... N° SERVICIO2 ..." → un solo resultado con extras
 // Ej: "6° AXILAS Y BIKINI 1° MENTON #6431 1° RC 6° INTERGLUTEA" →
@@ -1199,6 +1501,77 @@ function parseDescripcionPares(desc){
   const[primero,...extras]=pairs;
   return{sesNum:primero.sesNum,servicio:primero.servicio,extras:extras.length?extras:null,tickets:tickets||null};
 }
+/// Extrae lista de servicios desde texto tipo "BRAZILIAN BIGOTE Y MENTON"
+function parseServiciosList(text){
+  const src=(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const found=[];
+  if(/bikini\s*y\s*axilas|axilas\s*y\s*bikini/.test(src))found.push("Bikini y Axilas");
+  else if(/\baxilas\b/.test(src))found.push("Axilas");
+  if(/piernas\s*y\s*pompas|\bpp\b/.test(src))found.push("Piernas y Pompas");
+  else if(/\bpiernas\b/.test(src))found.push("Piernas");
+  if(/brazos\s*y\s*piernas/.test(src))found.push("Brazos y Piernas");
+  else if(/\bbrazos\b/.test(src))found.push("Brazos");
+  if(/bk\s*brazil|brazilia|bikini\s*braz|\bbb\b|\bbrazilian\b|\bbrzilian\b/.test(src))found.push("Brazilian");
+  if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|\bfrench\b/.test(src))found.push("French Bikini");
+  if(/cuerpo\s*completo|\bcc\b/.test(src))found.push("Cuerpo Completo");
+  if(/interglut/.test(src))found.push("Interglútea");
+  if(/rostro\s*completo|\brc\b/.test(src))found.push("Rostro Completo");
+  else if(/medio\s*rostro/.test(src))found.push("Medio Rostro");
+  else if(/\brostro\b/.test(src))found.push("Rostro Completo");
+  if(/\bmenton\b/.test(src))found.push("Mentón");
+  if(/\bbigote\b/.test(src))found.push("Bigote");
+  if(/\bpies\b/.test(src))found.push("Pies");
+  if(/\bespalda\b/.test(src))found.push("Espalda");
+  return found;
+}
+// Parsea formato Metepec — dos variantes:
+//  Caso A (cada zona con su propio DIODO...SESION): "DIODO PIERNAS MANTENIMIENTO SESION 4  DIODO AXILAS SESION 4"
+//  Caso B (todas las zonas antes de un SESION):     "BRAZILIAN BIGOTE Y MENTON DIODO SESION 6 LR"
+function parseMetepecDesc(desc){
+  if(!desc||!/SESION\s+\d/i.test(desc))return null;
+  const d=desc.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const sesMatches=[...d.matchAll(/SESION\s+(\d+)/gi)];
+  const esManten=/MANTENIMIENTO/i.test(d);
+  if(sesMatches.length>1){
+    // Caso A: múltiples bloques DIODO...SESION N
+    const segments=d.split(/\bDIODO\b/i).filter(s=>s.trim());
+    const pairs=[];
+    for(const seg of segments){
+      const mSes=seg.match(/SESION\s+(\d+)/i);if(!mSes)continue;
+      const sesNum=parseInt(mSes[1]);
+      const segManten=/MANTENIMIENTO/i.test(seg);
+      const beforeSesion=seg.slice(0,mSes.index).replace(/MANTENIMIENTO/gi,"").trim();
+      const servNombre=icsServicio(beforeSesion,"");
+      if(servNombre==="Servicio")continue;
+      pairs.push({sesNum,servicio:segManten?servNombre+" Mantenimiento":servNombre});
+    }
+    if(!pairs.length)return null;
+    const[primero,...extras]=pairs;
+    return{sesNum:primero.sesNum,servicio:primero.servicio,extras:extras.length?extras:null,tickets:null};
+  }else{
+    // Caso B: zonas listadas antes O después de DIODO, con un solo SESION N
+    const sesNum=parseInt(sesMatches[0][1]);
+    const sesIdx=sesMatches[0].index;
+    const mDiodo=d.match(/\bDIODO\b/i);
+    let servicesText;
+    if(!mDiodo||mDiodo.index>=sesIdx){
+      // Sin DIODO o SESION viene primero → servicios están ANTES de SESION
+      servicesText=d.slice(0,sesIdx).trim();
+    }else if(d.slice(0,mDiodo.index).trim().length===0){
+      // DIODO al inicio → servicios están ENTRE DIODO y SESION
+      servicesText=d.slice(mDiodo.index+mDiodo[0].length,sesIdx).trim();
+    }else{
+      // DIODO en medio → servicios están ANTES de DIODO
+      servicesText=d.slice(0,mDiodo.index).trim();
+    }
+    if(!servicesText)return null;
+    const servsList=parseServiciosList(servicesText);
+    if(!servsList.length)return null;
+    const pairs=servsList.map(s=>({sesNum,servicio:esManten?s+" Mantenimiento":s}));
+    const[primero,...extras]=pairs;
+    return{sesNum:primero.sesNum,servicio:primero.servicio,extras:extras.length?extras:null,tickets:null};
+  }
+}
 function icsParseDT(dt,useDST){if(!dt)return{date:null,time:null};if(/^\d{8}$/.test(dt))return{date:`${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`,time:null};const m=dt.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}(Z?)$/);if(!m)return{date:null,time:null};const[,Y,Mo,D,H,Mi,isZ]=m;if(isZ==="Z"){const utc=new Date(Date.UTC(+Y,+Mo-1,+D,+H,+Mi));// México abolió DST en 2023 — desde 2023 siempre UTC-6. Antes: CDT(UTC-5) abr-oct.
 const off=(useDST&&+Y<2023&&+Mo>=4&&+Mo<=10)?5:6;const local=new Date(utc.getTime()-off*3600000);return{date:`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,"0")}-${String(local.getUTCDate()).padStart(2,"0")}`,time:`${String(local.getUTCHours()).padStart(2,"0")}:${String(local.getUTCMinutes()).padStart(2,"0")}`};}return{date:`${Y}-${Mo}-${D}`,time:`${H}:${Mi}`};}
 
@@ -1217,7 +1590,8 @@ function parseICS(text,opts={}){
     if(!cur[key])cur[key]=val;
   }
   const minDate=opts.minDate||"2025-01-01";
-  const useDST=opts.useDST!==false; // true = CDMX con horario de verano (Polanco, Metepec, etc.)
+  const useDST=opts.useDST!==false; // true = CDMX con horario de verano (Polanco, etc.)
+  const personalMap=opts.personalMap||{};
   const appointments=[],skipped=[];
   for(const ev of rawEvs){
     const rawS=ev["SUMMARY"]||"";
@@ -1238,12 +1612,12 @@ function parseICS(text,opts={}){
     if(!date){skipped.push({summary:rawS,razon:"Fecha inválida"});continue;}
     if(date<minDate){skipped.push({summary:rawS,razon:`Anterior a ${minDate}`});continue;}
     // Servicio y número de sesión
-    const rawDesc=(ev["DESCRIPTION"]||"").replace(/\\n/g,"\n").replace(/\\\\/g,"\\");
+    const rawDesc=(ev["DESCRIPTION"]||"").replace(/\\n/g,"\n").replace(/\\\\/g,"\\").replace(/\\,/g,",").replace(/\\;/g,";");
     const hasCheck=rawS.includes("✅");
     const estado=date<hoy()?(hasCheck?"completada":"cancelada"):"agendada";
     const reagendada=/reagend/i.test(rawDesc)||rawS.toLowerCase().includes("reagend");
     // Intentar extraer servicio+sesión+extras+ticket desde descripción (formato "N° SERVICIO")
-    const pares=parseDescripcionPares(rawDesc);
+    const pares=parseDescripcionPares(rawDesc)||parseMetepecDesc(rawDesc);
     let servicio,sesNum,serviciosSesion=null,ticketZettle=null;
     if(pares){
       servicio=pares.servicio;sesNum=pares.sesNum;
@@ -1257,10 +1631,25 @@ function parseICS(text,opts={}){
       if(tm.length)ticketZettle=tm.map(m=>`#${m[1]}`).join(", ");
     }
     const tipo=detectTipo(servicio);
-    appointments.push({id:`ics-${appointments.length}`,nombre,telefono,servicio,tipo:tipo.id,duracion:tipo.duracion,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion),sesNum,totalSes:8,estado,incluir:estado!=="cancelada",reagendada,serviciosSesion,ticketZettle});
+    // Extraer iniciales al final del rawDesc (ej: "ESPALDA DIODO SESION 4  LR" → "LR")
+    const inicialesM=rawDesc.trim().match(/\s+([A-Z]{2,3})\s*$/);
+    const agendadoPor=inicialesM&&personalMap[inicialesM[1]]?personalMap[inicialesM[1]]:null;
+    const horaFiCalc=horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion);
+    const baseAppt={nombre,telefono,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFiCalc,estado,incluir:estado!=="cancelada",reagendada,ticketZettle,agendadoPor,serviciosSesion:null};
+    appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio,tipo:tipo.id,duracion:tipo.duracion,sesNum});
+    // Cada servicio extra del mismo evento se convierte en una cita separada (propio paquete)
+    if(serviciosSesion){
+      for(const extra of serviciosSesion){
+        const eTipo=detectTipo(extra.servicio);
+        appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio:extra.servicio,tipo:eTipo.id,duracion:eTipo.duracion,sesNum:extra.sesNum});
+      }
+    }
   }
-  appointments.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  return{appointments,skipped};
+  // Deduplicar: si el ICS tiene el mismo evento dos veces (reagendado, recurrente, o servicio repetido en extras)
+  const seen=new Set();
+  const deduped=appointments.filter(a=>{const k=`${a.nombre}||${a.fecha}||${a.horaIni}||${a.servicio}`;if(seen.has(k))return false;seen.add(k);return true;});
+  deduped.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  return{appointments:deduped,skipped};
 }
 
 function GCalImport({session,useDST=true}){
@@ -1296,7 +1685,7 @@ function GCalImport({session,useDST=true}){
     const reader=new FileReader();
     reader.onload=(e)=>{
       const text=e.target.result;
-      const{appointments,skipped:sk}=parseICS(text,{useDST,minDate});
+      const{appointments,skipped:sk}=parseICS(text,{useDST,minDate,personalMap:PERSONAL_MAPS[session.nombre]||{}});
       setParsed(appointments);setSkipped(sk);setStep(2);setLoading(false);
     };
     reader.readAsText(file);
@@ -1337,7 +1726,18 @@ function GCalImport({session,useDST=true}){
       const teleUpdates=nombres.filter(n=>{const e=clientaMap[n];const t=porNombre[n].find(c=>c.telefono)?.telefono;return e&&!e.telefono&&t;});
       await Promise.all(teleUpdates.map(n=>supabase.from("clientas").update({telefono:porNombre[n].find(c=>c.telefono).telefono}).eq("id",clientaMap[n].id)));
 
-      // ── FASE 3: crear todos los paquetes en un solo batch ────────────────────
+      // ── FASE 3: limpiar paquetes y citas existentes de estas clientas (import idempotente) ────
+      setProgress({fase:"Limpiando datos anteriores...",done:0,total:nombres.length});
+      const clientaIds=Object.values(clientaMap).map(c=>c?.id).filter(Boolean);
+      if(clientaIds.length>0){
+        // Borrar en lotes de 100 para no sobrepasar el límite de Supabase
+        for(let i=0;i<clientaIds.length;i+=100){
+          const chunk=clientaIds.slice(i,i+100);
+          await supabase.from("citas").delete().in("clienta_id",chunk);
+          await supabase.from("paquetes").delete().in("clienta_id",chunk);
+        }
+      }
+      // ── FASE 3b: crear todos los paquetes en un solo batch ────────────────────
       setProgress({fase:"Creando paquetes...",done:0,total:nombres.length});
       const paqRows=[];
       for(const nombre of nombres){
@@ -1350,15 +1750,19 @@ function GCalImport({session,useDST=true}){
           // Si la próxima sesión agendada es la 6a, significa que 5 ya se hicieron
           const sesUsadasByNum=agsSes.length>0?Math.min(...agsSes.map(s=>s.sesNum))-1:0;
           const sesUsadas=Math.max(sesUsadasByCount,sesUsadasByNum,0);
-          const totalSes=Math.max(...sesiones.map(s=>s.sesNum),8);
+          const esManten=/mantenimiento/i.test(servicio);
+          const totalSes=esManten?Math.max(...sesiones.map(s=>s.sesNum)):Math.max(...sesiones.map(s=>s.sesNum),8);
           paqRows.push({clienta_id:clientaId,clienta_nombre:nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio,total_sesiones:totalSes,sesiones_usadas:sesUsadas,precio:0,fecha_compra:sesiones[0].fecha,activo:sesUsadas<totalSes,_key:`${nombre}||${servicio}`});
         }
       }
-      const{data:paqCreados=[]}=await supabase.from("paquetes").insert(paqRows.map(({_key,...r})=>r)).select();
+      // Deduplicar: solo un paquete por (clienta_id + servicio)
+      const seenPaqKeys=new Set();
+      const paqRowsDedup=paqRows.filter(r=>{if(seenPaqKeys.has(r._key))return false;seenPaqKeys.add(r._key);return true;});
+      const{data:paqCreados=[]}=await supabase.from("paquetes").insert(paqRowsDedup.map(({_key,...r})=>r)).select();
       paquetesCreados=paqCreados?.length||0;
       // Mapear paquete_id por nombre+servicio
       const paqMap={};
-      (paqCreados||[]).forEach((p,i)=>{paqMap[paqRows[i]._key]=p.id;});
+      (paqCreados||[]).forEach((p,i)=>{if(paqRowsDedup[i])paqMap[paqRowsDedup[i]._key]=p.id;});
 
       // ── FASE 4: insertar citas en chunks de 100 ──────────────────────────────
       const citaRows=[];
@@ -1368,7 +1772,7 @@ function GCalImport({session,useDST=true}){
         porNombre[nombre].forEach(c=>{if(!porServicio[c.servicio])porServicio[c.servicio]=[];porServicio[c.servicio].push(c);});
         for(const[servicio,sesiones] of Object.entries(porServicio)){
           const paqId=paqMap[`${nombre}||${servicio}`];
-          sesiones.forEach(c=>citaRows.push({clienta_id:clientaId,clienta_nombre:nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:c.reagendada?"Reagendada - Importado de Google Calendar (.ics)":"Importado de Google Calendar (.ics)",...(c.ticketZettle?{ticket_zettle:c.ticketZettle}:{}),...(c.serviciosSesion?{servicios_sesion:c.serviciosSesion}:{})}));
+          sesiones.forEach(c=>citaRows.push({clienta_id:clientaId,clienta_nombre:nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado==="cancelada"?"completada":c.estado,notas:c.reagendada?"Reagendada - Importado de Google Calendar (.ics)":"Importado de Google Calendar (.ics)",...(c.agendadoPor?{agendado_por:c.agendadoPor}:{}),...(c.ticketZettle?{ticket_zettle:c.ticketZettle}:{}),...(c.serviciosSesion?{servicios_sesion:c.serviciosSesion}:{})}));
         }
       }
       const CHUNK=100;
@@ -1384,7 +1788,7 @@ function GCalImport({session,useDST=true}){
   };
 
   const toggleEvento=(id)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,incluir:!p.incluir}:p));
-  const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v})));
+  const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v,...(v&&p.estado==="cancelada"?{estado:"completada"}:{})})));
   const editEvento=(id,field,val)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,[field]:val}:p));
   const completadas=parsed.filter(p=>p.incluir&&p.estado==="completada").length;
   const canceladas=parsed.filter(p=>p.estado==="cancelada").length;
@@ -1445,6 +1849,7 @@ function GCalImport({session,useDST=true}){
           <div><div style={{fontSize:"13px",fontWeight:600}}>{fileName}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)"}}>{parsed.filter(p=>p.incluir).length} seleccionados · ✅ {completadas} completadas · 📅 {agendadas} agendadas</div></div>
           <div style={{display:"flex",gap:"6px"}}>
             {skipped.length>0&&<button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px",borderColor:showSkipped?"#f97316":"rgba(255,255,255,0.1)",color:showSkipped?"#f97316":"rgba(255,255,255,0.4)"}} onClick={()=>setShowSkipped(v=>!v)}>⚠ {skipped.length} omitidos</button>}
+            {canceladas>0&&<button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px",borderColor:"rgba(16,185,129,0.4)",color:"#10b981"}} onClick={()=>setParsed(prev=>prev.map(p=>p.estado==="cancelada"?{...p,estado:"completada",incluir:true}:p))}>✓ Historial completo</button>}
             <button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(true)}>✓ Todos</button>
             <button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button>
           </div>
@@ -1600,7 +2005,7 @@ function CSVImport({session}){
   const onDrop=(e)=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)procesarArchivo(f);};
   const onFileChange=(e)=>{const f=e.target.files[0];if(f)procesarArchivo(f);};
   const toggleEvento=(id)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,incluir:!p.incluir}:p));
-  const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v})));
+  const toggleAll=(v)=>setParsed(prev=>prev.map(p=>({...p,incluir:v,...(v&&p.estado==="cancelada"?{estado:"completada"}:{})})));
   const editEvento=(id,field,val)=>setParsed(prev=>prev.map(p=>p.id===id?{...p,[field]:val}:p));
 
   const importar=async()=>{
@@ -1739,7 +2144,7 @@ function CombinedImport({session,useDST=true}){
     setIcsFile(file.name);setIcsLoading(true);
     const r=new FileReader();
     r.onload=(e)=>{
-      const{appointments,skipped:sk}=parseICS(e.target.result,{useDST,minDate:"2000-01-01"});
+      const{appointments,skipped:sk}=parseICS(e.target.result,{useDST,minDate:"2000-01-01",personalMap:PERSONAL_MAPS[session.nombre]||{}});
       const withMeta=appointments.map(a=>({
         ...a,
         incluir:a.estado!=="cancelada"&&a.fecha>=minDate,
@@ -2039,7 +2444,7 @@ function CombinedImport({session,useDST=true}){
         if(ePaq){console.error("Paquete error:",ePaq.message);errores++;gDone++;continue;}
         const paqId=paq?.[0]?.id;paqCreados++;
         // Batch insert citas del grupo
-        const citaRows=ses.map(c=>({clienta_id:clientaId,clienta_nombre:c.nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:"Importado ICS+CSV"}));
+        const citaRows=ses.map(c=>({clienta_id:clientaId,clienta_nombre:c.nombre,paquete_id:paqId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:c.servicio,tipo_servicio:c.tipo,duracion_min:c.duracion,fecha:c.fecha,hora_inicio:c.horaIni,hora_fin:c.horaFi,sesion_numero:c.sesNum,es_cobro:c.sesNum===1,estado:c.estado,notas:"Importado ICS+CSV",...(c.agendadoPor?{agendado_por:c.agendadoPor}:{})}));
         const{error:eCitas}=await supabase.from("citas").insert(citaRows);
         if(eCitas){console.error("Citas error:",eCitas.message);errores++;}else citasCreadas+=citaRows.length;
         // Ticket de venta (solo sesión 1 con venta vinculada)
@@ -2702,6 +3107,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const[tickets,setTickets]=useState([]);
   const[citas,setCitas]=useState([]);
   const[loadingDB,setLoadingDB]=useState(false);
+  const[ultimaActualizacion,setUltimaActualizacion]=useState(null);
   const[metaData,setMetaData]=useState(null);
   const[metaDiario,setMetaDiario]=useState([]); // [{fecha,sucursal,mensajes,spend}]
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
@@ -2744,6 +3150,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
     ]);
     if(tData)setTickets(tData);
     if(cData)setCitas(cData);
+    setUltimaActualizacion(new Date());
     setLoadingDB(false);
   };
   const cargarMeta=async()=>{
@@ -3107,7 +3514,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
               :metaError
               ?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(255,80,80,0.1)",color:"#ff6b6b",border:"1px solid rgba(255,80,80,0.3)",flexShrink:0}}>⚠ Meta</div>
               :metaData?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.25)",flexShrink:0}}>● Meta</div>:null}
-            <button className="btn-ghost" style={{padding:"5px 9px",fontSize:"13px",flexShrink:0}} onClick={()=>{cargarDatos();cargarMeta();}}>↻</button>
+            <button className="btn-ghost" style={{padding:"5px 12px",fontSize:"12px",flexShrink:0,display:"flex",alignItems:"center",gap:"6px",borderColor:loadingDB?"rgba(255,255,255,0.08)":"rgba(79,70,229,0.4)",color:loadingDB?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.7)"}} onClick={()=>{if(!loadingDB){cargarDatos();cargarMeta();}}} disabled={loadingDB}><span style={{display:"inline-block",animation:loadingDB?"meta-spin 0.8s linear infinite":"none"}}>↻</span>{ultimaActualizacion?<span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>Actualizado {ultimaActualizacion.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</span>:<span style={{fontSize:"10px",color:"rgba(255,255,255,0.3)"}}>Actualizar</span>}</button>
             {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px",flexShrink:0,whiteSpace:"nowrap"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ ${sucursalesPropias.join(" & ")}`:`Mis sucursales`}</button>}
             <button className="btn-ghost" style={{fontSize:"11px",flexShrink:0}} onClick={onLogout}>Salir</button>
           </div>
@@ -3478,8 +3885,8 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
               {(importType==="ics"||importType==="combinado")&&<div>
                 <div style={{fontSize:"10px",letterSpacing:"1px",color:"rgba(255,255,255,0.3)",marginBottom:"6px"}}>ZONA HORARIA</div>
                 <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                  <button onClick={()=>setImportDST(true)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CDT/CST (CDMX, Polanco, Metepec)</button>
-                  <button onClick={()=>setImportDST(false)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:!importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:!importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:!importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CST fijo (Oriente)</button>
+                  <button onClick={()=>setImportDST(true)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CDT/CST (Polanco, Coapa)</button>
+                  <button onClick={()=>setImportDST(false)} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:!importDST?"rgba(73,184,211,0.1)":"transparent",borderColor:!importDST?"#49B8D3":"rgba(255,255,255,0.1)",color:!importDST?"#49B8D3":"rgba(255,255,255,0.4)"}}>CST fijo (Metepec, Oriente, Valle)</button>
                 </div>
               </div>}
             </div>
