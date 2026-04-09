@@ -11,6 +11,16 @@ const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
 const CLAUDE_KEY        = import.meta.env.VITE_CLAUDE_KEY;
 const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ─── Analítica: registrar evento de uso ───────────────────────────────────────
+async function logActividad(session,evento,detalle=null,duracion=null){
+  try{
+    await supabase.from("activity_logs").insert([{
+      usuario:session.usuario,sucursal_id:session.id,sucursal_nombre:session.nombre,
+      rol:session.rol,evento,detalle,duracion_segundos:duracion
+    }]);
+  }catch(_){}
+}
+
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -1155,6 +1165,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
       const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
     const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
+    logActividad(session,"venta_completada",item.nombre);
     const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
@@ -1174,6 +1185,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
     const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}]);
     if(eCi)throw new Error("Cita: "+eCi.message);
+    logActividad(session,"venta_anticipo",item.nombre);
     const fTk=fechaTicket;setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
@@ -1216,7 +1228,7 @@ function POS({session,onSwitchSucursal,isAdmin}){
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:"rgba(255,255,255,0.35)",fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
             {["pos","agenda","confirmar","clientas","historial","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?"#fff":"rgba(255,255,255,0.35)",position:"relative"}}
-              onClick={()=>{setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
+              onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
               {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
@@ -3098,12 +3110,299 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 // ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD — Vista ejecutiva para dueño de negocio
 // ══════════════════════════════════════════════════════════════════════════════
+// ANALÍTICA — solo admin (panel de usabilidad en tiempo real)
+// ══════════════════════════════════════════════════════════════════════════════
+// Mapeo: qué gerentes/socias administran cada sucursal
+const GERENTES_SUC=(()=>{
+  const m={};
+  USUARIOS.filter(u=>u.rol==="socia").forEach(u=>(u.sucursales||[]).forEach(s=>{(m[s]=m[s]||[]).push(u.usuario);}));
+  USUARIOS.filter(u=>u.rol==="duena_general").forEach(u=>{const ss=u.sucursalesPropias||SUCURSALES_NAMES;ss.forEach(s=>{(m[s]=m[s]||[]).push(u.usuario);});});
+  return m;
+})();
+const ROL_BADGE={admin:{label:"Admin",c:"#a855f7"},duena_general:{label:"Dueña",c:"#f0c040"},socia:{label:"Gerente",c:"#f97316"},sucursal:{label:"POS",c:"#49B8D3"}};
+
+function Analitica(){
+  const[logs,setLogs]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[sucTab,setSucTab]=useState("General");
+  const[rango,setRango]=useState("7d");
+
+  const cargarLogs=async()=>{
+    setLoading(true);
+    const ahora=new Date();
+    const desde=rango==="24h"?new Date(ahora-24*3600*1e3).toISOString()
+      :rango==="7d"?new Date(ahora-7*24*3600*1e3).toISOString()
+      :new Date(ahora-30*24*3600*1e3).toISOString();
+    const{data}=await supabase.from("activity_logs").select("*").gte("created_at",desde).order("created_at",{ascending:false}).limit(3000);
+    setLogs(data||[]);setLoading(false);
+  };
+  useEffect(()=>{cargarLogs();},[rango]);
+  useEffect(()=>{
+    const ch=supabase.channel("analitica_rt")
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"activity_logs"},p=>{setLogs(prev=>[p.new,...prev].slice(0,3000));})
+      .subscribe();
+    return()=>{supabase.removeChannel(ch);};
+  },[]);
+
+  // ── Filtrado inteligente por sucursal ────────────────────────────────────────
+  // Branch tabs incluyen: usuario POS de esa sucursal + gerentes que la administran
+  const logsTab=sucTab==="General"?logs
+    :sucTab==="Gerentes"?logs.filter(l=>l.rol==="socia"||l.rol==="duena_general")
+    :logs.filter(l=>
+        (l.rol==="sucursal"&&l.sucursal_nombre===sucTab)||
+        (GERENTES_SUC[sucTab]||[]).includes(l.usuario)
+      );
+
+  const ahora=new Date();
+  const hace1h=new Date(ahora-3600*1e3).toISOString();
+  const hace24h=new Date(ahora-86400*1e3).toISOString();
+  const activosAhora=[...new Set(logs.filter(l=>l.created_at>hace1h).map(l=>l.usuario))];
+  const eventosHoy=logs.filter(l=>l.created_at>hace24h).length;
+
+  // ── Tiempo por sección (tab dashboard) ──────────────────────────────────────
+  const tabSecciones=["resumen","sucursales","servicios","meta","pos","finanzas","importar"];
+  const heatLabels={resumen:"Resumen",sucursales:"Sucursales",servicios:"Servicios",meta:"Meta Ads",pos:"POS",finanzas:"Finanzas",importar:"Importar"};
+  const tiempoPorTab={};
+  logsTab.filter(l=>l.evento&&l.evento.startsWith("tab:")&&l.duracion_segundos>0).forEach(l=>{
+    const t=l.evento.replace("tab:","");tiempoPorTab[t]=(tiempoPorTab[t]||0)+(l.duracion_segundos||0);
+  });
+  const maxTiempo=Math.max(...tabSecciones.map(s=>tiempoPorTab[s]||0),1);
+  const eventCounts={};logsTab.forEach(l=>{const k=l.evento||"otro";eventCounts[k]=(eventCounts[k]||0)+1;});
+  const topSeccion=Object.entries(tiempoPorTab).sort((a,b)=>b[1]-a[1])[0];
+
+  // ── Acciones POS (vistas en el POS) ─────────────────────────────────────────
+  const posVistas={};
+  logsTab.filter(l=>l.evento==="pos:vista"&&l.detalle).forEach(l=>{posVistas[l.detalle]=(posVistas[l.detalle]||0)+1;});
+
+  // ── Stats agrupados por usuario + rol ───────────────────────────────────────
+  const usuStats={};
+  logs.forEach(l=>{
+    if(!usuStats[l.usuario])usuStats[l.usuario]={usuario:l.usuario,nombre:l.sucursal_nombre,rol:l.rol,count:0,ultimo:null,ventas:0};
+    usuStats[l.usuario].count++;
+    if(!usuStats[l.usuario].ultimo||l.created_at>usuStats[l.usuario].ultimo)usuStats[l.usuario].ultimo=l.created_at;
+    if(l.evento==="venta_completada"||l.evento==="venta_anticipo")usuStats[l.usuario].ventas++;
+  });
+  const todosUsuarios=Object.values(usuStats).sort((a,b)=>b.count-a.count);
+  const usuariosGerentes=todosUsuarios.filter(u=>u.rol==="socia"||u.rol==="duena_general");
+  const usuariosPOS=todosUsuarios.filter(u=>u.rol==="sucursal");
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const fmtEvento=(e,det)=>{
+    if(!e)return"—";
+    if(e==="session_start")return"🟢 Inicio de sesión";
+    if(e==="session_end")return"🔴 Cierre de sesión";
+    if(e==="venta_completada")return"💰 Venta completada";
+    if(e==="venta_anticipo")return"📋 Anticipo registrado";
+    if(e==="pos:vista")return`🖥 POS → ${det||""}`;
+    if(e.startsWith("tab:"))return`📂 Dashboard → ${e.replace("tab:","")}`;
+    return e;
+  };
+  const fmtT=(s)=>{if(!s||s<=0)return"—";if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;};
+  const relTime=(iso)=>{if(!iso)return"—";const s=Math.round((Date.now()-new Date(iso))/1000);if(s<60)return`hace ${s}s`;if(s<3600)return`hace ${Math.floor(s/60)}m`;if(s<86400)return`hace ${Math.floor(s/3600)}h`;return`hace ${Math.floor(s/86400)}d`;};
+  const heatColor=(s)=>{const r=(tiempoPorTab[s]||0)/maxTiempo;if(r>0.75)return"#2721E8";if(r>0.5)return"#4f46e5";if(r>0.25)return"#7c6ffa";if(r>0)return"rgba(79,70,229,0.45)";return"rgba(255,255,255,0.06)";};
+  const UserRow=({u})=>{
+    const activo=activosAhora.includes(u.usuario);
+    const badge=ROL_BADGE[u.rol]||{label:u.rol,c:"#fff"};
+    const col=COLORES[u.nombre]||badge.c;
+    return(
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:`${col}22`,border:`1px solid ${col}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:col,flexShrink:0}}>
+            {(u.nombre||u.usuario||"?")[0]}
+          </div>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:13,fontWeight:600}}>{u.nombre||u.usuario}</span>
+              <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:`${badge.c}22`,color:badge.c,border:`1px solid ${badge.c}44`}}>{badge.label}</span>
+            </div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginTop:1}}>
+              {u.count} eventos · {u.ventas>0?`${u.ventas} ventas · `:""}último {relTime(u.ultimo)}
+            </div>
+          </div>
+        </div>
+        <div style={{fontSize:11,color:activo?"#10b981":"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",gap:4}}>
+          {activo&&<div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",boxShadow:"0 0 5px #10b981"}}/>}
+          {activo?"Activo ahora":""}
+        </div>
+      </div>
+    );
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* Header */}
+      <div className="glass" style={{padding:"18px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:700}}>🔬 Analítica de Uso</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:3}}>Usabilidad en tiempo real · solo visible para admin</div>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          {[{v:"24h",l:"24 h"},{v:"7d",l:"7 días"},{v:"30d",l:"30 días"}].map(r=>(
+            <button key={r.v} onClick={()=>setRango(r.v)} style={{padding:"5px 14px",fontSize:11,fontWeight:600,border:"1px solid",borderRadius:8,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",background:rango===r.v?"#2721E8":"transparent",borderColor:rango===r.v?"#2721E8":"rgba(255,255,255,0.1)",color:rango===r.v?"#fff":"rgba(255,255,255,0.4)"}}>
+              {r.l}
+            </button>
+          ))}
+          <button onClick={cargarLogs} style={{padding:"5px 12px",fontSize:11,border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",background:"transparent",color:"rgba(255,255,255,0.4)"}}>↻</button>
+        </div>
+      </div>
+
+      {/* Tabs: General + cada sucursal (POS + sus gerentes) + Gerentes globales */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {[{k:"General",l:"🌐 General",c:"#2721E8"},...SUCURSALES_NAMES.map(s=>({k:s,l:s,c:COLORES[s]})),{k:"Gerentes",l:"👔 Gerentes",c:"#f97316"}].map(({k,l,c})=>(
+          <button key={k} onClick={()=>setSucTab(k)} style={{padding:"7px 18px",fontSize:12,fontWeight:600,border:"1px solid",borderRadius:20,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",background:sucTab===k?`${c}22`:"transparent",borderColor:sucTab===k?c:"rgba(255,255,255,0.1)",color:sucTab===k?c:"rgba(255,255,255,0.4)"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
+        {[
+          {l:"ACTIVOS ÚLTIMA HORA",v:activosAhora.length,s:activosAhora.map(u=>USUARIOS.find(x=>x.usuario===u)?.nombre||u).join(", ")||"Nadie",cl:"#10b981",cls:"green"},
+          {l:"EVENTOS ÚLTIMAS 24H",v:eventosHoy,s:"En todo el sistema",cl:"#fff",cls:"hi"},
+          {l:"SECCIÓN MÁS USADA",v:(topSeccion?.[0]||"—").toUpperCase(),s:fmtT(topSeccion?.[1]||0)+" acumulado",cl:"#a855f7",cls:""},
+          {l:"EVENTOS EN VISTA",v:logsTab.length,s:`${[...new Set(logsTab.map(l=>l.usuario))].length} usuarios`,cl:"#49B8D3",cls:""},
+        ].map((k,i)=>(
+          <div key={i} className={`kpi ${k.cls}`}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"rgba(255,255,255,0.35)",marginBottom:8}}>{k.l}</div>
+            <div style={{fontSize:24,fontWeight:700,color:k.cl,marginBottom:4}}>{k.v}</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k.s}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Layout: 3 columnas */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+
+        {/* Col 1: Gerentes de sucursal */}
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"#f97316",marginBottom:14,display:"flex",alignItems:"center",gap:6}}>
+              👔 GERENTES Y DUEÑAS
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.3)",color:"#f97316"}}>socia · duena_general</span>
+            </div>
+            {usuariosGerentes.length===0&&!loading&&<div style={{color:"rgba(255,255,255,0.2)",fontSize:12}}>Sin actividad en este período</div>}
+            {usuariosGerentes.map(u=><UserRow key={u.usuario} u={u}/>)}
+          </div>
+
+          {/* POS staff */}
+          <div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"#49B8D3",marginBottom:14,display:"flex",alignItems:"center",gap:6}}>
+              🖥 STAFF POS
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"rgba(73,184,211,0.1)",border:"1px solid rgba(73,184,211,0.3)",color:"#49B8D3"}}>sucursal</span>
+            </div>
+            {usuariosPOS.length===0&&!loading&&<div style={{color:"rgba(255,255,255,0.2)",fontSize:12}}>Sin actividad en este período</div>}
+            {usuariosPOS.map(u=><UserRow key={u.usuario} u={u}/>)}
+          </div>
+
+          {/* Acciones POS */}
+          {Object.keys(posVistas).length>0&&<div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"rgba(255,255,255,0.3)",marginBottom:14}}>NAVEGACIÓN POS</div>
+            {Object.entries(posVistas).sort((a,b)=>b[1]-a[1]).map(([v,c])=>(
+              <div key={v} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.6)",textTransform:"capitalize"}}>{v}</span>
+                <span style={{fontSize:12,fontWeight:700,color:"#49B8D3"}}>{c}x</span>
+              </div>
+            ))}
+          </div>}
+        </div>
+
+        {/* Col 2: Heatmap + barras de tiempo */}
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"rgba(255,255,255,0.3)",marginBottom:14}}>MAPA DE CALOR — DASHBOARD</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
+              {tabSecciones.map(s=>{
+                const c=heatColor(s);
+                return(
+                  <div key={s} style={{borderRadius:10,padding:"14px 8px",textAlign:"center",border:`1px solid ${c}`,background:`${c}22`}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#fff",marginBottom:3}}>{heatLabels[s]}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:c==="rgba(255,255,255,0.06)"?"rgba(255,255,255,0.2)":"#fff"}}>{fmtT(tiempoPorTab[s]||0)}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginTop:2}}>{eventCounts[`tab:${s}`]||0} visitas</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.15)",textAlign:"right"}}>Azul oscuro = más tiempo</div>
+          </div>
+          <div className="glass" style={{padding:"20px 24px"}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"rgba(255,255,255,0.3)",marginBottom:16}}>TIEMPO ACUMULADO</div>
+            {tabSecciones.map(s=>{
+              const t=tiempoPorTab[s]||0;
+              const pct=maxTiempo>0?(t/maxTiempo*100):0;
+              return(
+                <div key={s} style={{marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.65)"}}>{heatLabels[s]}</span>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{fmtT(t)}</span>
+                  </div>
+                  <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#2721E8,#a855f7)",borderRadius:3}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Col 3: Feed en vivo */}
+        <div className="glass" style={{padding:"20px 24px",display:"flex",flexDirection:"column",maxHeight:900}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexShrink:0}}>
+            <div style={{fontSize:10,letterSpacing:"1.5px",color:"rgba(255,255,255,0.3)"}}>FEED EN VIVO</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",boxShadow:"0 0 6px #10b981"}}/>
+              <span style={{fontSize:10,color:"#10b981"}}>Tiempo real</span>
+            </div>
+          </div>
+          {loading&&<div style={{textAlign:"center",padding:60,color:"rgba(255,255,255,0.25)",fontSize:13}}>Cargando...</div>}
+          {!loading&&logsTab.length===0&&<div style={{textAlign:"center",padding:60,color:"rgba(255,255,255,0.2)",fontSize:12}}>Sin eventos en este período</div>}
+          <div style={{overflowY:"auto",flex:1}}>
+            {logsTab.slice(0,300).map((l,i)=>{
+              const badge=ROL_BADGE[l.rol]||{label:l.rol,c:"#fff"};
+              const col=COLORES[l.sucursal_nombre]||badge.c;
+              return(
+                <div key={l.id||i} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"9px 4px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                  <div style={{width:26,height:26,borderRadius:"50%",background:`${col}22`,border:`1px solid ${col}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:col,flexShrink:0}}>
+                    {(l.sucursal_nombre||l.usuario||"?")[0]}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                      <span style={{fontSize:11,fontWeight:600,color:"#fff"}}>{fmtEvento(l.evento,l.detalle)}</span>
+                      <span style={{fontSize:8,padding:"1px 5px",borderRadius:3,background:`${badge.c}1a`,color:badge.c,border:`1px solid ${badge.c}33`,flexShrink:0}}>{badge.label}</span>
+                    </div>
+                    {l.detalle&&l.evento!=="pos:vista"&&<div style={{fontSize:10,color:"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.detalle}</div>}
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.18)",marginTop:1,display:"flex",gap:5}}>
+                      <span>{l.sucursal_nombre||l.usuario}</span>
+                      <span>·</span>
+                      <span>{relTime(l.created_at)}</span>
+                      {l.duracion_segundos>0&&<><span>·</span><span>{fmtT(l.duracion_segundos)}</span></>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 const inicioSemana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00"),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
-function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
+function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   useCSSInjection();
   const[tab,setTab]=useState("resumen");
+  const tabInicioRef=useRef(Date.now());
+  const tabPrevRef=useRef("resumen");
+  useEffect(()=>{
+    const prev=tabPrevRef.current;
+    const dur=Math.round((Date.now()-tabInicioRef.current)/1000);
+    if(prev!==tab&&session)logActividad(session,`tab:${tab}`,prev,dur>3?dur:null);
+    tabPrevRef.current=tab;tabInicioRef.current=Date.now();
+  },[tab]);
   const[periodo,setPeriodo]=useState("mes"); // "semana" | "mes"
   const[tickets,setTickets]=useState([]);
   const[citas,setCitas]=useState([]);
@@ -3425,7 +3724,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
+  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -3522,7 +3821,7 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:"1px solid rgba(255,255,255,0.04)",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -3902,6 +4201,9 @@ function Dashboard({onLogout,sucursalesFiltro=null,sucursalesPropias=null}){
           </div>}
           {!importSuc&&<div style={{textAlign:"center",padding:"60px",color:"rgba(255,255,255,0.25)",fontSize:"13px"}}>Selecciona una sucursal para comenzar</div>}
         </div>}
+
+        {/* ═══ ANALÍTICA ═══ */}
+        {tab==="analitica"&&<Analitica/>}
       </div>
     </div>
   );
@@ -4440,19 +4742,21 @@ export default function App(){
         const hash=await hashPassword(pass);
         if(hash!==supaRec.password_hash){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
         setSession(hardcoded);setSupaUser(supaRec);
+        logActividad(hardcoded,"session_start",hardcoded.rol);
         if(supaRec.must_change_password)setMustChange(true);
       }else{
         if(hardcoded.password!==pass){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
         const hash=await hashPassword(pass);
         const{data:newRec}=await supabase.from("system_users").insert([{id:hardcoded.id,username:hardcoded.usuario,password_hash:hash,must_change_password:true}]).select().maybeSingle();
         setSession(hardcoded);setSupaUser(newRec||{must_change_password:true});
+        logActividad(hardcoded,"session_start",hardcoded.rol);
         setMustChange(true);
       }
     }catch(e){setErr("Error de conexión. Intenta de nuevo.");}
     setLoading(false);
   }
 
-  function logout(){setSession(null);setSupaUser(null);setMustChange(false);}
+  function logout(){if(session)logActividad(session,"session_end");setSession(null);setSupaUser(null);setMustChange(false);}
 
   if(!session){
     if(showForgot)return<ForgotPasswordScreen onBack={()=>setShowForgot(false)}/>;
@@ -4483,8 +4787,8 @@ export default function App(){
 
   if(mustChange)return<FirstLoginScreen session={session} onComplete={()=>setMustChange(false)}/>;
 
-  if(session.rol==="admin")return<><Dashboard onLogout={logout}/><AsistenteVirtual session={session}/></>;
-  if(session.rol==="duena_general")return<><Dashboard onLogout={logout} sucursalesPropias={session.sucursalesPropias}/><AsistenteVirtual session={session}/></>;
-  if(session.rol==="socia")return<><Dashboard onLogout={logout} sucursalesFiltro={session.sucursales}/><AsistenteVirtual session={session}/></>;
+  if(session.rol==="admin")return<><Dashboard session={session} onLogout={logout}/><AsistenteVirtual session={session}/></>;
+  if(session.rol==="duena_general")return<><Dashboard session={session} onLogout={logout} sucursalesPropias={session.sucursalesPropias}/><AsistenteVirtual session={session}/></>;
+  if(session.rol==="socia")return<><Dashboard session={session} onLogout={logout} sucursalesFiltro={session.sucursales}/><AsistenteVirtual session={session}/></>;
   return<><POS session={session} onSwitchSucursal={logout} isAdmin={false}/><AsistenteVirtual session={session}/></>;
 }
