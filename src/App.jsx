@@ -701,8 +701,18 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
       const{data:paq}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
       const paqPrecio=paq?.precio||0;
-      const restante=paqPrecio-anticoMonto;
-      setCitaCobro({cita,paqPrecio,anticoMonto,restante,paq});
+      // Buscar otros paquetes del mismo ticket con cobro pendiente
+      let otrosPaquetes=[];
+      if(paq?.ticket_id){
+        const{data:otrosPaqs}=await supabase.from("paquetes").select("*").eq("ticket_id",paq.ticket_id).neq("id",paq.id);
+        for(const op of otrosPaqs||[]){
+          const{data:otraCita}=await supabase.from("citas").select("*").eq("paquete_id",op.id).eq("sesion_numero",1).eq("es_cobro",false).maybeSingle();
+          if(otraCita) otrosPaquetes.push({paq:op,cita:otraCita});
+        }
+      }
+      const totalPrecio=paqPrecio+otrosPaquetes.reduce((s,x)=>s+x.paq.precio,0);
+      const restante=totalPrecio-anticoMonto;
+      setCitaCobro({cita,paqPrecio:totalPrecio,anticoMonto,restante,paq,otrosPaquetes});
       setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());
       setShowCobro(true);
     }else{completar(cita);}
@@ -711,13 +721,17 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const cobrarYCompletar=async()=>{
     if(!citaCobro)return;setSavingCobro(true);
     try{
-      const{cita,paqPrecio,anticoMonto,restante}=citaCobro;
+      const{cita,paqPrecio,anticoMonto,restante,otrosPaquetes=[]}=citaCobro;
       const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
       const totalFinal=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[cita.servicio],total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
+      const todosServicios=[cita.servicio,...otrosPaquetes.map(x=>x.cita.servicio)];
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
       const tzVal=ticketZettle.trim()?(ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim()):null;
       await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,...(tzVal?{ticket_zettle:tzVal}:{})}).eq("id",cita.id);
+      for(const op of otrosPaquetes){
+        await supabase.from("citas").update({es_cobro:true,metodo_pago:`Liquidación conjunta · ${mpago}`,total_pagado:0}).eq("id",op.cita.id);
+      }
       setShowCobro(false);setCitaCobro(null);
       await completar(cita);
     }catch(e){console.error(e);}setSavingCobro(false);
@@ -884,17 +898,20 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         </div>
       </div></div>}
       {showCobro&&citaCobro&&(()=>{
-        const{cita,paqPrecio,anticoMonto,restante}=citaCobro;
+        const{cita,paqPrecio,anticoMonto,restante,paq,otrosPaquetes=[]}=citaCobro;
         const msiOpts=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.msi||[];
         const totalFinalAg=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
         const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===restante);
         return(<div className="overlay"><div className="glass" style={{width:460,padding:"28px",borderColor:"rgba(249,115,22,0.3)"}}>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>LIQUIDACIÓN DE PAQUETE</div>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>{otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px"}}>
             <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
-            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"6px"}}>{cita.servicio}</div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"4px"}}><span>{cita.servicio}</span><span>{fmt(paq?.precio||0)}</span></div>
+            {otrosPaquetes.map((op,idx)=>(
+              <div key={idx} style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:"rgba(255,255,255,0.4)",marginBottom:"4px"}}><span>{op.paq.servicio}</span><span>{fmt(op.paq.precio)}</span></div>
+            ))}
             <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"8px 0"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>Precio paquete</span><span>{fmt(paqPrecio)}</span></div>
+            {otrosPaquetes.length>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:"rgba(255,255,255,0.4)"}}>Subtotal paquetes</span><span>{fmt(paqPrecio)}</span></div>}
             {anticoMonto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#f97316",marginBottom:"4px"}}><span>Anticipo pagado</span><span>− {fmt(anticoMonto)}</span></div>}
             <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"6px 0"}}/>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"16px",fontWeight:700}}><span>A cobrar hoy</span><span style={{color:"#49B8D3"}}>{fmt(descuentoAg>0&&pagosAg.length===1?totalFinalAg:restante)}</span></div>
@@ -1136,8 +1153,8 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
-  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito([]):setCarrito([{...item,qty:1}]);};
-  const total=carrito.length>0?carrito[0].precio:0;const totalCD=Math.round(total*(1-descuento/100));const msiD=carrito.length>0?(carrito[0].msi||[]):[];
+  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,qty:1}]);};
+  const total=carrito.reduce((s,i)=>s+i.precio,0);const totalCD=Math.round(total*(1-descuento/100));const msiD=[...new Set(carrito.flatMap(i=>i.msi||[]))].sort((a,b)=>a-b);
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
@@ -1156,54 +1173,62 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;sel({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
 
   const cerrar=async()=>{setSaving(true);setErrGuardar("");try{
-    const item=carrito[0];
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpago=pagos.length===1?(pagos[0].metodo+(msiSel>0?` ${msiSel}MSI`:"")+( ["Débito","Crédito"].includes(pagos[0].metodo)&&termSel[0]?` · ${termSel[0]}`:"")):pagos.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSel[i]?` · ${termSel[i]}`:""} ${fmt(p.monto)}`).join(" + ");
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
-    let pId=null;
-    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
-      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
-    if(eCi)throw new Error("Cita: "+eCi.message);
-    logActividad(session,"venta_completada",item.nombre);
+    for(const item of carrito){
+      let pId=null;
+      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+        const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+      const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:true,estado:"agendada",notas:`Ticket #${tId||""}`}]);
+      if(eCi)throw new Error("Cita: "+eCi.message);
+    }
+    logActividad(session,"venta_completada",carrito.map(i=>i.nombre).join(", "));
     const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
   const cerrarAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
-    const item=carrito[0];
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpAnticipo=anticoOpt==="transferencia"?"Transferencia":"Efectivo";
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[item.nombre],total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
-    let pId=null;
-    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
-      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}]);
-    if(eCi)throw new Error("Cita: "+eCi.message);
-    logActividad(session,"venta_anticipo",item.nombre);
+    for(let idx=0;idx<carrito.length;idx++){
+      const item=carrito[idx];const esPrimero=idx===0;
+      let pId=null;
+      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+        const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+      const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
+      const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,  ...camposAnticipo}]);
+      if(eCi)throw new Error("Cita: "+eCi.message);
+    }
+    logActividad(session,"venta_anticipo",carrito.map(i=>i.nombre).join(", "));
     const fTk=fechaTicket;setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
   const agendarSinAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
-    const item=carrito[0];
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
-    let pId=null;
-    if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
-      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
-    const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:tipoSvc.id,duracion_min:duracionCita,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,duracionCita),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
-    if(eCi)throw new Error("Cita: "+eCi.message);
+    for(const item of carrito){
+      let pId=null;
+      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+        const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+      const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
+      if(eCi)throw new Error("Cita: "+eCi.message);
+    }
     setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
@@ -1398,7 +1423,17 @@ function POS({session,onSwitchSucursal,isAdmin}){
             {/* 1 Paquete */}
             <div><div style={{fontSize:"9px",letterSpacing:"1px",color:pOk?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:pOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:pOk?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>1</div>PAQUETE</div>
               {!pOk?<div style={{color:"rgba(255,255,255,0.1)",fontSize:"11px",padding:"10px",textAlign:"center",border:"1px dashed rgba(255,255,255,0.06)",borderRadius:"8px"}}>← Selecciona del menú</div>:
-              <div style={{padding:"10px 12px",background:"rgba(39,33,232,0.1)",border:"1px solid rgba(39,33,232,0.3)",borderRadius:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:"12px",fontWeight:600}}>{carrito[0].nombre}</div><div style={{fontSize:"14px",fontWeight:700,color:"#49B8D3",marginTop:"2px"}}>{fmt(carrito[0].precio)}</div></div><button onClick={()=>setCarrito([])} style={{background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"6px",color:"#ff6b6b",cursor:"pointer",padding:"3px 8px",fontSize:"10px"}}>✕</button></div>}
+              <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+                {carrito.map((item,idx)=>(
+                  <div key={idx} style={{padding:"10px 12px",background:"rgba(39,33,232,0.1)",border:"1px solid rgba(39,33,232,0.3)",borderRadius:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div><div style={{fontSize:"12px",fontWeight:600}}>{item.nombre}</div><div style={{fontSize:"14px",fontWeight:700,color:"#49B8D3",marginTop:"2px"}}>{fmt(item.precio)}</div></div>
+                    <button onClick={()=>setCarrito(carrito.filter((_,i)=>i!==idx))} style={{background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"6px",color:"#ff6b6b",cursor:"pointer",padding:"3px 8px",fontSize:"10px"}}>✕</button>
+                  </div>
+                ))}
+                {carrito.length>1&&<div style={{display:"flex",justifyContent:"space-between",padding:"6px 12px",fontSize:"12px",fontWeight:700,color:"#49B8D3",borderTop:"1px solid rgba(39,33,232,0.3)",marginTop:"2px"}}>
+                  <span>Total</span><span>{fmt(total)}</span>
+                </div>}
+              </div>}
             </div>
             {/* 2 Datos */}
             {pOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:dOk?"#10b981":"rgba(255,255,255,0.25)",marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:dOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:dOk?"#fff":"rgba(255,255,255,0.25)",flexShrink:0}}>2</div>CLIENTA</div>
@@ -1462,7 +1497,10 @@ function POS({session,onSwitchSucursal,isAdmin}){
       {showConfirm&&<div className="overlay"><div className="glass" style={{width:460,padding:"28px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:"rgba(255,255,255,0.3)",marginBottom:"16px"}}>CONFIRMAR COBRO</div>
         <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
-          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{fontSize:"12px",fontWeight:600,marginBottom:"4px"}}>{carrito[0]?.nombre}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,duracionCita)}</div></div>
+          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
+            {carrito.map((item,idx)=><div key={idx} style={{fontSize:"12px",fontWeight:600,marginBottom:idx<carrito.length-1?"4px":"0"}}>{item.nombre} — {fmt(item.precio)}</div>)}
+            <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)"}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>
+          </div>
           <div style={{padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"10px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}</div>
           {/* Multi-pago */}
           <div><div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
@@ -1482,7 +1520,13 @@ function POS({session,onSwitchSucursal,isAdmin}){
             ))}
             {pagos[pagos.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagos.length===1?0:pagos.reduce((s,p)=>s+p.monto,0);const resto=totalCD-suma;setPagos(pagos.length===1?[{...pagos[0],monto:Math.round(totalCD/2)},{metodo:"",monto:totalCD-Math.round(totalCD/2)}]:[...pagos,{metodo:"",monto:Math.max(0,resto)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px"}}>+ Agregar otro método de pago</button>}
           </div>
-          <div style={{padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}><div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",marginBottom:"6px"}}><span style={{color:"rgba(255,255,255,0.5)"}}>{carrito[0]?.nombre}</span><span>{fmt(total)}</span></div><div style={{height:"1px",background:"rgba(255,255,255,0.08)",marginBottom:"6px"}}/>{descuento>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:"#ff8a65",marginBottom:"6px"}}><span>Desc. {descuento}%</span><span>-{fmt(total*descuento/100)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",fontWeight:700}}><span>Total</span><span style={{color:"#49B8D3"}}>{fmt(totalCD)}</span></div>{msiSel>0&&<div style={{fontSize:"12px",color:"#49B8D3",textAlign:"right",marginTop:"4px"}}>{fmt(totalCD/msiSel)}/mes × {msiSel}</div>}</div>
+          <div style={{padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
+            {carrito.map((item,idx)=><div key={idx} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:"rgba(255,255,255,0.5)"}}>{item.nombre}</span><span>{fmt(item.precio)}</span></div>)}
+            <div style={{height:"1px",background:"rgba(255,255,255,0.08)",margin:"6px 0"}}/>
+            {descuento>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:"#ff8a65",marginBottom:"6px"}}><span>Desc. {descuento}%</span><span>-{fmt(total*descuento/100)}</span></div>}
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",fontWeight:700}}><span>Total</span><span style={{color:"#49B8D3"}}>{fmt(totalCD)}</span></div>
+            {msiSel>0&&<div style={{fontSize:"12px",color:"#49B8D3",textAlign:"right",marginTop:"4px"}}>{fmt(totalCD/msiSel)}/mes × {msiSel}</div>}
+          </div>
         </div>
         {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"12px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
         <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
