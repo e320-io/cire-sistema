@@ -1132,14 +1132,14 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const[tickets,setTickets]=useState([]);const[loadingT,setLoadingT]=useState(false);const[fichaId,setFichaId]=useState(null);const[clientas,setClientas]=useState([]);const[cliBusq,setCliBusq]=useState("");const[loadingCli,setLoadingCli]=useState(false);const[notifDatos,setNotifDatos]=useState([]);const[showNotif,setShowNotif]=useState(false);const[confirmDelCli,setConfirmDelCli]=useState(null);const[confirmDelTicket,setConfirmDelTicket]=useState(null);const[historialFecha,setHistorialFecha]=useState(hoy());const[ticketDetalle,setTicketDetalle]=useState(null);
 
   const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
-  const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");
+  const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasDuracion,setZonasDuracion]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
   const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito([]):setCarrito([{...item,qty:1}]);};
   const total=carrito.length>0?carrito[0].precio:0;const totalCD=Math.round(total*(1-descuento/100));const msiD=carrito.length>0?(carrito[0].msi||[]):[];
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
-  const duracionCita=carrito.length>0?(getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
+  const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
   const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&aOk;
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
@@ -1147,11 +1147,11 @@ function POS({session,onSwitchSucursal,isAdmin}){
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasPrecio("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
 
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
   const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
-  const agregarZonas=()=>{if(!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio)return;const lista=zonasSeleccionadas.slice(0,3).join(", ")+(zonasSeleccionadas.length>3?` +${zonasSeleccionadas.length-3}`:"");const nombre=`Pack Zonas: ${lista} (${zonasSesiones} ses)`;sel({nombre,precio:Number(zonasPrecio),msi:[3],categoria:"Personalizado"});setShowZonasForm(false);};
+  const agregarZonas=()=>{if(!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio)return;const lista=zonasSeleccionadas.slice(0,3).join(", ")+(zonasSeleccionadas.length>3?` +${zonasSeleccionadas.length-3}`:"");const nombre=`Pack Zonas: ${lista} (${zonasSesiones} ses)`;const dur=zonasDuracion?Number(zonasDuracion):null;sel({nombre,precio:Number(zonasPrecio),msi:[3],categoria:"Personalizado",...(dur?{duracion:dur}:{})});setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");};
   const toggleCeraZona=(z)=>setCeraZonas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
   const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;sel({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
 
@@ -1355,9 +1355,10 @@ function POS({session,onSwitchSucursal,isAdmin}){
                   </div>
                   <div style={{display:"flex",gap:"8px"}}>
                     <div style={{flex:"0 0 90px"}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>SESIONES</div><input type="number" className="inp" placeholder="Nº" value={zonasSesiones} onChange={e=>setZonasSesiones(e.target.value)} min="1" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
+                    <div style={{flex:"0 0 90px"}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>DURACIÓN (min)</div><input type="number" className="inp" placeholder="60" value={zonasDuracion} onChange={e=>setZonasDuracion(e.target.value)} min="15" step="15" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
                     <div style={{flex:1}}><div style={{fontSize:"9px",color:"rgba(255,255,255,0.3)",marginBottom:"4px",letterSpacing:"1px"}}>PRECIO $</div><input type="number" className="inp" placeholder="0" value={zonasPrecio} onChange={e=>setZonasPrecio(e.target.value)} min="0" style={{fontSize:"12px",padding:"8px 12px"}}/></div>
                   </div>
-                  {zonasSeleccionadas.length>0&&zonasSesiones&&zonasPrecio&&<div style={{padding:"7px 10px",background:"rgba(139,92,246,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Pack: {zonasSeleccionadas.join(", ")} ({zonasSesiones} ses)» — {fmt(Number(zonasPrecio))}</div>}
+                  {zonasSeleccionadas.length>0&&zonasSesiones&&zonasPrecio&&<div style={{padding:"7px 10px",background:"rgba(139,92,246,0.08)",borderRadius:"8px",fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>«Pack: {zonasSeleccionadas.join(", ")} ({zonasSesiones} ses{zonasDuracion?` · ${zonasDuracion} min`:""})» — {fmt(Number(zonasPrecio))}</div>}
                   <button onClick={agregarZonas} disabled={!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio} className="btn-blue" style={{background:!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio?"rgba(139,92,246,0.2)":"#7c3aed",border:"none",width:"100%",padding:"9px",fontSize:"12px",fontWeight:700,cursor:!zonasSeleccionadas.length||!zonasSesiones||!zonasPrecio?"default":"pointer"}}>✓ Agregar paquete al ticket</button>
                 </div>
               </div>
