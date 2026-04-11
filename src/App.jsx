@@ -3326,13 +3326,13 @@ function Analitica(){
     const desde=rango==="24h"?new Date(ahora-24*3600*1e3).toISOString()
       :rango==="7d"?new Date(ahora-7*24*3600*1e3).toISOString()
       :new Date(ahora-30*24*3600*1e3).toISOString();
-    const{data}=await supabase.from("activity_logs").select("*").gte("created_at",desde).order("created_at",{ascending:false}).limit(3000);
+    const{data}=await supabase.from("activity_logs").select("*").neq("usuario","cire.admin").gte("created_at",desde).order("created_at",{ascending:false}).limit(3000);
     setLogs(data||[]);setLoading(false);
   };
   useEffect(()=>{cargarLogs();},[rango]);
   useEffect(()=>{
     const ch=supabase.channel("analitica_rt")
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"activity_logs"},p=>{setLogs(prev=>[p.new,...prev].slice(0,3000));})
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"activity_logs"},p=>{if(p.new?.usuario==="cire.admin")return;setLogs(prev=>[p.new,...prev].slice(0,3000));})
       .subscribe();
     return()=>{supabase.removeChannel(ch);};
   },[]);
