@@ -1338,8 +1338,8 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           {view==="historial"&&tickets.length>0&&<div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.4)":T.faint}}>HOY <span style={{color:"#49B8D3",fontWeight:700}}>{fmt(totalHoy)}</span></div>}
           {isAdmin&&<button className="btn-ghost" onClick={onSwitchSucursal} style={{fontSize:"11px"}}>← Dashboard</button>}
-          <button onClick={toggleTema} title={light?"Modo oscuro":"Modo claro"} style={{background:"none",border:"none",cursor:"pointer",fontSize:"17px",opacity:0.55,lineHeight:1,padding:"4px",transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.55"}>
-            {light?"🌙":"☀️"}
+          <button onClick={toggleTema} className="btn-ghost" style={{fontSize:"11px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+            {light?"🌙 Oscuro":"☀️ Claro"}
           </button>
         </div>
       </div>
@@ -4010,8 +4010,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               :metaData?<div style={{fontSize:"10px",padding:"3px 8px",borderRadius:"20px",background:"rgba(16,185,129,0.1)",color:"#10b981",border:"1px solid rgba(16,185,129,0.25)",flexShrink:0}}>● Meta</div>:null}
             <button className="btn-ghost" style={{padding:"5px 12px",fontSize:"12px",flexShrink:0,display:"flex",alignItems:"center",gap:"6px"}} onClick={()=>{if(!loadingDB){cargarDatos();cargarMeta();}}} disabled={loadingDB}><span style={{display:"inline-block",animation:loadingDB?"meta-spin 0.8s linear infinite":"none"}}>↻</span>{ultimaActualizacion?<span style={{fontSize:"10px",opacity:0.45}}>Actualizado {ultimaActualizacion.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</span>:<span style={{fontSize:"10px",opacity:0.45}}>Actualizar</span>}</button>
             {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px",flexShrink:0,whiteSpace:"nowrap"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ ${sucursalesPropias.join(" & ")}`:`Mis sucursales`}</button>}
-            <button onClick={toggleTema} title={light?"Modo oscuro":"Modo claro"} style={{background:"none",border:"none",cursor:"pointer",fontSize:"16px",opacity:0.55,lineHeight:1,padding:"4px",transition:"opacity 0.2s",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.55"}>
-              {light?"🌙":"☀️"}
+            <button onClick={toggleTema} className="btn-ghost" style={{fontSize:"11px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+              {light?"🌙 Oscuro":"☀️ Claro"}
             </button>
             <button className="btn-ghost" style={{fontSize:"11px",flexShrink:0}} onClick={onLogout}>Salir</button>
           </div>
@@ -4972,8 +4972,8 @@ export default function App(){
           <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"#2721E8",opacity:light?0.05:0.08,filter:"blur(100px)",top:"-150px",left:"-150px",pointerEvents:"none"}}/>
           <div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"#49B8D3",opacity:light?0.04:0.06,filter:"blur(80px)",bottom:"0px",right:"0px",pointerEvents:"none"}}/>
           <div className="glass" style={{width:420,padding:"52px 44px",position:"relative"}}>
-            <button onClick={toggleTema} title={light?"Modo oscuro":"Modo claro"} style={{position:"absolute",top:"16px",right:"16px",background:"none",border:"none",cursor:"pointer",fontSize:"18px",opacity:0.5,lineHeight:1}}>
-              {light?"🌙":"☀️"}
+            <button onClick={toggleTema} className="btn-ghost" style={{position:"absolute",top:"16px",right:"16px",fontSize:"11px",display:"flex",alignItems:"center",gap:"5px"}}>
+              {light?"🌙 Oscuro":"☀️ Claro"}
             </button>
             <div style={{textAlign:"center",marginBottom:"36px"}}>
               <div style={{fontSize:"10px",letterSpacing:"5px",color:"#49B8D3",marginBottom:"10px",fontWeight:500}}>SISTEMA INTERNO</div>
