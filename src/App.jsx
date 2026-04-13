@@ -4715,7 +4715,7 @@ function AsistenteVirtual({ session }) {
 
   const hayMensajesUsuario = mensajes.some(m => m.role === "user");
   const btnPanelStyle = {
-    position: "fixed", bottom: 24, right: 24,
+    position: "fixed", bottom: 24, left: 24,
     width: 56, height: 56, borderRadius: "50%",
     background: "linear-gradient(135deg, #2721E8, #49B8D3)",
     border: "none", cursor: "pointer", zIndex: 400,
@@ -4741,7 +4741,7 @@ function AsistenteVirtual({ session }) {
       {/* Panel de chat */}
       {open && (
         <div style={{
-          position: "fixed", bottom: 90, right: 24,
+          position: "fixed", bottom: 90, left: 24,
           width: 370, height: 580,
           background: "#1a1d40",
           border: "1px solid rgba(255,255,255,0.1)",
