@@ -973,7 +973,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         const msiOpts=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.msi||[];
         const totalFinalAg=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
         const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===restante);
-        return(<div className="overlay"><div className="glass" style={{width:460,padding:"28px",borderColor:"rgba(249,115,22,0.3)"}}>
+        return(<div className="overlay"><div className="glass" style={{width:460,borderColor:"rgba(249,115,22,0.3)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}><div style={{overflowY:"auto",flex:1,padding:"28px",paddingBottom:"12px"}}>
           <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>{otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px"}}>
             <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
@@ -1017,7 +1017,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px",borderColor:!ticketZettle.trim()?"rgba(239,68,68,0.5)":undefined}}/>
             <div style={{fontSize:"9px",color:"#ef4444",marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
           </div>
-          <div style={{display:"flex",gap:"10px",marginTop:"8px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
+          </div><div style={{padding:"12px 28px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
         </div></div>);
       })()}
 
