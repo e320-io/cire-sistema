@@ -1214,8 +1214,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[nombreCli,setNombreCli]=useState("");const[telCli,setTelCli]=useState("");const[nacDia,setNacDia]=useState("");const[nacMes,setNacMes]=useState("");const[nacAnio,setNacAnio]=useState("");const[comoNos,setComoNos]=useState("");const[depiAntes,setDepiAntes]=useState(null);const[showDatosOpc,setShowDatosOpc]=useState(false);
   const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);
   const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");const[ticketZettlePOS,setTicketZettlePOS]=useState("");
-  const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo"
+  const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo" | "otra"
   const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
+  const[montoAnticipoCustom,setMontoAnticipoCustom]=useState("");
+  const[metodoAnticipoCust,setMetodoAnticipoCust]=useState("transferencia");
   const[pagos,setPagos]=useState([{metodo:"",monto:0}]); // multi-pago en modal cobro
   const[termSel,setTermSel]=useState({}); // {pagoIdx: terminalNombre}
   const[terminalesPOS,setTerminalesPOS]=useState([]);
@@ -1276,10 +1278,12 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
-    const mpAnticipo=anticoOpt==="transferencia"?"Transferencia":"Efectivo";
+    const mpAnticipo=anticoOpt==="otra"?(metodoAnticipoCust==="transferencia"?"Transferencia":"Efectivo"):anticoOpt==="transferencia"?"Transferencia":"Efectivo";
+    const montoAnt=anticoOpt==="otra"?(Number(montoAnticipoCustom)||0):250;
+    if(anticoOpt==="otra"&&montoAnt<=0){setErrGuardar("Ingresa un monto válido.");setSaving(false);return;}
     const tNum=await nextTicketNum();
     const tzAntVal=ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzAntVal}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoAnt,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzAntVal}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
@@ -1289,8 +1293,8 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
-      const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:250,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
-      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $250 ${mpAnticipo} · Ticket #${tId||""}`,  ...camposAnticipo}]);
+      const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:montoAnt,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $${montoAnt} ${mpAnticipo} · Ticket #${tId||""}`,  ...camposAnticipo}]);
       if(eCi)throw new Error("Cita: "+eCi.message);
     }
     logActividad(session,"venta_anticipo",carrito.map(i=>i.nombre).join(", "));
@@ -1562,10 +1566,18 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             {/* 4 Anticipo */}
             {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:anticoOpt!=="no"?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:anticoOpt!=="no"?"#fff":T.faint,flexShrink:0}}>4</div>ANTICIPO</div>
               <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
-                {[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"}].map(o=>(
+                {[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"},{v:"otra",l:"Otra cantidad"}].map(o=>(
                   <button key={o.v} onClick={()=>{setAnticoOpt(o.v);if(o.v==="no")setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?(light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"):"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?T.dim:"#10b981":T.div,color:anticoOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?T.faint:"#10b981"}}>✓</span>}
                   </button>))}
+                {anticoOpt==="otra"&&<div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                  <div style={{display:"flex",gap:"6px"}}>
+                    {[{v:"transferencia",l:"Transferencia / Tarjeta"},{v:"efectivo",l:"Efectivo"}].map(m=>(
+                      <button key={m.v} onClick={()=>setMetodoAnticipoCust(m.v)} style={{flex:1,padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:metodoAnticipoCust===m.v?"rgba(16,185,129,0.15)":"transparent",borderColor:metodoAnticipoCust===m.v?"#10b981":T.div,color:metodoAnticipoCust===m.v?"#10b981":T.sub}}>{m.l}</button>
+                    ))}
+                  </div>
+                  <input className="inp" type="number" value={montoAnticipoCustom} onChange={e=>setMontoAnticipoCustom(e.target.value)} placeholder="Monto $" min="1" style={{fontSize:"13px",padding:"8px 10px",fontWeight:600}}/>
+                </div>}
                 {anticoOpt!=="no"&&<div style={{marginTop:"4px"}}>
                   <div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div>
                   <input className="inp" value={ticketZettleAnticipo} onChange={e=>setTicketZettleAnticipo(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px",letterSpacing:"0.5px"}}/>
@@ -1576,7 +1588,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           {todo&&!esDom&&<div style={{padding:"12px 18px",borderTop:`1px solid ${T.div}`,flexShrink:0}}>
             {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"10px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
             {anticoOpt!=="no"
-              ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":"✓ Registrar anticipo $250 + cita"}</button></div>
+              ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":anticoOpt==="otra"&&montoAnticipoCustom?`✓ Registrar anticipo $${montoAnticipoCustom} + cita`:"✓ Registrar anticipo $250 + cita"}</button></div>
               :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>
                 <button className="btn-ghost" style={{width:"100%",padding:"10px",fontSize:"12px",color:T.muted}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(total)} ahora</button>
