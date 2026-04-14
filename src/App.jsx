@@ -788,16 +788,18 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   };
 
   const cobrarYCompletar=async()=>{
-    if(!citaCobro)return;setSavingCobro(true);
+    if(!citaCobro)return;
+    if(!ticketZettle.trim()){alert("El número de ticket Zettle es obligatorio para registrar el cobro.");return;}
+    setSavingCobro(true);
     try{
       const{cita,paqPrecio,anticoMonto,restante,otrosPaquetes=[]}=citaCobro;
       const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
       const totalFinal=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
       const tNum=await nextTicketNum();
       const todosServicios=[cita.servicio,...otrosPaquetes.map(x=>x.cita.servicio)];
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null}]);
-      const tzVal=ticketZettle.trim()?(ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim()):null;
-      await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,...(tzVal?{ticket_zettle:tzVal}:{})}).eq("id",cita.id);
+      const tzVal=ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim();
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,ticket_zettle:tzVal}).eq("id",cita.id);
       for(const op of otrosPaquetes){
         await supabase.from("citas").update({es_cobro:true,metodo_pago:`Liquidación conjunta · ${mpago}`,total_pagado:0}).eq("id",op.cita.id);
       }
@@ -1011,9 +1013,9 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             {fechaTicketAg!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicketAg+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}
           </div>
           <div style={{marginBottom:"8px"}}>
-            <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>TICKET ZETTLE (opcional)</div>
-            <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px"}}/>
-            <div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>Número de ticket generado manualmente en Zettle</div>
+            <div style={{fontSize:"10px",color:"#ef4444",marginBottom:"6px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE <span style={{color:"#ef4444"}}>*</span></div>
+            <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px",borderColor:!ticketZettle.trim()?"rgba(239,68,68,0.5)":undefined}}/>
+            <div style={{fontSize:"9px",color:"#ef4444",marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
           </div>
           <div style={{display:"flex",gap:"10px",marginTop:"8px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
         </div></div>);
@@ -1211,7 +1213,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[clientaSel,setClientaSel]=useState(null);const[busqCli,setBusqCli]=useState("");const[cliResults,setCliResults]=useState([]);
   const[nombreCli,setNombreCli]=useState("");const[telCli,setTelCli]=useState("");const[nacDia,setNacDia]=useState("");const[nacMes,setNacMes]=useState("");const[nacAnio,setNacAnio]=useState("");const[comoNos,setComoNos]=useState("");const[depiAntes,setDepiAntes]=useState(null);const[showDatosOpc,setShowDatosOpc]=useState(false);
   const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);
-  const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");
+  const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");const[ticketZettlePOS,setTicketZettlePOS]=useState("");
   const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo"
   const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
   const[pagos,setPagos]=useState([{metodo:"",monto:0}]); // multi-pago en modal cobro
@@ -1236,7 +1238,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
 
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
   const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
@@ -1244,13 +1246,16 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const toggleCeraZona=(z)=>setCeraZonas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
   const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;sel({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
 
-  const cerrar=async()=>{setSaving(true);setErrGuardar("");try{
+  const cerrar=async()=>{
+    if(!ticketZettlePOS.trim()){setErrGuardar("El número de ticket Zettle es obligatorio.");return;}
+    setSaving(true);setErrGuardar("");try{
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpago=pagos.length===1?(pagos[0].metodo+(msiSel>0?` ${msiSel}MSI`:"")+( ["Débito","Crédito"].includes(pagos[0].metodo)&&termSel[0]?` · ${termSel[0]}`:"")):pagos.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSel[i]?` · ${termSel[i]}`:""} ${fmt(p.monto)}`).join(" + ");
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null}]).select();
+    const tzPOS=ticketZettlePOS.trim().startsWith("#")?ticketZettlePOS.trim():"#"+ticketZettlePOS.trim();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzPOS}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     for(const item of carrito){
@@ -1265,13 +1270,16 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
-  const cerrarAnticipo=async()=>{setSaving(true);setErrGuardar("");try{
+  const cerrarAnticipo=async()=>{
+    if(!ticketZettleAnticipo.trim()){setErrGuardar("El número de ticket Zettle es obligatorio.");return;}
+    setSaving(true);setErrGuardar("");try{
     let cliId=null;
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     const mpAnticipo=anticoOpt==="transferencia"?"Transferencia":"Efectivo";
     const tNum=await nextTicketNum();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null}]).select();
+    const tzAntVal=ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:250,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzAntVal}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
@@ -1559,7 +1567,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                     <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?T.faint:"#10b981"}}>✓</span>}
                   </button>))}
                 {anticoOpt!=="no"&&<div style={{marginTop:"4px"}}>
-                  <div style={{fontSize:"9px",color:T.sub,marginBottom:"4px",letterSpacing:"1px"}}>TICKET ZETTLE (opcional)</div>
+                  <div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div>
                   <input className="inp" value={ticketZettleAnticipo} onChange={e=>setTicketZettleAnticipo(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px",letterSpacing:"0.5px"}}/>
                 </div>}
               </div>
@@ -1610,6 +1618,11 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",fontWeight:700}}><span>Total</span><span style={{color:"#49B8D3"}}>{fmt(totalCD)}</span></div>
             {msiSel>0&&<div style={{fontSize:"12px",color:"#49B8D3",textAlign:"right",marginTop:"4px"}}>{fmt(totalCD/msiSel)}/mes × {msiSel}</div>}
           </div>
+        </div>
+        <div style={{marginBottom:"12px"}}>
+          <div style={{fontSize:"10px",color:"#ef4444",marginBottom:"6px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE <span style={{color:"#ef4444"}}>*</span></div>
+          <input className="inp" value={ticketZettlePOS} onChange={e=>{setTicketZettlePOS(e.target.value);setErrGuardar("");}} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px",borderColor:!ticketZettlePOS.trim()?"rgba(239,68,68,0.5)":undefined}}/>
+          <div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
         </div>
         {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"12px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
         <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
@@ -3617,6 +3630,17 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[metaChartMetrica,setMetaChartMetrica]=useState("inversion");
   const[expandedSucSem,setExpandedSucSem]=useState(null);
   const[posSuc,setPosSuc]=useState(null);
+  const WHATS_NEW_KEY=`whats_new_zettle_v1_${session?.usuario||""}`;
+  const[showWhatsNew,setShowWhatsNew]=useState(()=>!localStorage.getItem(WHATS_NEW_KEY));
+  const dismissWhatsNew=()=>{localStorage.setItem(WHATS_NEW_KEY,"1");setShowWhatsNew(false);};
+  const[zettleLoading,setZettleLoading]=useState(false);
+  const[zettleLogs,setZettleLogs]=useState([]);// [{key,label,status,count,error}]
+  const[zettleData,setZettleData]=useState([]);// ventas crudas de Zettle, estado aislado
+  const[zettleCitas,setZettleCitas]=useState([]);// cobros de recepción con ticket_zettle
+  const[zettleSucFiltro,setZettleSucFiltro]=useState(null);
+  const[zettleVista,setZettleVista]=useState("ventas");// "ventas" | "comparativo"
+  const[editZettle,setEditZettle]=useState(null);// {id, value} — ticket POS en edición
+  const[savingZettle,setSavingZettle]=useState(false);
   const[importType,setImportType]=useState("combinado"); // "combinado" | "ics" | "csv"
   const[importSuc,setImportSuc]=useState(USUARIOS.find(u=>u.rol==="sucursal")||null);
   const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
@@ -3918,7 +3942,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica"]:["resumen","sucursales","servicios","meta","pos","finanzas"];
+  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle"];
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -4018,7 +4042,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -4352,8 +4376,278 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {/* ═══ VER POS ═══ */}
         {tab==="pos"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>SELECCIONA SUCURSAL</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>{USUARIOS_DASH.map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}><div style={{width:"40px",height:"40px",borderRadius:"12px",background:`${s.color}22`,border:`1px solid ${s.color}44`,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px"}}>🖥</div><div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div><div style={{fontSize:"11px",color:T.sub}}>Ver POS →</div></div>)}</div></div>}
 
+        {/* ═══ VENTAS ZETTLE ═══ */}
+        {tab==="zettle"&&(()=>{
+          // Cuentas Zettle: Valle y Polanco comparten una sola cuenta (valle_polanco)
+          const ZETTLE_CUENTAS=[
+            {key:"metepec",label:"Metepec"},
+            {key:"coapa",label:"Coapa"},
+            {key:"valle_polanco",label:"Valle + Polanco"},
+            {key:"oriente",label:"Oriente"},
+          ];
+          // Carga datos SOLO en estado local — no toca tickets ni el dashboard
+          const cargarZettle=async()=>{
+            setZettleLoading(true);
+            setZettleData([]);
+            setZettleLogs(ZETTLE_CUENTAS.map(c=>({...c,status:"pending"})));
+            const todas=[];
+            for(const cuenta of ZETTLE_CUENTAS){
+              setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"loading"}:l));
+              try{
+                const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${mesDesde}&raw=true`;
+                const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
+                const json=await res.json();
+                if(!res.ok||!Array.isArray(json)){
+                  setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"error",error:json.error||`HTTP ${res.status}`}:l));
+                }else{
+                  todas.push(...json);
+                  setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"ok",count:json.length}:l));
+                }
+              }catch(e){
+                setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"error",error:e.message}:l));
+              }
+            }
+            setZettleData(todas);
+            // Cargar cobros de recepción con ticket_zettle registrado en el mismo período
+            const{data:citasZ}=await supabase
+              .from("citas")
+              .select("id,fecha,sucursal_nombre,servicio,total_pagado,ticket_zettle,clienta_nombre")
+              .gte("fecha",mesDesde).lte("fecha",mesHasta)
+              .eq("es_cobro",true)
+              .not("ticket_zettle","is",null);
+            setZettleCitas(citasZ||[]);
+            setZettleLoading(false);
+          };
+          const tksZ=(zettleSucFiltro
+            ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
+            :zettleData
+          ).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+          const totalZ=tksZ.reduce((s,t)=>s+Number(t.total),0);
+          const porSucZ={};tksZ.forEach(t=>{const n=t.sucursal||"—";porSucZ[n]=(porSucZ[n]||0)+Number(t.total);});
+          const exportCSV=()=>{
+            const header="# Ticket Zettle,Fecha,Sucursal,Concepto,Método de Pago,Total";
+            const rows=tksZ.map(t=>`${t.ticket_num??""}, ${t.fecha},"${t.sucursal||""}","${(t.servicios||[]).join("; ")}","${t.metodo_pago||""}",${t.total}`);
+            const blob=new Blob([[header,...rows].join("\n")],{type:"text/csv;charset=utf-8;"});
+            const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`zettle-${mesDesde}-${mesHasta}.csv`;a.click();URL.revokeObjectURL(url);
+          };
+          return<div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+            {/* Header + descripción */}
+            <div className="glass" style={{padding:"20px 24px"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
+                <div style={{display:"flex",gap:"14px",alignItems:"flex-start"}}>
+                  <div style={{fontSize:"22px",marginTop:"2px"}}>💳</div>
+                  <div>
+                    <div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Seguimiento de ventas — Zettle vs POS</div>
+                    <div style={{fontSize:"12px",color:T.muted,lineHeight:1.6,maxWidth:"580px"}}>
+                      Compara las ventas cobradas en Zettle (la terminal física) contra lo que cada recepcionista registró en el sistema. El objetivo es detectar ventas faltantes de captura, montos incorrectos o bugs en el flujo. Usa el filtro por sucursal para darle seguimiento individual a cada equipo.
+                    </div>
+                    <div style={{marginTop:"8px",fontSize:"11px",color:T.sub}}>{mesSelLabel}</div>
+                  </div>
+                </div>
+                <button className="btn-primary" style={{fontSize:"12px",opacity:zettleLoading?0.6:1,cursor:zettleLoading?"not-allowed":"pointer",flexShrink:0}} onClick={cargarZettle} disabled={zettleLoading}>
+                  {zettleLoading?"Cargando...":"🔄 Cargar Zettle"}
+                </button>
+              </div>
+              {/* Logs */}
+              {zettleLogs.length>0&&<div style={{marginTop:"16px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                {zettleLogs.map(l=><div key={l.key} style={{padding:"6px 12px",borderRadius:"8px",fontSize:"11px",fontWeight:600,display:"flex",alignItems:"center",gap:"6px",
+                  background:l.status==="ok"?"rgba(16,185,129,0.1)":l.status==="error"?"rgba(239,68,68,0.1)":l.status==="loading"?"rgba(73,184,211,0.1)":"rgba(255,255,255,0.05)",
+                  border:`1px solid ${l.status==="ok"?"rgba(16,185,129,0.3)":l.status==="error"?"rgba(239,68,68,0.3)":l.status==="loading"?"rgba(73,184,211,0.3)":"rgba(255,255,255,0.1)"}`,
+                  color:l.status==="ok"?"#10b981":l.status==="error"?"#ef4444":l.status==="loading"?"#49B8D3":T.faint}}>
+                  <span>{l.status==="ok"?"✓":l.status==="error"?"✗":l.status==="loading"?"⋯":"·"}</span>
+                  <span>{l.label}</span>
+                  {l.status==="ok"&&<span style={{opacity:0.7}}>({l.count} registros)</span>}
+                  {l.status==="error"&&<span style={{opacity:0.7,fontSize:"10px"}}>{l.error}</span>}
+                </div>)}
+              </div>}
+            </div>
+            {/* Filtro por sucursal */}
+            {(()=>{const sucs=[...new Set(zettleData.map(t=>t.sucursal).filter(Boolean))].sort();return sucs.length>1&&<div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+              <button onClick={()=>setZettleSucFiltro(null)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:!zettleSucFiltro?"rgba(39,33,232,0.15)":"transparent",borderColor:!zettleSucFiltro?"#2721E8":T.dim,color:!zettleSucFiltro?"#fff":T.muted}}>Todas</button>
+              {sucs.map(n=>{const u=USUARIOS_DASH.find(u=>u.nombre===n);return<button key={n} onClick={()=>setZettleSucFiltro(n===zettleSucFiltro?null:n)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:zettleSucFiltro===n?`${u?.color||"#49B8D3"}22`:"transparent",borderColor:zettleSucFiltro===n?(u?.color||"#49B8D3"):T.dim,color:zettleSucFiltro===n?(u?.color||"#49B8D3"):T.muted}}>{n}</button>;})}
+            </div>;})()}
+            {/* Estado vacío */}
+            {zettleData.length===0&&zettleLogs.length===0&&<div className="glass" style={{padding:"48px",textAlign:"center",color:T.faint,fontSize:"13px"}}>
+              Presiona "Cargar Zettle" para obtener las ventas de {mesSelLabel}
+            </div>}
+            {zettleData.length===0&&zettleLogs.length>0&&!zettleLoading&&<div style={{textAlign:"center",padding:"40px",color:T.faint,fontSize:"13px"}}>Sin ventas Zettle en {mesSelLabel}</div>}
+
+            {/* ── COMPARATIVO ── */}
+            {zettleData.length>0&&(()=>{
+              // Zettle: filtrado por sucursal seleccionada
+              const filasZ=(zettleSucFiltro
+                ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
+                :zettleData
+              ).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+              const totalZ=filasZ.reduce((s,t)=>s+Number(t.total),0);
+              // POS: tickets manuales del estado global del dashboard, mismo período y sucursal
+              const filasPOS=(zettleSucFiltro
+                ?tickets.filter(t=>t.sucursal_nombre===zettleSucFiltro)
+                :tickets
+              ).filter(t=>!t.zettle_uuid&&t.fuente!=="zettle"&&t.fecha>=mesDesde&&t.fecha<=mesHasta)
+               .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+              const totalPOS=filasPOS.reduce((s,t)=>s+Number(t.total),0);
+              // Métricas de brecha
+              const pctTickets=filasZ.length>0?Math.round(filasPOS.length/filasZ.length*100):0;
+              const pctMonto=totalZ>0?Math.round(totalPOS/totalZ*100):0;
+              const color=p=>p>=90?"#10b981":p>=70?"#f59e0b":"#ef4444";
+              // Tabla helper
+              const TablaComp=({filas,cols,footer})=><div className="glass" style={{padding:0,overflow:"hidden"}}>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
+                    <thead><tr style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`}}>
+                      {cols.map(h=><th key={h.k} style={{padding:"10px 14px",textAlign:h.r?"right":"left",fontWeight:600,fontSize:"10px",letterSpacing:"1px",color:T.sub}}>{h.k.toUpperCase()}</th>)}
+                    </tr></thead>
+                    <tbody>{filas.map((row,i)=><tr key={i} style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)"}`,background:i%2===0?"transparent":(light?"rgba(0,0,0,0.015)":"rgba(255,255,255,0.015)")}}>
+                      {cols.map(h=><td key={h.k} style={{padding:"8px 14px",textAlign:h.r?"right":"left",...(h.style||{})}}>{h.render(row)}</td>)}
+                    </tr>)}</tbody>
+                    {footer&&<tfoot><tr style={{borderTop:`2px solid ${light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}`}}>{footer}</tr></tfoot>}
+                  </table>
+                </div>
+              </div>;
+              return<>
+                {/* ── Panel comparativo ── */}
+                <div className="glass" style={{padding:"20px 24px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 180px 1fr",gap:"32px",alignItems:"center"}}>
+                    {/* Zettle */}
+                    <div>
+                      <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"14px"}}>💳 ZETTLE — REFERENCIA (100%)</div>
+                      <div style={{display:"flex",gap:"32px"}}>
+                        <div><div style={{fontSize:"32px",fontWeight:800,color:"#49B8D3",lineHeight:1}}>{filasZ.length}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>transacciones</div></div>
+                        <div><div style={{fontSize:"32px",fontWeight:800,color:"#49B8D3",lineHeight:1}}>{fmt(totalZ)}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>total</div></div>
+                      </div>
+                    </div>
+                    {/* Barras centrales */}
+                    <div style={{display:"flex",flexDirection:"column",gap:"12px",alignItems:"center"}}>
+                      {[{label:"tickets",pct:pctTickets},{label:"monto",pct:pctMonto}].map(({label,pct})=><div key={label} style={{width:"100%",textAlign:"center"}}>
+                        <div style={{fontSize:"22px",fontWeight:800,color:color(pct),lineHeight:1}}>{pct}%</div>
+                        <div style={{margin:"6px 0",height:"6px",borderRadius:"3px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${Math.min(pct,100)}%`,borderRadius:"3px",background:color(pct),transition:"width 0.4s"}}/>
+                        </div>
+                        <div style={{fontSize:"10px",color:T.faint}}>{label}</div>
+                      </div>)}
+                    </div>
+                    {/* POS */}
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"14px"}}>🖥 POS — LO QUE SUBIERON</div>
+                      <div style={{display:"flex",gap:"32px",justifyContent:"flex-end"}}>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:"32px",fontWeight:800,color:color(pctTickets),lineHeight:1}}>{filasPOS.length}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>transacciones</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:"32px",fontWeight:800,color:color(pctMonto),lineHeight:1}}>{fmt(totalPOS)}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>total</div></div>
+                      </div>
+                      {(filasZ.length-filasPOS.length>0||totalZ-totalPOS>0)&&<div style={{marginTop:"10px",fontSize:"12px",color:"#ef4444",fontWeight:600}}>
+                        faltan {filasZ.length-filasPOS.length} tickets · {fmt(totalZ-totalPOS)}
+                      </div>}
+                    </div>
+                  </div>
+                </div>
+                {/* ── Dos tablas lado a lado ── */}
+                {(()=>{
+                  // Mapa ticket_zettle → clienta_nombre desde el POS para enriquecer la tabla Zettle
+                  const posClientaMap={};
+                  filasPOS.forEach(t=>{if(t.ticket_zettle&&t.clienta_nombre)posClientaMap[t.ticket_zettle]=t.clienta_nombre;});
+                  return<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",alignItems:"start"}}>
+                  {/* Tabla Zettle */}
+                  <div>
+                    <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"8px",paddingLeft:"4px"}}>ZETTLE</div>
+                    <TablaComp filas={filasZ}
+                      cols={[
+                        {k:"# Ticket",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.ticket_num??<span style={{color:T.faint}}>—</span>}</span>},
+                        {k:"Fecha",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.fecha}</span>},
+                        {k:"Clienta",render:t=>{const n=t.ticket_num?posClientaMap[`#${t.ticket_num}`]||posClientaMap[String(t.ticket_num)]:null;return<span style={{fontSize:"11px",color:n?T.muted:T.faint,fontStyle:n?"normal":"italic"}}>{n||"—"}</span>;}},
+                        {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
+                        {k:"Total",r:true,render:t=><span style={{fontWeight:700,fontFamily:"monospace"}}>{fmt(t.total)}</span>},
+                      ]}
+                      footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasZ.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:"#49B8D3"}}>{fmt(totalZ)}</td></>}
+                    />
+                  </div>
+                  {/* Tabla POS */}
+                  <div>
+                    <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"8px",paddingLeft:"4px"}}>POS — RECEPCIÓN</div>
+                    {filasPOS.length===0
+                      ?<div className="glass" style={{padding:"40px",textAlign:"center",color:T.faint,fontSize:"13px"}}>Sin tickets en el sistema{zettleSucFiltro?` para ${zettleSucFiltro}`:""}</div>
+                      :<TablaComp filas={filasPOS}
+                        cols={[
+                          {k:"# Zettle",render:t=>{
+                            const isEditing=editZettle?.id===t.id;
+                            const guardarZettle=async()=>{
+                              if(savingZettle)return;
+                              const raw=(editZettle.value||"").trim();
+                              const val=raw?(raw.startsWith("#")?raw:"#"+raw):null;
+                              setSavingZettle(true);
+                              await supabase.from("tickets").update({ticket_zettle:val}).eq("id",t.id);
+                              // Actualizar también la cita vinculada (mismo clienta_id + fecha)
+                              if(val&&t.clienta_id){
+                                await supabase.from("citas").update({ticket_zettle:val})
+                                  .eq("clienta_id",t.clienta_id).eq("fecha",t.fecha).eq("es_cobro",true);
+                              }
+                              // Reflejar en estado local sin recargar todo
+                              setTickets(prev=>prev.map(tk=>tk.id===t.id?{...tk,ticket_zettle:val}:tk));
+                              setSavingZettle(false);setEditZettle(null);
+                            };
+                            if(isEditing)return<div style={{display:"flex",gap:"4px",alignItems:"center"}}>
+                              <input autoFocus value={editZettle.value} onChange={e=>setEditZettle({...editZettle,value:e.target.value})}
+                                onKeyDown={e=>{if(e.key==="Enter")guardarZettle();if(e.key==="Escape")setEditZettle(null);}}
+                                placeholder="#123" style={{width:"72px",fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid #49B8D3",background:"transparent",color:"#fff",fontFamily:"monospace",outline:"none"}}/>
+                              <button onClick={guardarZettle} disabled={savingZettle} style={{fontSize:"11px",padding:"3px 8px",borderRadius:"6px",background:"#49B8D3",border:"none",color:"#fff",cursor:"pointer",fontWeight:600}}>{savingZettle?"...":"✓"}</button>
+                              <button onClick={()=>setEditZettle(null)} style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.15)",color:T.faint,cursor:"pointer"}}>✕</button>
+                            </div>;
+                            return<div style={{display:"flex",alignItems:"center",gap:"6px",cursor:"pointer"}} onClick={()=>setEditZettle({id:t.id,value:t.ticket_zettle||""})}>
+                              <span style={{fontFamily:"monospace",color:t.ticket_zettle?"#49B8D3":T.faint,fontSize:"11px",fontWeight:600}}>{t.ticket_zettle||"—"}</span>
+                              <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✏</span>
+                            </div>;
+                          }},
+                          {k:"Fecha",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.fecha}</span>},
+                          {k:"Clienta",render:t=><span style={{fontSize:"11px",color:t.clienta_nombre?T.muted:T.faint,fontStyle:t.clienta_nombre?"normal":"italic"}}>{t.clienta_nombre||"—"}</span>},
+                          {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
+                          {k:"Método",render:t=><span style={{fontSize:"11px",color:T.faint}}>{(t.metodo_pago||"").split(" ")[0]}</span>},
+                          {k:"Total",r:true,render:t=><span style={{fontWeight:700,fontFamily:"monospace"}}>{fmt(t.total)}</span>},
+                        ]}
+                        footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasPOS.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:color(pctMonto)}}>{fmt(totalPOS)}</td></>}
+                      />
+                    }
+                  </div>
+                </div>;})()}
+              </>;
+            })()}
+          </div>;
+        })()}
+
         {/* ═══ FINANZAS ═══ */}
         {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
+
+        {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
+        {showWhatsNew&&TABS_DASH.includes("zettle")&&<div style={{position:"fixed",bottom:"28px",right:"28px",zIndex:9999,width:"340px",background:light?"#fff":"#1a1a2e",border:"1px solid rgba(73,184,211,0.4)",borderRadius:"16px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
+          <div style={{height:"4px",background:"linear-gradient(90deg,#2721E8,#49B8D3)"}}/>
+          <div style={{padding:"20px 20px 16px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}>
+              <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+                <span style={{fontSize:"20px"}}>✨</span>
+                <div>
+                  <div style={{fontSize:"14px",fontWeight:700,color:light?"#1a1a2e":"#fff"}}>Descubre lo nuevo</div>
+                  <div style={{fontSize:"10px",color:"#49B8D3",fontWeight:600,letterSpacing:"1px",marginTop:"1px"}}>ACTUALIZACIÓN ABRIL 2026</div>
+                </div>
+              </div>
+              <button onClick={dismissWhatsNew} style={{background:"none",border:"none",cursor:"pointer",color:light?"rgba(0,0,0,0.3)":"rgba(255,255,255,0.3)",fontSize:"18px",lineHeight:1,padding:"0 2px"}}>✕</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"16px"}}>
+              {[
+                {ico:"💳",title:"Tab Zettle",desc:"Compara las ventas de la terminal contra lo que recepción registró en el sistema."},
+                {ico:"📊",title:"Comparativo Zettle vs POS",desc:"Ve cuántos tickets y qué monto falta capturar por sucursal en tiempo real."},
+                {ico:"✏️",title:"Asignación manual",desc:"Puedes asignar el número de ticket Zettle directamente desde la tabla."},
+                {ico:"🔒",title:"Ticket obligatorio",desc:"A partir de hoy recepción debe ingresar el # de Zettle en cada cobro."},
+              ].map(({ico,title,desc})=><div key={title} style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
+                <span style={{fontSize:"16px",marginTop:"1px",flexShrink:0}}>{ico}</span>
+                <div>
+                  <div style={{fontSize:"12px",fontWeight:600,color:light?"#1a1a2e":"#fff"}}>{title}</div>
+                  <div style={{fontSize:"11px",color:light?"rgba(0,0,0,0.5)":"rgba(255,255,255,0.45)",lineHeight:1.4,marginTop:"1px"}}>{desc}</div>
+                </div>
+              </div>)}
+            </div>
+            <button onClick={()=>{dismissWhatsNew();setTab("zettle");}} style={{width:"100%",padding:"10px",borderRadius:"10px",background:"linear-gradient(90deg,#2721E8,#49B8D3)",border:"none",color:"#fff",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>
+              Ver tab Zettle →
+            </button>
+          </div>
+        </div>}
 
         {/* ═══ IMPORTAR ═══ */}
         {tab==="importar"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>

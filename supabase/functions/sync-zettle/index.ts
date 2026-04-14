@@ -88,8 +88,17 @@ function mapPago(payments: any[]): string {
   return type || "Otro"
 }
 
+// ─── CORS ────────────────────────────────────────────────────────────────────
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+}
+
 // ─── Handler principal ───────────────────────────────────────────────────────
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS })
+
   try {
     const url = new URL(req.url)
     const sucursalKey = (url.searchParams.get("sucursal") || "metepec").toLowerCase()
@@ -99,7 +108,7 @@ Deno.serve(async (req) => {
     if (!config) {
       return new Response(
         JSON.stringify({ error: `Sucursal "${sucursalKey}" no configurada. Opciones: ${Object.keys(SUCURSALES).join(", ")}, valle_polanco` }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
       )
     }
 
@@ -110,7 +119,7 @@ Deno.serve(async (req) => {
     if (!clientId || !apiKey) {
       return new Response(
         JSON.stringify({ error: `Secrets ZETTLE_${sucursalKey.toUpperCase()}_CLIENT_ID / API_KEY no configurados` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { ...CORS, "Content-Type": "application/json" } }
       )
     }
 
@@ -157,9 +166,34 @@ Deno.serve(async (req) => {
       }
       return new Response(lines.join("\n"), {
         headers: {
+          ...CORS,
           "Content-Type": "text/csv",
           "Content-Disposition": `attachment; filename="zettle-${sucursalKey}.csv"`,
         },
+      })
+    }
+
+    // Modo raw: devuelve JSON con todas las ventas sin escribir a la BD
+    // Usado por el tab de validación Zettle en el dashboard admin
+    if (url.searchParams.get("raw") === "true") {
+      const all = await fetchAllPurchases(token, startDate)
+      const esCompartida = sucursalKey === "valle_polanco"
+      const rows = all.map((p: any) => {
+        const suc = esCompartida
+          ? asignarSucursalCompartida(p.userDisplayName, (p.timestamp || "").slice(0, 10))
+          : config
+        return {
+          ticket_num:      p.purchaseNumber ?? null,
+          fecha:           (p.timestamp || "").slice(0, 10),
+          sucursal:        suc.nombre,
+          servicios:       (p.products || []).map((pr: any) => pr.name).filter(Boolean),
+          metodo_pago:     mapPago(p.payments || []),
+          total:           Math.round((p.amount ?? 0) / 100),
+          zettle_uuid:     p.purchaseUUID,
+        }
+      })
+      return new Response(JSON.stringify(rows), {
+        headers: { ...CORS, "Content-Type": "application/json" },
       })
     }
 
@@ -190,7 +224,7 @@ Deno.serve(async (req) => {
     if (purchases.length === 0) {
       return new Response(
         JSON.stringify({ synced: 0, sucursal: config.nombre, startDate }),
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { ...CORS, "Content-Type": "application/json" } }
       )
     }
 
@@ -229,14 +263,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ synced: rows.length, por_sucursal: porSucursal, startDate, ok: true }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { ...CORS, "Content-Type": "application/json" } }
     )
 
   } catch (err) {
     console.error("[sync-zettle] ERROR:", err)
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } }
     )
   }
 })
