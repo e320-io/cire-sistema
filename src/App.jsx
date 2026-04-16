@@ -3037,17 +3037,42 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[fRecurrente,setFRecurrente]=useState(false);
   const[fPeriodo,setFPeriodo]=useState(hoyYM);
 
+  const ZETTLE_CUENTAS_FIN=[
+    {key:"metepec",label:"Metepec"},
+    {key:"coapa",label:"Coapa"},
+    {key:"valle_polanco",label:"Valle + Polanco"},
+    {key:"oriente",label:"Oriente"},
+  ];
+  const fetchZettleVentas=async(desde,hasta)=>{
+    const todas=[];
+    for(const cuenta of ZETTLE_CUENTAS_FIN){
+      try{
+        const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${desde}&raw=true`;
+        const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
+        const json=await res.json();
+        if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
+      }catch{}
+    }
+    const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
+    todas.forEach(t=>{const n=t.sucursal;if(m[n]!==undefined)m[n]+=Number(t.total);});
+    return m;
+  };
+
   const cargar=async()=>{
     setLoading(true);
     const{desde,hasta}=rango(periodo);
     const{desde:dA,hasta:hA}=rango(antYM(periodo));
+    const esMesActual=periodo===hoyYM();
+    const esMesAnteriorActual=antYM(periodo)===hoyYM();
     const[{data:tks},{data:tksA},{data:g}]=await Promise.all([
-      supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",desde).lte("fecha",hasta),
-      supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",dA).lte("fecha",hA),
+      esMesActual?supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",desde).lte("fecha",hasta):Promise.resolve({data:[]}),
+      esMesAnteriorActual?supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",dA).lte("fecha",hA):Promise.resolve({data:[]}),
       supabase.from("gastos_operativos").select("*").eq("periodo",periodo),
     ]);
     const toMap=(arr)=>{const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});(arr||[]).forEach(t=>{if(m[t.sucursal_nombre]!==undefined)m[t.sucursal_nombre]+=Number(t.total);});return m;};
-    setVentas(toMap(tks));setVentasAnt(toMap(tksA));setGastos(g||[]);
+    const ventasMap=esMesActual?toMap(tks):await fetchZettleVentas(desde,hasta);
+    const ventasAntMap=esMesAnteriorActual?toMap(tksA):await fetchZettleVentas(dA,hA);
+    setVentas(ventasMap);setVentasAnt(ventasAntMap);setGastos(g||[]);
     if(META_TOKEN&&META_ACCOUNT){
       try{
         const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
