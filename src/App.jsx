@@ -91,6 +91,15 @@ const CSS = `
   .rank-row:hover{background:var(--rank-hover);}
   .clienta-sugg{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--sugg-border);transition:background 0.15s;font-size:14px;}
   .clienta-sugg:hover{background:rgba(39,33,232,0.12);}
+  body.acc-grande{font-size:17px;--text-muted:rgba(255,255,255,0.92);--text-subtle:rgba(255,255,255,0.80);--text-faint:rgba(255,255,255,0.72);}
+  body.tema-claro.acc-grande{--text-muted:rgba(26,31,60,0.95);--text-subtle:rgba(26,31,60,0.88);--text-faint:rgba(26,31,60,0.78);}
+  body.acc-grande .nav-tab{font-size:15px;}
+  body.acc-grande .tab-dash{font-size:15px;}
+  body.acc-grande .inp{font-size:15px;}
+  body.acc-grande .btn-blue{font-size:15px;}
+  body.acc-grande .btn-ghost{font-size:14px;}
+  body.acc-grande .clienta-sugg{font-size:15px;}
+  body.acc-grande .rank-row{font-size:15px;}
 `;
 
 let cssInjected = false;
@@ -107,12 +116,12 @@ function useTema(){
 }
 
 // ─── Contexto de tema global ───────────────────────────────────────────────────
-const ThemeCtx=createContext({light:false});
-const mkT=(light)=>({
-  sub:    light?"rgba(26,31,60,0.68)":"rgba(255,255,255,0.55)",
-  faint:  light?"rgba(26,31,60,0.52)":"rgba(255,255,255,0.35)",
-  muted:  light?"rgba(26,31,60,0.78)":"rgba(255,255,255,0.35)",
-  dim:    light?"rgba(26,31,60,0.42)":"rgba(255,255,255,0.25)",
+const ThemeCtx=createContext({light:false,acc:false});
+const mkT=(light,acc=false)=>({
+  sub:    light?(acc?"rgba(26,31,60,0.95)":"rgba(26,31,60,0.68)"):(acc?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.55)"),
+  faint:  light?(acc?"rgba(26,31,60,0.85)":"rgba(26,31,60,0.52)"):(acc?"rgba(255,255,255,0.80)":"rgba(255,255,255,0.35)"),
+  muted:  light?(acc?"rgba(26,31,60,0.95)":"rgba(26,31,60,0.78)"):(acc?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.35)"),
+  dim:    light?(acc?"rgba(26,31,60,0.80)":"rgba(26,31,60,0.42)"):(acc?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.25)"),
   div:    light?"rgba(0,0,0,0.08)"   :"rgba(255,255,255,0.06)",
   cardBg: light?"rgba(0,0,0,0.03)"   :"rgba(255,255,255,0.03)",
   cardBdr:light?"rgba(0,0,0,0.09)"   :"rgba(255,255,255,0.08)",
@@ -126,17 +135,17 @@ const mkT=(light)=>({
   navBg:  light?"rgba(242,239,232,0.97)":"rgba(0,0,0,0.4)",
   pageBg: light?"#eeebe3"            :"#22264A",
 });
-function useT(){const{light}=useContext(ThemeCtx);return{light,T:mkT(light)};}
+function useT(){const{light,acc}=useContext(ThemeCtx);return{light,acc,T:mkT(light,acc)};}
 
 const USUARIOS=[
-  {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8"},
+  {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8",accesibilidad:true},
   {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
-  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"]},
+  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"]},
   {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"]},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
@@ -3611,7 +3620,7 @@ const inicioSemana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00"),dow=d.get
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
 function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropias=null,tema="dark",toggleTema=()=>{}}){
-  const{light,T}=useT();
+  const{light,T,acc}=useT();
   useCSSInjection();
   const[tab,setTab]=useState("resumen");
   const tabInicioRef=useRef(Date.now());
@@ -3642,6 +3651,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[metaChartMetrica,setMetaChartMetrica]=useState("inversion");
   const[expandedSucSem,setExpandedSucSem]=useState(null);
   const[posSuc,setPosSuc]=useState(null);
+  useEffect(()=>{if(posSuc?.accesibilidad)document.body.classList.add("acc-grande");else if(!acc)document.body.classList.remove("acc-grande");},[posSuc,acc]);
   const WHATS_NEW_KEY=`whats_new_zettle_v1_${session?.usuario||""}`;
   const[showWhatsNew,setShowWhatsNew]=useState(()=>!localStorage.getItem(WHATS_NEW_KEY));
   const dismissWhatsNew=()=>{localStorage.setItem(WHATS_NEW_KEY,"1");setShowWhatsNew(false);};
@@ -4011,7 +4021,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const topMet=Object.entries(metCobro).filter(([k])=>k&&k!=="—").sort((a,b)=>b[1]-a[1]);
   const maxMet=topMet[0]?.[1]||1;
 
-  if(posSuc)return<POS session={posSuc} onSwitchSucursal={()=>{setPosSuc(null);cargarDatos();}} isAdmin={true} tema={tema} toggleTema={toggleTema}/>;
+  if(posSuc){const posAcc=!!(posSuc.accesibilidad);return<ThemeCtx.Provider value={{light,acc:posAcc}}><POS session={posSuc} onSwitchSucursal={()=>{setPosSuc(null);cargarDatos();}} isAdmin={true} tema={tema} toggleTema={toggleTema}/></ThemeCtx.Provider>;}
   return(
     <div style={{minHeight:"100vh",background:light?"#f0f2f8":"#22264A",color:light?"#1a1f3c":"#fff"}}>
       {/* Topbar */}
@@ -4433,7 +4443,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           const tksZ=(zettleSucFiltro
             ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
             :zettleData
-          ).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+          ).filter(t=>t.fecha>=mesDesde&&t.fecha<=mesHasta)
+           .sort((a,b)=>b.fecha.localeCompare(a.fecha));
           const totalZ=tksZ.reduce((s,t)=>s+Number(t.total),0);
           const porSucZ={};tksZ.forEach(t=>{const n=t.sucursal||"—";porSucZ[n]=(porSucZ[n]||0)+Number(t.total);});
           const exportCSV=()=>{
@@ -4486,11 +4497,12 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
             {/* ── COMPARATIVO ── */}
             {zettleData.length>0&&(()=>{
-              // Zettle: filtrado por sucursal seleccionada
+              // Zettle: filtrado por sucursal y período seleccionado
               const filasZ=(zettleSucFiltro
                 ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
                 :zettleData
-              ).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+              ).filter(t=>t.fecha>=mesDesde&&t.fecha<=mesHasta)
+               .sort((a,b)=>b.fecha.localeCompare(a.fecha));
               const totalZ=filasZ.reduce((s,t)=>s+Number(t.total),0);
               // POS: tickets manuales del estado global del dashboard, mismo período y sucursal
               const filasPOS=(zettleSucFiltro
@@ -5266,7 +5278,9 @@ export default function App(){
   function logout(){if(session)logActividad(session,"session_end");setSession(null);setSupaUser(null);setMustChange(false);}
 
   const light=tema==="light";
-  const T=mkT(light);
+  const acc=!!(session?.accesibilidad);
+  useEffect(()=>{document.body.classList.toggle("acc-grande",acc);},[acc]);
+  const T=mkT(light,acc);
 
   let content;
   if(!session){
@@ -5312,5 +5326,5 @@ export default function App(){
     content=<><POS session={session} onSwitchSucursal={logout} isAdmin={false} tema={tema} toggleTema={toggleTema}/><AsistenteVirtual session={session}/></>;
   }
 
-  return <ThemeCtx.Provider value={{light}}>{content}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{light,acc}}>{content}</ThemeCtx.Provider>;
 }
