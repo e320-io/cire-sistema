@@ -50,6 +50,20 @@ async function getZettleToken(clientId: string, apiKey: string): Promise<string>
   return access_token
 }
 
+// ─── Fecha local Mexico City (UTC-6, sin DST desde 2023) ────────────────────
+function toMexicoDate(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })
+}
+
+// Convierte "YYYY-MM-DD" a medianoche UTC-6 para que Zettle no devuelva
+// transacciones del día anterior hechas entre las 6pm y medianoche local.
+function startDateUTC(dateStr: string): string {
+  // Si ya viene con hora (ISO completo), dejarlo tal cual
+  if (dateStr.length > 10) return dateStr
+  // "2026-04-01" → "2026-04-01T06:00:00Z"  (medianoche en UTC-6)
+  return `${dateStr}T06:00:00Z`
+}
+
 // ─── Fetch compras paginadas ─────────────────────────────────────────────────
 async function fetchAllPurchases(token: string, startDate: string): Promise<any[]> {
   const all: any[] = []
@@ -57,7 +71,7 @@ async function fetchAllPurchases(token: string, startDate: string): Promise<any[
 
   while (true) {
     const params = new URLSearchParams({
-      startDate,
+      startDate: startDateUTC(startDate),
       limit: "1000",
       descending: "false",
     })
@@ -159,7 +173,7 @@ Deno.serve(async (req) => {
       const lines = ["numero_recibo,fecha,monto,usuario"]
       for (const p of all) {
         const num    = p.purchaseNumber ?? ""
-        const fecha  = (p.timestamp || "").slice(0, 10)
+        const fecha  = p.timestamp ? toMexicoDate(p.timestamp) : ""
         const monto  = Math.round((p.amount ?? 0) / 100)
         const user   = (p.userDisplayName || "").replace(/,/g, " ")
         lines.push(`${num},${fecha},${monto},${user}`)
@@ -179,12 +193,13 @@ Deno.serve(async (req) => {
       const all = await fetchAllPurchases(token, startDate)
       const esCompartida = sucursalKey === "valle_polanco"
       const rows = all.map((p: any) => {
+        const fechaMx = p.timestamp ? toMexicoDate(p.timestamp) : ""
         const suc = esCompartida
-          ? asignarSucursalCompartida(p.userDisplayName, (p.timestamp || "").slice(0, 10))
+          ? asignarSucursalCompartida(p.userDisplayName, fechaMx)
           : config
         return {
           ticket_num:      p.purchaseNumber ?? null,
-          fecha:           (p.timestamp || "").slice(0, 10),
+          fecha:           fechaMx,
           sucursal:        suc.nombre,
           servicios:       (p.products || []).map((pr: any) => pr.name).filter(Boolean),
           metodo_pago:     mapPago(p.payments || []),
@@ -202,7 +217,7 @@ Deno.serve(async (req) => {
       // Totales por mes y usuario: { "2026-01": { "SUCURSAL DEL VALLE": 450000, ... } }
       const porMes: Record<string, Record<string, number>> = {}
       for (const p of all) {
-        const mes = (p.timestamp || "").slice(0, 7)   // "2026-01"
+        const mes = p.timestamp ? toMexicoDate(p.timestamp).slice(0, 7) : ""  // "2026-01"
         const user = p.userDisplayName || "(sin nombre)"
         const monto = Math.round((p.amount ?? 0) / 100)
         if (!porMes[mes]) porMes[mes] = {}
@@ -232,8 +247,9 @@ Deno.serve(async (req) => {
     // Para cuenta compartida (valle_polanco), la sucursal se determina por userDisplayName
     const esCompartida = sucursalKey === "valle_polanco"
     const rows = purchases.map((p: any) => {
+      const fechaMx = p.timestamp ? toMexicoDate(p.timestamp) : ""
       const suc = esCompartida
-        ? asignarSucursalCompartida(p.userDisplayName, (p.timestamp || "").slice(0, 10))
+        ? asignarSucursalCompartida(p.userDisplayName, fechaMx)
         : config
       return {
         sucursal_id:     suc.id,
@@ -243,7 +259,7 @@ Deno.serve(async (req) => {
         metodo_pago:     mapPago(p.payments || []),
         descuento:       0,
         tipo_clienta:    "Recompra",
-        fecha:           (p.timestamp || "").slice(0, 10),
+        fecha:           fechaMx,
         fuente:          "zettle",
         zettle_uuid:     p.purchaseUUID,
       }

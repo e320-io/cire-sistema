@@ -179,7 +179,7 @@ const CATALOGO=[
   {categoria:"Corporal",items:[{nombre:"Moldeo 1ª sesión",precio:699,msi:[]},{nombre:"Moldeo Subsecuente",precio:999,msi:[]},{nombre:"6 ses Moldeo",precio:3999,msi:[3]},{nombre:"12 ses Moldeo + Facial",precio:6999,msi:[3]},{nombre:"Anticelulítico 1ª ses",precio:699,msi:[]},{nombre:"6 ses Anticelulítico",precio:3999,msi:[3]},{nombre:"Moldeo Brasileño 1ª ses",precio:699,msi:[]},{nombre:"6 ses Moldeo Brasileño",precio:3999,msi:[3]},{nombre:"Aparatología 1 zona",precio:649,msi:[]}]},
   {categoria:"Post Operatorio",items:[{nombre:"Post Op 1ª ses",precio:999,msi:[]},{nombre:"10 ses Post Op",precio:9999,msi:[3]},{nombre:"15 ses Post Op",precio:13999,msi:[3]},{nombre:"20 ses Post Op + Facial",precio:17999,msi:[3]}]},
 ];
-const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Baby Clean",duracion:60,color:"#E67C73"},{id:"facial_full",label:"FullFace",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"HIFU 4D",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"}];
+const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Baby Clean",duracion:60,color:"#E67C73"},{id:"facial_full",label:"FullFace",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"HIFU 4D",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"},{id:"valoracion",label:"Valoración",duracion:30,color:"#EAB308"}];
 // Tiempos reales por zona según tabla de tiempos (minutos)
 const TIEMPOS_ZONA={
   laser:{
@@ -228,7 +228,7 @@ const colorCita=(c)=>{
   if(c.sesion_numero===1)return"#D50000";
   return"#039BE5";
 };
-const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];return TIPOS_SVC[0];};
+const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];if(l.includes("valor"))return TIPOS_SVC[7];return TIPOS_SVC[0];};
 const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);const f=hh*60+mm+dur;return`${String(Math.floor(f/60)).padStart(2,"0")}:${String(f%60).padStart(2,"0")}`;};
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
 const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","Corporales","Mantenimiento","Personalizado","Cera"];
@@ -1152,39 +1152,318 @@ function AjustesTerminales({session}){
 // ══════════════════════════════════════════════════════════════════════════════
 // CONFIRMACIONES MAÑANA — resumen de citas con liga WhatsApp
 // ══════════════════════════════════════════════════════════════════════════════
+const horaAmPm=(h24)=>{if(!h24)return"";const[h,m]=h24.split(":").map(Number);const ampm=h>=12?"pm":"am";const h12=h%12||12;return`${h12}:${String(m||0).padStart(2,"0")} ${ampm}`;};
+
+const COAPA_UBICACION=`Nuestra ubicación:
+
+ 𝙲𝙸𝚁𝙴 𝙲𝙾𝙰𝙿𝙰
+🚨UBICACIÓN🚨
+Plaza Girasoles, local 19 (primer piso, arriba de Exitus Credit) Calz. del Hueso 453, Coapa, Girasoles III, Coyoacán, 04920 Ciudad de México, CDMX
+🚙🚕🚗🚲🛴🚘
+📱 5630399230
+https://maps.app.goo.gl/RY7pGDD35kLdKXyr6`;
+
+const MSGS_COAPA={
+  laser:(hora)=>`𝘏𝘰𝘭𝘢! 👋🏻 𝘉𝘶𝘦𝘯 𝘥í𝘢 ❣️
+
+Te contacto de 𝙲𝙸𝚁𝙴 𝙲𝙾𝙰𝙿𝙰
+
+📆 Confirmando tu cita depilación con láser el día de mañana a las ${hora}
+
+𝘙𝘦𝘤𝘶𝘦𝘳𝘥𝘢: 🗒️
+✅𝘋𝘦𝘣𝘦𝘴 𝘷𝘦𝘯𝘪𝘳 𝘤𝘰𝘯 𝘭𝘢 𝘻𝘰𝘯𝘢(𝘴) 𝘤𝘰𝘮𝘱𝘭𝘦𝘵𝘢𝘮𝘦𝘯𝘵𝘦 𝘳𝘢𝘴𝘶𝘳𝘢𝘥𝘢 𝘺 𝘭𝘪𝘮𝘱𝘪𝘢.
+✅𝘚𝘪 𝘦𝘴𝘵á𝘴 𝘵𝘰𝘮𝘢𝘯𝘥𝘰 𝘢𝘭𝘨ú𝘯 𝘮𝘦𝘥𝘪𝘤𝘢𝘮𝘦𝘯𝘵𝘰, 𝘥𝘦𝘣𝘦𝘳á𝘴 𝘪𝘯𝘧𝘰𝘳𝘮𝘢𝘳 𝘢 𝘯𝘶𝘦𝘴𝘵𝘳𝘢 𝘤𝘰𝘴𝘮𝘦𝘵ó𝘭𝘰𝘨𝘢 𝘰 𝘱𝘰𝘳 𝘦𝘴𝘵𝘦 𝘮𝘦𝘥𝘪𝘰.
+👉Ibuprofeno y láser🚫🙅🏻‍♀️
+👉 𝘈𝘯𝘵𝘪𝘣𝘪ó𝘵𝘪𝘤𝘰𝘴 𝘺 𝘭á𝘴𝘦𝘳🚫🙅🏻‍♀️
+👉 𝘈𝘯𝘵𝘪𝘨𝘳𝘪𝘱𝘢𝘭𝘦𝘴 𝘺 𝘭á𝘴𝘦𝘳 🚫🙅🏻‍♀️
+👉 𝘗𝘪𝘦𝘭 𝘣𝘳𝘰𝘯𝘤𝘦𝘢𝘥𝘢 𝘺 𝘭á𝘴𝘦𝘳 🚫🙅🏻‍♀️
+✅𝘚𝘪 𝘭𝘰 𝘥𝘦𝘴𝘦𝘢𝘴 𝘱𝘶𝘦𝘥𝘦𝘴 𝘵𝘳𝘢𝘦𝘳 𝘶𝘯𝘢 𝘤𝘰𝘣𝘪𝘫𝘪𝘵𝘢/𝘵𝘰𝘢𝘭𝘭𝘢 𝘥𝘦 𝘣𝘢ñ𝘰 𝘤𝘰𝘮𝘱𝘭𝘦𝘵𝘰 𝘱𝘢𝘳𝘢 𝘤𝘶𝘣𝘳𝘪𝘳𝘵𝘦
+✅𝘚𝘪 𝘯𝘰 𝘢𝘴𝘪𝘴𝘵𝘦𝘴 𝘢 𝘵𝘶 𝘴𝘦𝘴𝘪ó𝘯, 𝘴𝘦 𝘥𝘢𝘳á 𝘱𝘰𝘳 𝘵𝘰𝘮𝘢𝘥𝘢 𝘺 𝘱𝘦𝘳𝘥𝘦𝘳á𝘴 𝘭𝘢 𝘮𝘪𝘴𝘮𝘢, 𝘪𝘨𝘶𝘢𝘭𝘮𝘦𝘯𝘵𝘦 𝘴𝘪 𝘯𝘰 𝘤𝘰𝘯𝘧𝘪𝘳𝘮𝘢𝘴.
+✅𝘊𝘶𝘦𝘯𝘵𝘢𝘴 𝘤𝘰𝘯 15 𝘮𝘪𝘯𝘶𝘵𝘰𝘴 𝘥𝘦 𝘵𝘰𝘭𝘦𝘳𝘢𝘯𝘤𝘪𝘢 (5 𝘮𝘪𝘯𝘶𝘵𝘰𝘴 𝘦𝘯 𝘥í𝘢 𝘴á𝘣𝘢𝘥𝘰) 𝘱𝘢𝘳𝘢 𝘭𝘭𝘦𝘨𝘢𝘳 𝘢 𝘵𝘶 𝘤𝘪𝘵𝘢, 𝘱𝘢𝘴𝘢𝘥𝘰 𝘦𝘴𝘦 𝘵𝘪𝘦𝘮𝘱𝘰, 𝘭𝘢 𝘮𝘪𝘴𝘮𝘢 𝘴𝘦 𝘥𝘢𝘳á 𝘱𝘰𝘳 𝘵𝘰𝘮𝘢𝘥𝘢.
+✅𝘊𝘰𝘯𝘵𝘢𝘮𝘰𝘴 𝘤𝘰𝘯 𝘵𝘰𝘥𝘢𝘴 𝘭𝘢𝘴 𝘮𝘦𝘥𝘪𝘥𝘢𝘴 𝘴𝘢𝘯𝘪𝘵𝘢𝘳𝘪𝘢𝘴 𝘺 𝘥𝘦 𝘴𝘦𝘨𝘶𝘳𝘪𝘥𝘢𝘥 𝘱𝘢𝘳𝘢 𝘵𝘶 𝘵𝘳𝘢𝘯𝘲𝘶𝘪𝘭𝘪𝘥𝘢𝘥.
+
+Agradecemos tu 𝐂𝐎𝐍𝐅𝐈𝐑𝐌𝐀𝐂𝐈Ó𝐍 o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 12 hrs de anticipación por favor.
+⚠️ AVISO: Trata de cancelar/ re agendar con responsabilidad, ya qué no podemos garantizar espacios disponibles de inmediato. Gracias!! ⚠️
+Si vienes a tu cita con retraso y/o te das cuenta que no podrás llegar, envíanos mensaje por favor 🙏
+${COAPA_UBICACION}`,
+  corporal:(hora)=>`Hola! 👋🏻 Buen día❣️
+
+Te contacto de *CIRE COAPA*
+
+📆 Confirmando tu cita el día de mañana a las ${hora}
+
+Recuerda: 🗒️
+
+•⁠  ⁠Si estás tomando algún medicamento, deberás informar a nuestra cosmetóloga o por este medio.
+•⁠  ⁠No consumir bebidas alcohólicas 12 horas antes de tu sesión.
+•⁠  ⁠No venir en periodo menstrual (en caso de que se vaya a tratar abdomen o espalda baja)
+•⁠  ⁠No consumir alimentos al menos 3 horas antes de tu cita. (Moldeo corporal)
+•⁠  ⁠Si no asistes a tu sesión, se dará por tomada y perderás la misma, igualmente si no confirmas
+•⁠  ⁠Cuentas con 15 minutos de tolerancia para llegar a tu cita (5 minutos en día sábado), pasado ese tiempo, la misma se dará por tomada.
+•⁠  ⁠Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradecemos tu CONFIRMACIÓN o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 12 hrs de anticipación por favor.
+⚠️_AVISO: Trata de cancelar/re agendar con responsabilidad, ya qué no podemos garantizar espacios disponibles de inmediato. Gracias!!_⚠️
+Si vienes a tu cita con retraso y/o te das cuenta que no podrás llegar, envíanos mensaje por favor 🙏
+
+${COAPA_UBICACION}`,
+  valoracion:(hora)=>`Hola! 👋🏻 Buen día ❣️
+
+Te contacto de *CIRE COAPA*
+
+📆 Confirmando tu cita de valoración del día de mañana a las ${hora}
+
+*Recuerda:* 🗒️
+
+- Debes venir con la zona(s) *SIN RASURAR*
+- Cuentas con 15 minutos de tolerancia para llegar a tu cita (*5 minutos en día sábado)*, pasado ese tiempo, la misma se dará por tomada.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradezco tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 12 hrs de anticipación por favor.
+
+*Si vienes a tu cita con retraso y/o te das cuenta que no podrás llegar, envíanos mensaje por favor 🙏*
+
+${COAPA_UBICACION}`,
+  cera:(hora)=>`Hola! 👋🏻 Buen día ❣️
+
+Te contacto de *CIRE COAPA*
+
+📆 Confirmando tu cita depilación con cera el día de mañana a las ${hora}
+
+*Recuerda:* 🗒️
+
+- El vello debe medir al menos un centímetro para que se pueda retirar.
+- No venir en periodo menstrual sin en caso de bikini.
+- *Si no asistes a tu sesión, se dará por tomada y perderás la misma, igualmente si no confirmas*.
+- Cuentas con 10 minutos de tolerancia para llegar a tu cita, pasado ese tiempo, la misma se dará por tomada.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradecemos tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 12 hrs de anticipación por favor.
+
+*Si vienes a tu cita con retraso y/o te das cuenta que no podrás llegar, envíanos mensaje por favor 🙏*
+⚠️_*AVISO: Trata de cancelar/re agendar con responsabilidad, ya qué no podemos garantizar espacios disponibles de inmediato. Gracias!!*_⚠️
+
+${COAPA_UBICACION}`,
+  hifu:(hora)=>`Hola! 👋🏻 Buen día❣️
+
+Te contacto de *CIRE COAPA*
+
+📆 Confirmando tu cita de HIFU 4D el día de mañana a las ${hora}
+
+*Recuerda:* 🗒️
+
+- Debes venir con la zona(s) limpia y sin maquillaje
+- Si estás tomando algún medicamento, deberás informar a nuestra cosmetóloga o por este medio.
+- No consumir bebidas alcohólicas 12 horas antes de tu sesión.
+- No venir en periodo menstrual (en caso de que se vaya a tratar abdomen o espalda baja)
+- *Si no asistes a tu sesión, se dará por tomada y perderás la misma, igualmente si no confirmas*
+- Cuentas con 15 minutos de tolerancia para llegar a tu cita *(5 minutos en día sábado)*, pasado ese tiempo, la misma se dará por tomada.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradecemos tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 12 hrs de anticipación por favor.
+
+*Si vienes a tu cita con retraso y/o te das cuenta que no podrás llegar, envíanos mensaje por favor 🙏*
+
+${COAPA_UBICACION}`,
+};
+
+const COAPA_TIPOS=[{id:"laser",label:"Láser"},{id:"corporal",label:"Moldeo"},{id:"valoracion",label:"Valoración"},{id:"cera",label:"Cera"},{id:"hifu",label:"HIFU"}];
+
+const MSG_COAPA_LASER_LUNES=(hora)=>`Hola! 👋🏻 Buenos días ❣️
+
+Te contacto de CIRE COAPA 🪷
+
+📆 Confirmando tu cita depilación con láser el día Lunes a las ${hora}
+
+Recuerda: 🗒️
+
+- Debes venir con la zona(s) completamente rasurada y limpia.
+- *Si estás tomando algún medicamento, deberás informar a nuestra cosmetóloga o por este medio.*
+👉 *Antibióticos y láser*🚫🙅🏻‍♀️
+👉 *Antigripales y láser* 🚫🙅🏻‍♀️
+👉 *Piel bronceada y láser* 🚫🙅🏻‍♀️
+- No consumir bebidas alcohólicas 12 horas antes de tu sesión.
+- 🩸 No podrás venir en tu 𝗽𝗲𝗿𝗶𝗼𝗱𝗼 𝗺𝗲𝗻𝘀𝘁𝗿𝘂𝗮𝗹 si la zona a depilar es bikini 👙
+Si es cualquier otra 𝘇𝗼𝗻𝗮 𝗮 𝗱𝗲𝗽𝗶𝗹𝗮𝗿, podrás asistir a tu sesión, solo te comentamos que podrías estar más sensible.
+- *Si lo deseas puedes traer una cobijita/toalla de baño completo para cubrirte.*
+- *Si no asistes a tu sesión, se dará por tomada y perderás la misma, igualmente si no confirmas*.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradezco tu CONFIRMACIÓN o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con 48hrs de anticipación por favor. (Máximo antes de las 8pm de mañana domingo)
+
+⚠️ _*AVISO: Trata de cancelar/re agendar con responsabilidad, ya qué no podemos garantizar espacios disponibles de inmediato. Gracias!!*_ ⚠️
+
+${COAPA_UBICACION}`;
+
+const MSG_COAPA_PRECONF_SABADO=(fechaTexto)=>`Hola! 👋🏻 Buen día ❣️ Te contacto de *CIRE COAPA*
+Este es un mensaje de pre-confirmación de tu cita del próximo sábado ${fechaTexto} y nos interesa saber si contaremos con tu asistencia o requieres hacer algún cambio y/o cancelación.
+Agradecemos tu respuesta de confirmación y en caso de requerir cancelar, lo puedes hacer *máximo a las 20 horas del día jueves anterior a tu cita*.
+Si tienes alguna duda o comentario, quedamos atentas!
+Te recordamos nuestras indicaciones generales para el día de tu cita:
+*Recuerda•* 🗒️
+- Debes venir con la zona(s) completamente rasurada y limpia.
+- *Si estás tomando algún medicamento, deberás informar a nuestra cosmetóloga o por este medio.*
+👉 *Antibióticos y láser*🙅‍♀️
+👉 *Antigripales y láser* 🙅‍♀️
+👉 *Piel bronceada y láser* 🙅‍♀️
+- No consumir bebidas alcohólicas 12 horas antes de tu sesión.
+- No venir en periodo menstrual sin importar la zona a tratar.
+- *Si no asistes a tu sesión y no la cancelas, se dará por tomada y perderás la misma, igualmente si no confirmas*.
+- Cuentas con 15 minutos de tolerancia *(5 minutos en día sábado)* para llegar a tu cita, pasado ese tiempo, la misma se dará por tomada.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad
+
+${COAPA_UBICACION}`;
+
+const fechaDiaMes=(fecha)=>{if(!fecha)return"";return new Date(fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"long"});};
+
+const proximoLunes=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");const day=d.getDay();const daysAhead=day===1?7:((1-day+7)%7);d.setDate(d.getDate()+daysAhead);return d.toISOString().slice(0,10);};
+
+const proximoSabadoPreconf=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");const day=d.getDay();let daysAhead=(6-day+7)%7;if(daysAhead<6)daysAhead+=7;d.setDate(d.getDate()+daysAhead);return d.toISOString().slice(0,10);};
+
+const proximoSabado=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");const day=d.getDay();const daysAhead=(6-day+7)%7||7;d.setDate(d.getDate()+daysAhead);return d.toISOString().slice(0,10);};
+
+const SUCURSAL_TEMPLATES={
+  Valle:{
+    ubicacion:`CIRE DEL VALLE — UBICACIÓN:\nCda. Dr. José Ignacio Bartolache 1038-INTERIOR 1\nCol del Valle Centro, Benito Juárez, 03100 CDMX\nhttps://share.google/dPMmKcOjyYvR87Dc2`,
+  },
+  Oriente:{
+    ubicacion:`CIRE ORIENTE — UBICACIÓN:\nRío Tacámbaro 56-Interior 2\nPaseos de Churubusco, Iztapalapa, 09030 CDMX\nhttps://maps.app.goo.gl/ewBvmbMu11qyL4427`,
+  },
+  Polanco:{
+    ubicacion:`CIRE POLANCO — UBICACIÓN:\nGutenberg 194, Anzures\nMiguel Hidalgo, 11590 CDMX\nhttps://maps.app.goo.gl/xf3L15sVs1wp6osd8`,
+  },
+  Metepec:{
+    ubicacion:`CIRE METEPEC — UBICACIÓN:\nC. Adolfo López Mateos 1100-Local 10-A\nLa Asunción, San Salvador Tizatlalli, Mex. 52172\nhttps://share.google/AkX1sqfYoRLN9D0wN`,
+  },
+};
+
+const msgSucLaserManana=(suc,hora)=>`Hola! 👋 Buenas tardes!
+
+Te contacto de *CIRE DEPILACIÓN*
+
+📆 Confirmando tu cita depilación con *Láser Diodo* el día de *mañana* a las ${hora}
+
+*Recuerda:* 🗒️
+
+- Debes venir con la zona(s) completamente *rasurada y limpia*.
+- Si estás tomando algún *medicamento*, deberás informar a nuestra cosmetóloga o por este medio.
+- Sí puedes asistir en tu *periodo menstrual* aunque la zona sea bikini 👙, solo estarías más sensible. En caso de bikini, venir aseada y con tampón.
+- Si no asistes a tu sesión, se tomará como *asistida y perderás la misma*.
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradezco tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos *12 hrs de anticipación* (antes de las 8pm del día anterior).
+
+${suc.ubicacion}`;
+
+const msgSucLaserSabado=(suc,hora)=>`Hola! 👋 Linda tarde!
+
+Te contacto de *CIRE DEPILACIÓN*
+
+📆 Confirmando tu cita depilación con *Láser Diodo* el día *SÁBADO* a las ${hora}
+
+*Recuerda:* 🗒️
+
+- Debes venir con la zona(s) completamente *rasurada y limpia*.
+- Si estás tomando algún *medicamento*, deberás informar a nuestra cosmetóloga o por este medio.
+- Sí puedes asistir en tu *periodo menstrual* aunque la zona sea bikini 👙, solo estarías más sensible. En caso de bikini, venir aseada y con tampón.
+- Si no asistes a tu sesión, se tomará como *asistida y perderás la misma*.
+
+Agradezco tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos *12 hrs de anticipación* (antes de las 8pm del día anterior).
+
+${suc.ubicacion}`;
+
+const msgSucCorporalCera=(suc,hora)=>`Hola! 👋 Lindo día!
+
+Te contacto de *CIRE*
+
+📆 Confirmando tu cita el día de *mañana* a las ${hora}
+
+*Recuerda:* 🗒️
+
+- Si estás tomando algún *medicamento*, deberás informar a nuestra cosmetóloga o por este medio.
+- No consumir bebidas *alcohólicas* 12 horas antes de tu sesión.
+- No venir en *periodo menstrual* (en caso de que se vaya a tratar abdomen o espalda baja).
+- Si es cera: el vello debe medir al menos *un centímetro* para que se pueda retirar.
+- Si no asistes a tu sesión, se dará por *tomada y perderás la misma*, igualmente si no confirmas.
+- Cuentas con *15 minutos* de tolerancia (5 minutos en día sábado).
+- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.
+
+Agradezco tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos *12 hrs de anticipación* (antes de las 8pm del día anterior).
+
+${suc.ubicacion}`;
+
 function ConfirmacionesManana({session}){
   const{light,T}=useT();
+  const esCoapa=session.nombre==="Coapa";
   const[citas,setCitas]=useState([]);const[loading,setLoading]=useState(true);
+  const[modo,setModo]=useState("manana");
   const manana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);};
+  const fechaObjetivo=modo==="lunes_laser"?proximoLunes():modo==="sabado_prox"?proximoSabadoPreconf():modo==="sabado_laser"?proximoSabado():manana();
   const cargar=async()=>{
     setLoading(true);
-    const fecha=manana();
-    const{data:citasData}=await supabase.from("citas").select("*").eq("sucursal_id",session.id).eq("fecha",fecha).neq("estado","cancelada").order("hora_inicio");
+    let query=supabase.from("citas").select("*").eq("sucursal_id",session.id).eq("fecha",fechaObjetivo).neq("estado","cancelada").order("hora_inicio");
+    if(modo==="lunes_laser"||modo==="sabado_laser")query=query.eq("tipo_servicio","laser");
+    const{data:citasData}=await query;
     const ids=[...new Set((citasData||[]).map(c=>c.clienta_id).filter(Boolean))];
     let cliMap={};
     if(ids.length>0){const{data:cliData}=await supabase.from("clientas").select("id,telefono").in("id",ids);cliMap=Object.fromEntries((cliData||[]).map(c=>[c.id,c]));}
     setCitas((citasData||[]).map(c=>({...c,telefono:cliMap[c.clienta_id]?.telefono||null})));
     setLoading(false);
   };
-  useEffect(()=>{cargar();},[session.id]);
+  useEffect(()=>{cargar();},[session.id,modo]);
   const formatWA=(tel)=>{if(!tel)return null;const clean=tel.replace(/\D/g,"");if(clean.length===10)return"521"+clean;if(clean.startsWith("521")&&clean.length===13)return clean;if(clean.startsWith("52")&&clean.length===12)return"521"+clean.slice(2);return clean;};
-  const msgWA=(c)=>{return encodeURIComponent(`Hola! 👋🏻 Buenas tardes ❣️\n\nTe contacto de 𝗖𝗜𝗥𝗘 𝗗𝗘𝗣𝗜𝗟𝗔𝗖𝗜𝗢́𝗡\n\n📆 Confirmando tu cita de ${c.servicio} el día de mañana a las ${c.hora_inicio}\n\nRecuerda: 🗒️\n\n- Debes venir con la zona(s) completamente 𝗿𝗮𝘀𝘂𝗿𝗮𝗱𝗮 𝘆 𝗹𝗶𝗺𝗽𝗶𝗮.\n- Si estás tomando algún 𝗺𝗲𝗱𝗶𝗰𝗮𝗺𝗲𝗻𝘁𝗼, deberás informar a nuestra cosmetóloga o por este medio.\n- 🩸 Sí puedes asistir en tu 𝗽𝗲𝗿𝗶𝗼𝗱𝗼 𝗺𝗲𝗻𝘀𝘁𝗿𝘂𝗮𝗹 aunque la zona a depilar es bikini 👙 o si es cualquier otra 𝘇𝗼𝗻𝗮 𝗮 𝗱𝗲𝗽𝗶𝗹𝗮𝗿, solo te comentamos que podrías estar más sensible, en caso de bikini, venir aseada y con tampón.\n- Si no asistes a tu sesión, se tomará como 𝗮𝘀𝗶𝘀𝘁𝗶𝗱𝗮 𝘆 𝗽𝗲𝗿𝗱𝗲𝗿𝗮́𝘀 𝗹𝗮 𝗺𝗶𝘀𝗺𝗮.\n- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.\n\nAgradezco tu 𝗖𝗢𝗡𝗙𝗜𝗥𝗠𝗔𝗖𝗜𝗢́𝗡 o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos 12 hrs de anticipación (antes de las 8pm de un día antes).\n\nTe recordamos que las 𝗰𝗮𝗻𝗰𝗲𝗹𝗮𝗰𝗶𝗼𝗻𝗲𝘀 son con 𝟭𝟮 𝗵𝗼𝗿𝗮𝘀 𝗱𝗲 𝗮𝗻𝘁𝗶𝗰𝗶𝗽𝗮𝗰𝗶𝗼́𝗻 (horario para cancelar Máximo 8 pm del día anterior)\n\nTienes 𝟭𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia en caso de Cuerpos completos, combos, y/o zonas amplias.\nY 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia en caso de zonas chicas como: rostro, axilas, bigote, etc.\nTienes 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 de tolerancia si tu cita es a las 7:00 o 7:30 pm.\n\nToma tus precauciones (tráfico, parquímetro, etc)\n\nCita 𝗰𝗼𝗻𝗳𝗶𝗿𝗺𝗮𝗱𝗮 y 𝗻𝗼 𝗮𝘀𝗶𝘀𝘁𝗶𝗱𝗮 se toma como servicio efectuado\n\nSolo se puede 𝗿𝗲𝗮𝗴𝗲𝗻𝗱𝗮𝗿 𝗨𝗡𝗔 𝗩𝗘𝗭 (si no estás segura de tu cita, puedes dejar abierta tu cita)\n\n𝗦𝗮́𝗯𝗮𝗱𝗼𝘀 el tiempo de tolerancia es de 𝟱 𝗺𝗶𝗻𝘂𝘁𝗼𝘀 y tiempo límite para reagendar o cancelar es 𝟰𝟴𝗵𝗿𝘀 𝗮𝗻𝘁𝗲𝘀 de tu cita.`);};
-  const fechaManana=manana();
-  const diaLabel=new Date(fechaManana+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
+  const msgWA=(c)=>encodeURIComponent(`Hola! 👋 Buenas tardes 💙\n\nTe contacto de *CIRE DEPILACIÓN*\n\n📆 Confirmando tu cita de ${c.servicio} el día de mañana a las ${c.hora_inicio}\n\nRecuerda: 📋\n\n- Debes venir con la zona(s) completamente *rasurada y limpia*.\n- Si estás tomando algún *medicamento*, deberás informar a nuestra cosmetóloga o por este medio.\n- 🔴 Sí puedes asistir en tu *periodo menstrual* aunque la zona a depilar es bikini 👙 o si es cualquier otra *zona a depilar*, solo te comentamos que podrías estar más sensible, en caso de bikini, venir aseada y con tampón.\n- Si no asistes a tu sesión, se tomará como *asistida y perderás la misma*.\n- Contamos con todas las medidas sanitarias y de seguridad para tu tranquilidad.\n\nAgradezco tu *CONFIRMACIÓN* o si no puedes asistir, indícanos el día y la hora en la que te gustaría reagendar con al menos 12 hrs de anticipación (antes de las 8pm de un día antes).\n\nTe recordamos que las *cancelaciones* son con *12 horas de anticipación* (horario para cancelar Máximo 8 pm del día anterior)\n\nTienes *15 minutos* de tolerancia en caso de Cuerpos completos, combos, y/o zonas amplias.\nY *5 minutos* de tolerancia en caso de zonas chicas como: rostro, axilas, bigote, etc.\nTienes *5 minutos* de tolerancia si tu cita es a las 7:00 o 7:30 pm.\n\nToma tus precauciones (tráfico, parquímetro, etc)\n\nCita *confirmada y no asistida* se toma como servicio efectuado\n\nSolo se puede *reagendar UNA VEZ* (si no estás segura de tu cita, puedes dejar abierta tu cita)\n\n*Sábados* el tiempo de tolerancia es de *5 minutos* y tiempo límite para reagendar o cancelar es *48hrs antes* de tu cita.`);
+  const tipoCoapa=(c)=>{const t=c.tipo_servicio;if(COAPA_TIPOS.some(x=>x.id===t))return t;return detectTipo(c.servicio).id;};
+  const msgCoapa=(c)=>{const t=tipoCoapa(c);const fn=MSGS_COAPA[t]||MSGS_COAPA.laser;return encodeURIComponent(fn(horaAmPm(c.hora_inicio)));};
+  const genMsg=(c)=>{
+    if(esCoapa){
+      if(modo==="lunes_laser")return encodeURIComponent(MSG_COAPA_LASER_LUNES(horaAmPm(c.hora_inicio)));
+      if(modo==="sabado_prox")return encodeURIComponent(MSG_COAPA_PRECONF_SABADO(fechaDiaMes(fechaObjetivo)));
+      return msgCoapa(c);
+    }
+    const sd=SUCURSAL_TEMPLATES[session.nombre];
+    if(sd){
+      const hora=horaAmPm(c.hora_inicio);
+      if(modo==="sabado_laser")return encodeURIComponent(msgSucLaserSabado(sd,hora));
+      if(c.tipo_servicio==="laser")return encodeURIComponent(msgSucLaserManana(sd,hora));
+      return encodeURIComponent(msgSucCorporalCera(sd,hora));
+    }
+    return msgWA(c);
+  };
+  const cambiarTipo=async(citaId,nuevoTipo)=>{
+    setCitas(prev=>prev.map(c=>c.id===citaId?{...c,tipo_servicio:nuevoTipo}:c));
+    const{error}=await supabase.from("citas").update({tipo_servicio:nuevoTipo}).eq("id",citaId);
+    if(error)console.error("Error actualizando tipo_servicio:",error);
+  };
+  const diaLabel=new Date(fechaObjetivo+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
+  const headerLabel=modo==="manana"?"CONFIRMACIONES":modo==="lunes_laser"?"CONFIRMACIONES · LUNES LÁSER":modo==="sabado_prox"?"PRE-CONFIRMACIÓN · SÁBADO":"CONFIRMACIONES · LÁSER SÁBADO";
+  const emptyMsg=modo==="lunes_laser"?"Sin citas de láser para el próximo lunes":modo==="sabado_prox"?"Sin citas para el sábado próximo":modo==="sabado_laser"?"Sin citas de láser para el próximo sábado":"Sin citas para mañana";
+  const esSucConTemplates=esCoapa||!!SUCURSAL_TEMPLATES[session.nombre];
+  const MODOS=esCoapa?[{id:"manana",label:"Mañana"},{id:"lunes_laser",label:"Lunes Láser"},{id:"sabado_prox",label:"Sábado próx."}]:SUCURSAL_TEMPLATES[session.nombre]?[{id:"manana",label:"Mañana"},{id:"sabado_laser",label:"Láser Sábado"}]:[{id:"manana",label:"Mañana"}];
+  const mostrarPills=esCoapa&&modo==="manana";
   return(
     <div style={{flex:1,overflowY:"auto",padding:"24px"}}>
       <div style={{maxWidth:"700px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-          <div><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>CONFIRMACIONES</div><div style={{fontSize:"15px",fontWeight:600,textTransform:"capitalize"}}>{diaLabel}</div></div>
+          <div><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>{headerLabel}</div><div style={{fontSize:"15px",fontWeight:600,textTransform:"capitalize"}}>{diaLabel}</div></div>
           <button className="btn-ghost" onClick={cargar} style={{fontSize:"11px"}}>↻ Actualizar</button>
         </div>
+        {esSucConTemplates&&(
+          <div style={{display:"flex",gap:"6px",marginBottom:"16px",flexWrap:"wrap"}}>
+            {MODOS.map(m=>{const activo=modo===m.id;return(
+              <button key={m.id} onClick={()=>setModo(m.id)} style={{padding:"8px 14px",borderRadius:"10px",fontSize:"12px",fontWeight:600,cursor:"pointer",border:"1px solid "+(activo?"#2721E8":"rgba(127,127,127,0.25)"),background:activo?"rgba(39,33,232,0.12)":"transparent",color:activo?"#2721E8":T.muted,transition:"all 0.15s"}}>{m.label}</button>
+            );})}
+          </div>
+        )}
         {loading&&<div style={{textAlign:"center",padding:"40px",color:T.sub}}>Cargando...</div>}
-        {!loading&&citas.length===0&&<div style={{textAlign:"center",padding:"40px",color:T.dim,fontSize:"13px"}}>Sin citas para mañana</div>}
+        {!loading&&citas.length===0&&<div style={{textAlign:"center",padding:"40px",color:T.dim,fontSize:"13px"}}>{emptyMsg}</div>}
         <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
           {citas.map(c=>{
             const waPhone=formatWA(c.telefono);
-            const waLink=waPhone?`https://wa.me/${waPhone}?text=${msgWA(c)}`:null;
+            const msg=genMsg(c);
+            const waLink=waPhone?`https://web.whatsapp.com/send?phone=${waPhone}&text=${msg}`:null;
             const esReagendada=c.notas?.startsWith("Reagendada");
+            const tipoSel=mostrarPills?tipoCoapa(c):null;
             return(
               <div key={c.id} className="glass" style={{padding:"16px 20px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px"}}>
@@ -1202,6 +1481,24 @@ function ConfirmacionesManana({session}){
                     <div style={{fontSize:"11px",color:T.faint,flexShrink:0}}>Sin teléfono</div>
                   )}
                 </div>
+                {mostrarPills&&(
+                  <div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid rgba(127,127,127,0.15)"}}>
+                    <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.sub,marginBottom:"8px"}}>TIPO DE SERVICIO</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                      {COAPA_TIPOS.map(t=>{
+                        const activo=tipoSel===t.id;
+                        const color=TIPOS_SVC.find(x=>x.id===t.id)?.color||"#2721E8";
+                        return(
+                          <button
+                            key={t.id}
+                            onClick={()=>cambiarTipo(c.id,t.id)}
+                            style={{padding:"5px 12px",borderRadius:"14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"1px solid "+(activo?color:"rgba(127,127,127,0.25)"),background:activo?color+"22":"transparent",color:activo?color:T.muted,transition:"all 0.15s"}}
+                          >{t.label}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -3036,6 +3333,12 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
   const[fRecurrente,setFRecurrente]=useState(false);
   const[fPeriodo,setFPeriodo]=useState(hoyYM);
+  const[historialVentas,setHistorialVentas]=useState([]);
+  const[historialCompleto,setHistorialCompleto]=useState([]);
+  const[loadingHistorial,setLoadingHistorial]=useState(false);
+  const[loadingHist,setLoadingHist]=useState(false);
+  const[tooltipBar,setTooltipBar]=useState(null);
+  const[rangoGrafico,setRangoGrafico]=useState("12m");
 
   const ZETTLE_CUENTAS_FIN=[
     {key:"metepec",label:"Metepec"},
@@ -3058,20 +3361,79 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     return m;
   };
 
+  // Llama Zettle raw (sin escribir a Supabase) y agrupa por sucursal
+  const fetchZettleRaw=async(desde,hasta)=>{
+    const todas=[];
+    for(const cuenta of ZETTLE_CUENTAS_FIN){
+      try{
+        const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${desde}&raw=true`;
+        const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
+        const json=await res.json();
+        if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
+      }catch{}
+    }
+    return todas;
+  };
+
+  // Ventas de mes pasado: Zettle raw (no escribe a BD, evita duplicados)
+  const fetchVentasDB=async(desde,hasta)=>{
+    const todas=await fetchZettleRaw(desde,hasta);
+    const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
+    todas.forEach(t=>{if(m[t.sucursal]!==undefined)m[t.sucursal]+=Number(t.total);});
+    return m;
+  };
+
+  const cargarHistorial=async()=>{
+    setLoadingHistorial(true);
+    const meses=Array.from({length:24},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i-1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}).reverse();
+    const desde=`${meses[0]}-01`;
+    const[hy,hm]=meses[23].split("-").map(Number);
+    const hasta=new Date(hy,hm,0).toISOString().slice(0,10);
+    const todas=await fetchZettleRaw(desde,hasta);
+    const byMes={};
+    meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
+    todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
+    setHistorialVentas(meses.map(m=>({mes:m,...byMes[m]})));
+    setLoadingHistorial(false);
+  };
+
+  const cargarHistorialCompleto=async()=>{
+    setLoadingHist(true);
+    const hFin=new Date();hFin.setDate(0);
+    const hastaStr=hFin.toISOString().slice(0,10);
+    // Chunking por año para evitar timeout del Edge Function (~60s)
+    const añoActual=new Date().getFullYear();
+    const todas=[];
+    for(let año=2023;año<=añoActual;año++){
+      const desde=`${año}-01-01`;
+      const hasta=año===añoActual?hastaStr:`${año}-12-31`;
+      const chunk=await fetchZettleRaw(desde,hasta);
+      todas.push(...chunk);
+    }
+    const mesSet=new Set(todas.map(t=>t.fecha.slice(0,7)));
+    const meses=[...mesSet].sort();
+    const byMes={};
+    meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
+    todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
+    setHistorialCompleto(meses.map(m=>({mes:m,...byMes[m]})));
+    setLoadingHist(false);
+  };
+
   const cargar=async()=>{
     setLoading(true);
     const{desde,hasta}=rango(periodo);
     const{desde:dA,hasta:hA}=rango(antYM(periodo));
-    const esMesActual=periodo===hoyYM();
-    const esMesAnteriorActual=antYM(periodo)===hoyYM();
+    // ≥ 2026-04: datos manuales (nueva plataforma). < 2026-04: Zettle raw API.
+    const usaManual=(ym)=>ym>="2026-04";
+    const qManual=(d,h)=>supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",d).lte("fecha",h).is("zettle_uuid",null);
     const[{data:tks},{data:tksA},{data:g}]=await Promise.all([
-      esMesActual?supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",desde).lte("fecha",hasta):Promise.resolve({data:[]}),
-      esMesAnteriorActual?supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",dA).lte("fecha",hA):Promise.resolve({data:[]}),
+      usaManual(periodo)?qManual(desde,hasta):Promise.resolve({data:[]}),
+      usaManual(antYM(periodo))?qManual(dA,hA):Promise.resolve({data:[]}),
       supabase.from("gastos_operativos").select("*").eq("periodo",periodo),
     ]);
     const toMap=(arr)=>{const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});(arr||[]).forEach(t=>{if(m[t.sucursal_nombre]!==undefined)m[t.sucursal_nombre]+=Number(t.total);});return m;};
-    const ventasMap=esMesActual?toMap(tks):await fetchZettleVentas(desde,hasta);
-    const ventasAntMap=esMesAnteriorActual?toMap(tksA):await fetchZettleVentas(dA,hA);
+    const ventasMap=usaManual(periodo)?toMap(tks):await fetchVentasDB(desde,hasta);
+    const ventasAntMap=usaManual(antYM(periodo))?toMap(tksA):await fetchVentasDB(dA,hA);
     setVentas(ventasMap);setVentasAnt(ventasAntMap);setGastos(g||[]);
     if(META_TOKEN&&META_ACCOUNT){
       try{
@@ -3087,6 +3449,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
   useEffect(()=>{cargar();setAiTxt("");},[periodo]);
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
+  useEffect(()=>{cargarHistorial();},[]);
 
   const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro"]);
   const pl=(suc)=>{
@@ -3233,6 +3596,96 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     );
   };
 
+  const GraficoVentas=()=>{
+    // Sucursales según la vista activa
+    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
+    // Filtro de rango temporal
+    const nMeses=rangoGrafico==="3m"?3:rangoGrafico==="12m"?12:24;
+    const datos=rangoGrafico==="hist"?historialCompleto:historialVentas.slice(-nMeses);
+    const fmtK=v=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:"$0";
+    const W=860,H=220,PL=68,PR=12,PT=14,PB=44;
+    const cW=W-PL-PR,cH=H-PT-PB;
+    const maxV=Math.max(...datos.flatMap(row=>sucs.map(s=>row[s]||0)),1);
+    const nM=datos.length||nMeses;
+    const gW=cW/nM;
+    const bW=Math.max(2,Math.min(20,(gW-6)/sucs.length));
+    const gOff=(gW-bW*sucs.length)/2;
+    const yTicks=[0,0.25,0.5,0.75,1];
+    // Promedio histórico por sucursal (sobre todos los 24 meses disponibles)
+    const promedioHist=sucs.reduce((acc,s)=>{
+      const vals=historialVentas.filter(r=>r[s]>0).map(r=>r[s]||0);
+      acc[s]=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+      return acc;
+    },{});
+    const RANGOS=[["3m","Trim."],["12m","12 M"],["24m","24 M"],["hist","Histórico"]];
+    return(
+      <div className="glass" style={{padding:"22px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px",flexWrap:"wrap",gap:"10px"}}>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS MES A MES{sucs.length===1?` · ${sucs[0].toUpperCase()}`:""}</div>
+          <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{display:"flex",border:`1px solid ${light?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",overflow:"hidden"}}>
+              {RANGOS.map(([v,l])=><button key={v} onClick={()=>{setRangoGrafico(v);if(v==="hist"&&historialCompleto.length===0)cargarHistorialCompleto();}} style={{padding:"4px 12px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:rangoGrafico===v?"#2721E8":"transparent",color:rangoGrafico===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
+            </div>
+            <button className="btn-ghost" style={{fontSize:"11px",padding:"4px 10px"}} onClick={rangoGrafico==="hist"?cargarHistorialCompleto:cargarHistorial} disabled={loadingHistorial||loadingHist}>↻</button>
+          </div>
+        </div>
+        {(loadingHistorial||(rangoGrafico==="hist"&&loadingHist))?(
+          <div style={{textAlign:"center",padding:"60px 0",color:T.faint,fontSize:"13px"}}>{loadingHist?"Sincronizando historial completo desde Zettle, espera un momento...":"Cargando datos..."}</div>
+        ):(
+          <>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",overflow:"visible"}}>
+              {yTicks.map(p=>{const y=PT+cH*(1-p);return(<g key={p}>
+                <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"} strokeWidth={1}/>
+                <text x={PL-6} y={y+4} textAnchor="end" fontSize={9} fill={T.faint}>{fmtK(maxV*p)}</text>
+              </g>);})}
+              {/* Líneas de promedio histórico por sucursal */}
+              {rangoGrafico!=="24m"&&sucs.map(suc=>{
+                const py=PT+cH-(promedioHist[suc]/maxV)*cH;
+                if(promedioHist[suc]<=0)return null;
+                return(<line key={`avg-${suc}`} x1={PL} y1={py} x2={W-PR} y2={py}
+                  stroke={COLORES[suc]} strokeWidth={1} strokeDasharray="4 3" opacity={0.45}/>);
+              })}
+              {datos.map((row,gi)=>{
+                const gx=PL+gi*gW;
+                const mesLabel=new Date(`${row.mes}-15`).toLocaleDateString("es-MX",{month:"short"}).replace(".","").toUpperCase().slice(0,3);
+                const esAnio=gi===0||row.mes.slice(5,7)==="01";
+                return(<g key={row.mes}>
+                  {sucs.map((suc,si)=>{
+                    const val=row[suc]||0;
+                    const bH=Math.max(val>0?2:0,(val/maxV)*cH);
+                    const x=gx+gOff+si*bW;
+                    const y=PT+cH-bH;
+                    return(<rect key={suc} x={x} y={y} width={Math.max(1,bW-1)} height={bH}
+                      fill={COLORES[suc]} opacity={0.85} rx={2}
+                      onMouseEnter={()=>setTooltipBar({suc,val,mes:row.mes,x:x+bW/2,y:Math.max(y,PT+10),prom:promedioHist[suc]})}
+                      onMouseLeave={()=>setTooltipBar(null)} style={{cursor:"default"}}/>);
+                  })}
+                  <text x={gx+gW/2} y={H-PB+14} textAnchor="middle" fontSize={9} fill={T.faint}>{mesLabel}</text>
+                  {esAnio&&<text x={gx+gW/2} y={H-PB+26} textAnchor="middle" fontSize={8} fill={T.faint} opacity={0.6}>{row.mes.slice(0,4)}</text>}
+                </g>);
+              })}
+              {tooltipBar&&(<g style={{pointerEvents:"none"}}>
+                <rect x={Math.min(tooltipBar.x-60,W-PR-120)} y={Math.max(tooltipBar.y-52,PT)} width={120} height={tooltipBar.prom>0?44:24} rx={4} fill="rgba(0,0,0,0.88)"/>
+                <text x={Math.min(tooltipBar.x,W-PR-60)} y={Math.max(tooltipBar.y-35,PT+16)} textAnchor="middle" fontSize={10} fill="#fff" fontWeight="700">{tooltipBar.suc}: {fmt(tooltipBar.val)}</text>
+                {tooltipBar.prom>0&&<text x={Math.min(tooltipBar.x,W-PR-60)} y={Math.max(tooltipBar.y-35,PT+16)+14} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.6)">Prom: {fmt(tooltipBar.prom)}</text>}
+              </g>)}
+            </svg>
+            <div style={{display:"flex",gap:"16px",justifyContent:"center",flexWrap:"wrap",marginTop:"10px",alignItems:"center"}}>
+              {sucs.map(s=><div key={s} style={{display:"flex",alignItems:"center",gap:"5px"}}>
+                <div style={{width:"10px",height:"10px",borderRadius:"2px",background:COLORES[s]}}/>
+                <span style={{fontSize:"11px",color:T.muted}}>{s}</span>
+              </div>)}
+              {rangoGrafico!=="24m"&&sucs.length>0&&<div style={{display:"flex",alignItems:"center",gap:"5px",marginLeft:"8px",paddingLeft:"8px",borderLeft:`1px solid ${T.div}`}}>
+                <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke={T.faint} strokeWidth="1" strokeDasharray="4 2"/></svg>
+                <span style={{fontSize:"11px",color:T.faint}}>Promedio histórico</span>
+              </div>}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const actSucMulti=sucMulti.filter(s=>sucVisible.includes(s));
   const pc=actSucMulti.length>0?plC(actSucMulti):null;
 
@@ -3267,26 +3720,36 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
       {loading&&<span style={{fontSize:"11px",color:T.sub}}>Cargando...</span>}
     </div>
 
-    {/* Vista individual */}
-    {(vista==="individual"||esSocia)&&<TarjetaPL suc={sucSel}/>}
+    {/* Gráfico histórico de ventas */}
+    <GraficoVentas/>
 
-    {/* Vista consolidada */}
-    {vista==="consolidado"&&pc&&<>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-        {[{l:"INGRESOS",v:fmt(pc.ing),c:"#10b981"},{l:"GASTOS",v:fmt(pc.egr),c:"#f97316"},{l:pc.util>=0?"UTILIDAD":"PÉRDIDA",v:fmt(Math.abs(pc.util)),c:pc.util>=0?"#10b981":"#ff6b6b"},{l:"MARGEN",v:pc.mg!==null?`${pc.mg.toFixed(1)}%`:"—",c:pc.mg>=20?"#10b981":pc.mg>=0?"#f0c040":"#ff6b6b"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"8px"}}>{k.l}</div><div style={{fontSize:"26px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(${actSucMulti.length},1fr)`,gap:"14px"}}>
-        {actSucMulti.map(s=><TarjetaPL key={s} suc={s} compact/>)}
-      </div>
-    </>}
+    {/* Vistas P&L — overlay mientras carga para no ver cambios bruscos */}
+    <div style={{position:"relative",opacity:loading?0.45:1,transition:"opacity 0.2s",pointerEvents:loading?"none":"auto"}}>
+      {loading&&<div style={{position:"absolute",inset:0,zIndex:10,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"40px"}}>
+        <div style={{background:light?"rgba(255,255,255,0.9)":"rgba(20,20,40,0.85)",borderRadius:"20px",padding:"8px 20px",fontSize:"12px",fontWeight:600,color:T.muted,backdropFilter:"blur(4px)",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>Cargando datos...</div>
+      </div>}
 
-    {/* Vista comparativa */}
-    {vista==="comparativa"&&<>
-      <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>{etiq(periodo).toUpperCase()} VS {etiq(antYM(periodo)).toUpperCase()}</div>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(sucVisible.length,5)},1fr)`,gap:"14px"}}>
-        {sucVisible.map(s=><TarjetaPL key={s} suc={s} compact showDelta/>)}
-      </div>
-    </>}
+      {/* Vista individual */}
+      {(vista==="individual"||esSocia)&&<TarjetaPL suc={sucSel}/>}
+
+      {/* Vista consolidada */}
+      {vista==="consolidado"&&pc&&<>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+          {[{l:"INGRESOS",v:fmt(pc.ing),c:"#10b981"},{l:"GASTOS",v:fmt(pc.egr),c:"#f97316"},{l:pc.util>=0?"UTILIDAD":"PÉRDIDA",v:fmt(Math.abs(pc.util)),c:pc.util>=0?"#10b981":"#ff6b6b"},{l:"MARGEN",v:pc.mg!==null?`${pc.mg.toFixed(1)}%`:"—",c:pc.mg>=20?"#10b981":pc.mg>=0?"#f0c040":"#ff6b6b"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"8px"}}>{k.l}</div><div style={{fontSize:"26px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${actSucMulti.length},1fr)`,gap:"14px"}}>
+          {actSucMulti.map(s=><TarjetaPL key={s} suc={s} compact/>)}
+        </div>
+      </>}
+
+      {/* Vista comparativa */}
+      {vista==="comparativa"&&<>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>{etiq(periodo).toUpperCase()} VS {etiq(antYM(periodo)).toUpperCase()}</div>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(sucVisible.length,5)},1fr)`,gap:"14px"}}>
+          {sucVisible.map(s=><TarjetaPL key={s} suc={s} compact showDelta/>)}
+        </div>
+      </>}
+    </div>
 
     {/* Formulario gastos */}
     <div className="glass" style={{padding:"22px"}}>
@@ -3677,7 +4140,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[expandedSucSem,setExpandedSucSem]=useState(null);
   const[posSuc,setPosSuc]=useState(null);
   useEffect(()=>{if(posSuc?.accesibilidad)document.body.classList.add("acc-grande");else if(!acc)document.body.classList.remove("acc-grande");},[posSuc,acc]);
-  const WHATS_NEW_KEY=`whats_new_zettle_v1_${session?.usuario||""}`;
+  const WHATS_NEW_KEY=`whats_new_finanzas_v2_${session?.usuario||""}`;
   const[showWhatsNew,setShowWhatsNew]=useState(()=>!localStorage.getItem(WHATS_NEW_KEY));
   const dismissWhatsNew=()=>{localStorage.setItem(WHATS_NEW_KEY,"1");setShowWhatsNew(false);};
   const[zettleLoading,setZettleLoading]=useState(false);
@@ -3710,7 +4173,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const cargarDatos=async()=>{
     setLoadingDB(true);
     const[{data:tData},{data:cData}]=await Promise.all([
-      supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta).order("created_at",{ascending:false}),
+      (hasta>="2026-04-01"?supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta).is("zettle_uuid",null):supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta)).order("created_at",{ascending:false}),
       supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hasta)
     ]);
     if(tData)setTickets(tData);
@@ -4093,7 +4556,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
       </div>
 
-      <div style={{padding:"24px 28px",maxWidth:"1400px",margin:"0 auto"}}>
+      <div style={{padding:"24px 28px",maxWidth:"1400px",margin:"0 auto",position:"relative",opacity:loadingDB?0.5:1,transition:"opacity 0.2s",pointerEvents:loadingDB?"none":"auto"}}>
+        {loadingDB&&<div style={{position:"fixed",top:"56px",left:0,right:0,height:"3px",zIndex:200,background:"linear-gradient(90deg,#2721E8,#49B8D3,#2721E8)",backgroundSize:"200% 100%",animation:"meta-spin 1.2s linear infinite"}}/>}
 
         {/* ═══ RESUMEN ═══ */}
         {tab==="resumen"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
@@ -4665,25 +5129,25 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
 
         {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
-        {showWhatsNew&&TABS_DASH.includes("zettle")&&<div style={{position:"fixed",bottom:"28px",right:"28px",zIndex:9999,width:"340px",background:light?"#fff":"#1a1a2e",border:"1px solid rgba(73,184,211,0.4)",borderRadius:"16px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
-          <div style={{height:"4px",background:"linear-gradient(90deg,#2721E8,#49B8D3)"}}/>
+        {showWhatsNew&&<div style={{position:"fixed",bottom:"28px",right:"28px",zIndex:9999,width:"360px",background:light?"#fff":"#1a1a2e",border:"1px solid rgba(39,33,232,0.35)",borderRadius:"16px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
+          <div style={{height:"4px",background:"linear-gradient(90deg,#2721E8,#a855f7,#10b981)"}}/>
           <div style={{padding:"20px 20px 16px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}>
               <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-                <span style={{fontSize:"20px"}}>✨</span>
+                <span style={{fontSize:"20px"}}>📈</span>
                 <div>
-                  <div style={{fontSize:"14px",fontWeight:700,color:light?"#1a1a2e":"#fff"}}>Descubre lo nuevo</div>
-                  <div style={{fontSize:"10px",color:"#49B8D3",fontWeight:600,letterSpacing:"1px",marginTop:"1px"}}>ACTUALIZACIÓN ABRIL 2026</div>
+                  <div style={{fontSize:"14px",fontWeight:700,color:light?"#1a1a2e":"#fff"}}>Finanzas mejorado</div>
+                  <div style={{fontSize:"10px",color:"#2721E8",fontWeight:600,letterSpacing:"1px",marginTop:"1px"}}>ACTUALIZACIÓN ABRIL 2026</div>
                 </div>
               </div>
               <button onClick={dismissWhatsNew} style={{background:"none",border:"none",cursor:"pointer",color:light?"rgba(0,0,0,0.3)":"rgba(255,255,255,0.3)",fontSize:"18px",lineHeight:1,padding:"0 2px"}}>✕</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"16px"}}>
               {[
-                {ico:"💳",title:"Tab Zettle",desc:"Compara las ventas de la terminal contra lo que recepción registró en el sistema."},
-                {ico:"📊",title:"Comparativo Zettle vs POS",desc:"Ve cuántos tickets y qué monto falta capturar por sucursal en tiempo real."},
-                {ico:"✏️",title:"Asignación manual",desc:"Puedes asignar el número de ticket Zettle directamente desde la tabla."},
-                {ico:"🔒",title:"Ticket obligatorio",desc:"A partir de hoy recepción debe ingresar el # de Zettle en cada cobro."},
+                {ico:"📊",title:"Gráfico de ventas mes a mes",desc:"Ve la tendencia de cada sucursal en Trim., 12M, 24M o todo el histórico disponible."},
+                {ico:"🏪",title:"Filtro por sucursal conectado",desc:"El gráfico cambia automáticamente según la sucursal o vista que tengas seleccionada."},
+                {ico:"━━",title:"Línea de promedio histórico",desc:"Compara el mes actual contra el promedio de los últimos 2 años con una línea punteada."},
+                {ico:"⚡",title:"Carga más rápida",desc:"Los datos del P&L y el gráfico ahora cargan desde Supabase. Sin esperas de Zettle."},
               ].map(({ico,title,desc})=><div key={title} style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
                 <span style={{fontSize:"16px",marginTop:"1px",flexShrink:0}}>{ico}</span>
                 <div>
@@ -4692,8 +5156,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                 </div>
               </div>)}
             </div>
-            <button onClick={()=>{dismissWhatsNew();setTab("zettle");}} style={{width:"100%",padding:"10px",borderRadius:"10px",background:"linear-gradient(90deg,#2721E8,#49B8D3)",border:"none",color:"#fff",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>
-              Ver tab Zettle →
+            <button onClick={()=>{dismissWhatsNew();setTab("finanzas");}} style={{width:"100%",padding:"10px",borderRadius:"10px",background:"linear-gradient(90deg,#2721E8,#a855f7)",border:"none",color:"#fff",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>
+              Ver Finanzas →
             </button>
           </div>
         </div>}
