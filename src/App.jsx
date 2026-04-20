@@ -3404,6 +3404,16 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[loadingHist,setLoadingHist]=useState(false);
   const[tooltipBar,setTooltipBar]=useState(null);
   const[rangoGrafico,setRangoGrafico]=useState("12m");
+  const[ventasSemanales,setVentasSemanales]=useState(null);
+  const[loadingSemanales,setLoadingSemanales]=useState(false);
+  const[proyeccion,setProyeccion]=useState(null);
+  const[loadingProy,setLoadingProy]=useState(false);
+
+  // Trae tickets directamente de Supabase (más rápido que pasar por la Edge Function)
+  const fetchTicketsDB=async(desde,hasta)=>{
+    const{data}=await supabase.from("tickets").select("sucursal_nombre,total,fecha").gte("fecha",desde).lte("fecha",hasta);
+    return data||[];
+  };
 
   const ZETTLE_CUENTAS_FIN=[
     {key:"metepec",label:"Metepec"},
@@ -3411,22 +3421,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     {key:"valle_polanco",label:"Valle + Polanco"},
     {key:"oriente",label:"Oriente"},
   ];
-  const fetchZettleVentas=async(desde,hasta)=>{
-    const todas=[];
-    for(const cuenta of ZETTLE_CUENTAS_FIN){
-      try{
-        const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${desde}&raw=true`;
-        const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
-        const json=await res.json();
-        if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
-      }catch{}
-    }
-    const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
-    todas.forEach(t=>{const n=t.sucursal;if(m[n]!==undefined)m[n]+=Number(t.total);});
-    return m;
-  };
 
-  // Llama Zettle raw (sin escribir a Supabase) y agrupa por sucursal
+  // Llama Zettle raw (sin escribir a Supabase) — usado solo en la tab de validación
   const fetchZettleRaw=async(desde,hasta)=>{
     const todas=[];
     for(const cuenta of ZETTLE_CUENTAS_FIN){
@@ -3440,12 +3436,21 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     return todas;
   };
 
-  // Ventas de mes pasado: Zettle raw (no escribe a BD, evita duplicados)
   const fetchVentasDB=async(desde,hasta)=>{
     const todas=await fetchZettleRaw(desde,hasta);
     const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
     todas.forEach(t=>{if(m[t.sucursal]!==undefined)m[t.sucursal]+=Number(t.total);});
     return m;
+  };
+
+  // Fetch del mes corriente desde Zettle (para el gráfico histórico)
+  const fetchMesActualTickets=async()=>{
+    const ma=hoyYM();
+    const hoy=new Date().toISOString().slice(0,10);
+    const todas=await fetchZettleRaw(`${ma}-01`,hoy);
+    const row={mes:ma};SUCURSALES_NAMES.forEach(s=>{row[s]=0;});
+    todas.forEach(t=>{if(row[t.sucursal]!==undefined)row[t.sucursal]+=Number(t.total);});
+    return row;
   };
 
   const cargarHistorial=async()=>{
@@ -3454,11 +3459,11 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     const desde=`${meses[0]}-01`;
     const[hy,hm]=meses[23].split("-").map(Number);
     const hasta=new Date(hy,hm,0).toISOString().slice(0,10);
-    const todas=await fetchZettleRaw(desde,hasta);
+    const[todas,mesActual]=await Promise.all([fetchZettleRaw(desde,hasta),fetchMesActualTickets()]);
     const byMes={};
     meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
     todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
-    setHistorialVentas(meses.map(m=>({mes:m,...byMes[m]})));
+    setHistorialVentas([...meses.map(m=>({mes:m,...byMes[m]})),mesActual]);
     setLoadingHistorial(false);
   };
 
@@ -3466,29 +3471,203 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     setLoadingHist(true);
     const hFin=new Date();hFin.setDate(0);
     const hastaStr=hFin.toISOString().slice(0,10);
-    // Chunking por año para evitar timeout del Edge Function (~60s)
     const añoActual=new Date().getFullYear();
     const todas=[];
-    for(let año=2023;año<=añoActual;año++){
+    for(let año=2021;año<=añoActual;año++){
       const desde=`${año}-01-01`;
       const hasta=año===añoActual?hastaStr:`${año}-12-31`;
       const chunk=await fetchZettleRaw(desde,hasta);
       todas.push(...chunk);
     }
-    const mesSet=new Set(todas.map(t=>t.fecha.slice(0,7)));
+    const mesActual=await fetchMesActualTickets();
+    const mesSet=new Set([...todas.map(t=>t.fecha.slice(0,7)),mesActual.mes]);
     const meses=[...mesSet].sort();
     const byMes={};
     meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
     todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
+    SUCURSALES_NAMES.forEach(s=>{byMes[mesActual.mes][s]=mesActual[s]||0;});
     setHistorialCompleto(meses.map(m=>({mes:m,...byMes[m]})));
     setLoadingHist(false);
+  };
+
+  const cargarVentasSemanales=async(ym)=>{
+    setLoadingSemanales(true);
+    const[y,m]=ym.split("-").map(Number);
+    const desde=`${ym}-01`;
+    const diasEnMes=new Date(y,m,0).getDate();
+    const hasta=`${ym}-${String(diasEnMes).padStart(2,"0")}`;
+    const tickets=await fetchTicketsDB(desde,hasta);
+    const semanas=[];
+    for(let ini=1;ini<=diasEnMes;ini+=7){
+      const fin=Math.min(ini+6,diasEnMes);
+      const row={semana:semanas.length+1,desde:`${ym}-${String(ini).padStart(2,"0")}`,hasta:`${ym}-${String(fin).padStart(2,"0")}`};
+      SUCURSALES_NAMES.forEach(s=>{row[s]=0;});
+      semanas.push(row);
+    }
+    tickets.forEach(t=>{
+      const dia=parseInt(t.fecha.slice(8,10));
+      const semIdx=Math.min(Math.floor((dia-1)/7),semanas.length-1);
+      if(semanas[semIdx]&&semanas[semIdx][t.sucursal_nombre]!==undefined)semanas[semIdx][t.sucursal_nombre]+=Number(t.total);
+    });
+    const totalMes={};SUCURSALES_NAMES.forEach(s=>{totalMes[s]=semanas.reduce((a,r)=>a+r[s],0);});
+    setVentasSemanales({semanas,totalMes});
+    setLoadingSemanales(false);
+  };
+
+  const proyectarIA=async()=>{
+    if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
+    setLoadingProy(true);setProyeccion(null);
+    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
+
+    // Solo meses COMPLETOS — excluir el mes actual porque está incompleto
+    const histCompleto=historialVentas.filter(r=>r.mes<periodo);
+
+    const[y,m]=periodo.split("-").map(Number);
+    const sigMes=m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`;
+    const targetMn=m===12?1:m+1;
+    const diasSigMes=new Date(y,targetMn,0).getDate();
+
+    // ── Helper: correr STL en un subconjunto de datos ─────────────────────────
+    const correrSTL=(datos,s,mnObj)=>{
+      if(datos.length<4)return 0;
+      const byMn={};
+      datos.forEach(r=>{const mn=parseInt(r.mes.slice(5));if(!byMn[mn])byMn[mn]=[];byMn[mn].push(r[s]||0);});
+      const avgG=datos.reduce((a,r)=>a+(r[s]||0),0)/datos.length;
+      if(avgG===0)return 0;
+      const idxEst={};
+      for(let mn=1;mn<=12;mn++)idxEst[mn]=byMn[mn]?(byMn[mn].reduce((a,b)=>a+b,0)/byMn[mn].length/avgG):1;
+      const desest=datos.map(r=>(r[s]||0)/(idxEst[parseInt(r.mes.slice(5))]||1));
+      const n=desest.length;
+      const w=desest.map((_,i)=>Math.exp((i-(n-1))*0.12));
+      const sW=w.reduce((a,b)=>a+b,0),sWX=w.reduce((a,wi,i)=>a+wi*i,0),sWY=w.reduce((a,wi,i)=>a+wi*desest[i],0);
+      const sWXY=w.reduce((a,wi,i)=>a+wi*i*desest[i],0),sWX2=w.reduce((a,wi,i)=>a+wi*i*i,0);
+      const den=sW*sWX2-sWX*sWX;
+      const slope=Math.abs(den)>1?(sW*sWXY-sWX*sWY)/den:0;
+      const intercept=(sWY-slope*sWX)/sW;
+      return Math.max(0,(intercept+slope*n)*(idxEst[mnObj]||1));
+    };
+
+    // ── Walk-forward validation: medir sesgo real del modelo ─────────────────
+    // Para cada mes en el historial (desde la posición 6), predecir con datos anteriores
+    // y comparar contra el real. Así detectamos si el modelo sistémicamente sobreestima.
+    const calibracionPorSuc=sucs.map(s=>{
+      const datos=histCompleto.filter(r=>(r[s]||0)>0);
+      const minTrain=5;
+      if(datos.length<minTrain+2)return{s,sesgo:0,mape:null,n:0,ultErrores:[]};
+      const errores=[];
+      for(let i=minTrain;i<datos.length;i++){
+        const train=datos.slice(0,i);
+        const obj=datos[i];
+        const mnObj=parseInt(obj.mes.slice(5));
+        const pred=correrSTL(train,s,mnObj);
+        if(obj[s]>0){
+          const errPct=(pred-obj[s])/obj[s];
+          errores.push({mes:obj.mes,pred:Math.round(pred),real:obj[s],errPct:+errPct.toFixed(3)});
+        }
+      }
+      if(errores.length===0)return{s,sesgo:0,mape:null,n:0,ultErrores:[]};
+      // Sesgo ponderado: errores recientes pesan más (decay 0.3)
+      const nE=errores.length;
+      const wE=errores.map((_,i)=>Math.exp((i-(nE-1))*0.3));
+      const sWE=wE.reduce((a,b)=>a+b,0);
+      const sesgo=errores.reduce((a,e,i)=>a+wE[i]*e.errPct,0)/sWE;
+      const mape=errores.reduce((a,e,i)=>a+wE[i]*Math.abs(e.errPct),0)/sWE*100;
+      return{s,sesgo:+sesgo.toFixed(3),mape:+mape.toFixed(1),n:errores.length,ultErrores:errores.slice(-4)};
+    });
+
+    // ── Modelo STL con corrección de sesgo ────────────────────────────────────
+    const modeloPorSuc=sucs.map(s=>{
+      const datos=histCompleto.filter(r=>(r[s]||0)>0);
+      if(datos.length<4)return{s,proyBase:0,proyCorregida:0,idxEst:1,tendMensual:0,meses:datos.length,sesgo:0,mape:null};
+
+      const byMn={};
+      datos.forEach(r=>{const mn=parseInt(r.mes.slice(5));if(!byMn[mn])byMn[mn]=[];byMn[mn].push(r[s]||0);});
+      const avgG=datos.reduce((a,r)=>a+(r[s]||0),0)/datos.length;
+      const idxEst={};
+      for(let mn=1;mn<=12;mn++)idxEst[mn]=byMn[mn]?(byMn[mn].reduce((a,b)=>a+b,0)/byMn[mn].length/avgG):1;
+      const desest=datos.map(r=>(r[s]||0)/(idxEst[parseInt(r.mes.slice(5))]||1));
+      const n=desest.length;
+      const w=desest.map((_,i)=>Math.exp((i-(n-1))*0.12));
+      const sW=w.reduce((a,b)=>a+b,0),sWX=w.reduce((a,wi,i)=>a+wi*i,0),sWY=w.reduce((a,wi,i)=>a+wi*desest[i],0);
+      const sWXY=w.reduce((a,wi,i)=>a+wi*i*desest[i],0),sWX2=w.reduce((a,wi,i)=>a+wi*i*i,0);
+      const den=sW*sWX2-sWX*sWX;
+      const slope=Math.abs(den)>1?(sW*sWXY-sWX*sWY)/den:0;
+      const intercept=(sWY-slope*sWX)/sW;
+      const proyBase=Math.max(0,Math.round((intercept+slope*n)*(idxEst[targetMn]||1)));
+
+      // Aplicar corrección de sesgo: si el modelo sobreestima 15%, dividir por 1.15
+      const cal=calibracionPorSuc.find(c=>c.s===s)||{sesgo:0};
+      const factorCorr=1/(1+cal.sesgo);
+      const proyCorregida=Math.max(0,Math.round(proyBase*factorCorr));
+      const tendMensual=avgG>0?Math.round(slope/avgG*100):0;
+
+      return{
+        s,proyBase,proyCorregida,
+        idxEst:+((idxEst[targetMn]||1).toFixed(2)),
+        tendMensual,meses:datos.length,
+        sesgo:cal.sesgo,mape:cal.mape,
+        factorCorr:+factorCorr.toFixed(3),
+        avgGlobal:Math.round(avgG),
+        histMesObj:byMn[targetMn]?byMn[targetMn].map(Math.round):null,
+      };
+    });
+
+    const totalBase=modeloPorSuc.reduce((a,r)=>a+r.proyBase,0);
+    const totalCorregido=modeloPorSuc.reduce((a,r)=>a+r.proyCorregida,0);
+
+    const distRef=[{sem:1,dias:"1-7",pctBase:22},{sem:2,dias:"8-14",pctBase:24},{sem:3,dias:"15-21",pctBase:28},{sem:4,dias:"22-28",pctBase:22}];
+    if(diasSigMes>28)distRef.push({sem:5,dias:"29+",pctBase:4});
+
+    const prompt=`Eres el analista de datos de CIRE (salones de depilación láser en México). Tienes el modelo estadístico YA calibrado con validación walk-forward. Tu tarea es solo ajustar por temporalidad y generar OKRs semanales para ${etiq(sigMes)}.
+
+MODELO STL CON CORRECCIÓN DE SESGO (walk-forward validation):
+${JSON.stringify(modeloPorSuc,null,2)}
+
+CONTEXTO:
+- ${etiq(periodo)} excluido del entrenamiento (mes incompleto).
+- ${etiq(sigMes)} (mes ${targetMn}): índice estacional promedio ${(modeloPorSuc.reduce((a,r)=>a+r.idxEst,0)/Math.max(modeloPorSuc.length,1)).toFixed(2)}.
+- En México, mayo impulsa servicios de belleza por Día de las Madres (10 mayo).
+- Quincenas (días 15 y fin de mes) → S3 y S4 suelen ser más fuertes.
+- Proyección base STL: ${fmt(totalBase)} | Proyección corregida (sesgo): ${fmt(totalCorregido)}.
+- El campo "sesgo" por sucursal: positivo = el modelo sobreestimaba, negativo = subestimaba.
+- El campo "mape" = error promedio histórico en % (ya ponderado por recencia).
+
+HISTORIAL COMPLETO (meses completos):
+${JSON.stringify(histCompleto.slice(-18).map(r=>({mes:r.mes,...Object.fromEntries(sucs.map(s=>[s,r[s]||0]))})),null,2)}
+
+Responde SOLO con JSON válido:
+{
+  "proyeccion_total": número (parte de la corregida, ajusta solo si la temporalidad lo justifica claramente),
+  "por_sucursal": {${sucs.map(s=>`"${s}":0`).join(",")}},
+  "semanas_okr": [
+    {"sem":1,"dias":"1-7","pct":número,"monto":número,"razon":"texto"},
+    {"sem":2,"dias":"8-14","pct":número,"monto":número,"razon":"texto"},
+    {"sem":3,"dias":"15-21","pct":número,"monto":número,"razon":"texto"},
+    {"sem":4,"dias":"22-28","pct":número,"monto":número,"razon":"texto"}${diasSigMes>28?',\n    {"sem":5,"dias":"29+","pct":número,"monto":número,"razon":"texto"}':''}
+  ],
+  "confianza": "alta|media|baja",
+  "ajuste_temporalidad": número (% de ajuste adicional al corregido, 0 si ninguno),
+  "insight": "2-3 oraciones: qué aprendió el modelo, dónde suele fallar, y recomendación"
+}`;
+
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","content-type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1400,messages:[{role:"user",content:prompt}]})});
+      const json=await res.json();
+      const txt=json.content?.[0]?.text||"{}";
+      const match=txt.match(/\{[\s\S]*\}/);
+      const proy=match?JSON.parse(match[0]):{};
+      setProyeccion({...proy,mes:sigMes,sucs,modeloPorSuc,totalModeloBase:totalBase,totalCorregido});
+    }catch{setProyeccion({error:"No se pudo generar la proyección. Verifica VITE_CLAUDE_KEY."});}
+    setLoadingProy(false);
   };
 
   const cargar=async()=>{
     setLoading(true);
     const{desde,hasta}=rango(periodo);
     const{desde:dA,hasta:hA}=rango(antYM(periodo));
-    // ≥ 2026-04: datos manuales (nueva plataforma). < 2026-04: Zettle raw API.
+    // >= 2026-04: datos manuales (nueva plataforma). < 2026-04: Zettle API.
     const usaManual=(ym)=>ym>="2026-04";
     const qManual=(d,h)=>supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",d).lte("fecha",h).is("zettle_uuid",null);
     const[{data:tks},{data:tksA},{data:g}]=await Promise.all([
@@ -3512,7 +3691,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     setLoading(false);
   };
 
-  useEffect(()=>{cargar();setAiTxt("");},[periodo]);
+  useEffect(()=>{cargar();setAiTxt("");cargarVentasSemanales(periodo);},[periodo]);
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
   useEffect(()=>{cargarHistorial();},[]);
 
@@ -3695,7 +3874,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
           </div>
         </div>
         {(loadingHistorial||(rangoGrafico==="hist"&&loadingHist))?(
-          <div style={{textAlign:"center",padding:"60px 0",color:T.faint,fontSize:"13px"}}>{loadingHist?"Sincronizando historial completo desde Zettle, espera un momento...":"Cargando datos..."}</div>
+          <div style={{textAlign:"center",padding:"60px 0",color:T.faint,fontSize:"13px"}}>{loadingHist?"Cargando historial completo...":"Cargando datos..."}</div>
         ):(
           <>
             <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",overflow:"visible"}}>
@@ -3751,6 +3930,180 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     );
   };
 
+  const AnalisisSemanal=()=>{
+    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
+    const[y,m]=periodo.split("-").map(Number);
+    const trimestre=Math.ceil(m/3);
+    const sigMes=m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`;
+
+    // ── Bloque semanal ────────────────────────────────────────────
+    const bloquesSemanal=()=>{
+      if(loadingSemanales)return(<div style={{textAlign:"center",padding:"40px 0",color:T.faint,fontSize:"13px"}}>Cargando semanas...</div>);
+      if(!ventasSemanales)return null;
+      const{semanas,totalMes}=ventasSemanales;
+      const totalGeneral=sucs.reduce((a,s)=>a+(totalMes[s]||0),0);
+      if(totalGeneral===0)return(<div style={{textAlign:"center",padding:"40px 0",color:T.faint,fontSize:"13px"}}>Sin datos para {etiq(periodo)}</div>);
+      const maxSemTotal=Math.max(...semanas.map(r=>sucs.reduce((a,s)=>a+r[s],0)),1);
+      return(
+        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+          {semanas.map(row=>{
+            const rowTotal=sucs.reduce((a,s)=>a+row[s],0);
+            const pct=totalGeneral>0?(rowTotal/totalGeneral*100):0;
+            const barW=rowTotal/maxSemTotal*100;
+            return(
+              <div key={row.semana} style={{background:light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)",borderRadius:"12px",padding:"16px 20px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:"10px"}}>
+                    <span style={{fontSize:"18px",fontWeight:800,color:T.txt}}>S{row.semana}</span>
+                    <span style={{fontSize:"12px",color:T.faint}}>{row.desde.slice(8)} – {row.hasta.slice(8)} {new Date(`${row.desde}T12:00:00`).toLocaleDateString("es-MX",{month:"short"}).replace(".","")}</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
+                    <span style={{fontSize:"26px",fontWeight:800,color:T.txt,letterSpacing:"-0.5px"}}>{pct.toFixed(1)}%</span>
+                    <span style={{fontSize:"13px",color:T.faint,fontWeight:500}}>{fmt(rowTotal)}</span>
+                  </div>
+                </div>
+                {/* Barra principal */}
+                <div style={{height:"10px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",borderRadius:"6px",overflow:"hidden",marginBottom:"10px"}}>
+                  <div style={{height:"100%",width:`${barW}%`,background:"linear-gradient(90deg,#2721E8,#49B8D3)",borderRadius:"6px",transition:"width 0.6s ease"}}/>
+                </div>
+                {/* Desglose por sucursal */}
+                {sucs.length>1&&<div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
+                  {sucs.map(s=>{
+                    const pctS=totalMes[s]>0?(row[s]/totalMes[s]*100):0;
+                    return(<div key={s} style={{display:"flex",alignItems:"center",gap:"5px",minWidth:"100px"}}>
+                      <div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s],flexShrink:0}}/>
+                      <span style={{fontSize:"11px",color:T.muted}}>{s}</span>
+                      <span style={{fontSize:"12px",fontWeight:700,color:COLORES[s],marginLeft:"auto"}}>{pctS.toFixed(1)}%</span>
+                    </div>);
+                  })}
+                </div>}
+              </div>
+            );
+          })}
+          {/* Total del mes */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderTop:`1px solid ${T.div}`,marginTop:"4px"}}>
+            <span style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,fontWeight:700}}>TOTAL {etiq(periodo).toUpperCase()}</span>
+            <div style={{display:"flex",gap:"16px",flexWrap:"wrap",justifyContent:"flex-end"}}>
+              {sucs.length>1&&sucs.map(s=><span key={s} style={{fontSize:"13px",fontWeight:700,color:COLORES[s]}}>{s}: {fmt(totalMes[s]||0)}</span>)}
+              <span style={{fontSize:"16px",fontWeight:800,color:T.txt}}>{fmt(totalGeneral)}</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ── Bloque proyección IA ──────────────────────────────────────
+    const bloqueProyeccion=()=>(
+      <div style={{borderTop:`1px solid ${T.div}`,paddingTop:"24px",marginTop:"8px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"18px",flexWrap:"wrap",gap:"10px"}}>
+          <div>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>PROYECCIÓN IA · {etiq(sigMes).toUpperCase()}</div>
+            <div style={{fontSize:"11px",color:T.faint,marginTop:"2px"}}>Descomposición estacional (STL) · regresión ponderada · validado por IA · excluye {etiq(periodo)} (mes incompleto)</div>
+          </div>
+          <button className="btn-blue" style={{fontSize:"12px",padding:"7px 16px"}} onClick={proyectarIA} disabled={loadingProy||historialVentas.filter(r=>r.mes<periodo).length<4}>
+            {loadingProy?"Analizando...":proyeccion?"Recalcular":"Proyectar con IA"}
+          </button>
+        </div>
+        {loadingProy&&<div style={{textAlign:"center",padding:"30px 0",color:T.faint,fontSize:"13px",fontStyle:"italic"}}>Corriendo modelo STL + consultando IA para ajuste estacional...</div>}
+        {proyeccion&&!proyeccion.error&&<>
+          {/* Pipeline: STL base → corrección sesgo → ajuste temporada → final */}
+          <div style={{display:"flex",gap:"8px",marginBottom:"16px",flexWrap:"wrap",alignItems:"stretch"}}>
+            <div style={{flex:1,minWidth:"120px",background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.05)",borderRadius:"10px",padding:"12px 14px"}}>
+              <div style={{fontSize:"10px",letterSpacing:"1px",color:T.faint,marginBottom:"4px"}}>STL BASE</div>
+              <div style={{fontSize:"17px",fontWeight:700,color:T.muted}}>{fmt(proyeccion.totalModeloBase||0)}</div>
+              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>sin corregir</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div>
+            <div style={{flex:1,minWidth:"130px",background:light?"rgba(249,115,22,0.07)":"rgba(249,115,22,0.12)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(249,115,22,0.2)"}}>
+              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#f97316",marginBottom:"4px"}}>CORRECCIÓN SESGO</div>
+              <div style={{fontSize:"17px",fontWeight:700,color:T.txt}}>{fmt(proyeccion.totalCorregido||0)}</div>
+              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>walk-forward validation</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div>
+            {(proyeccion.ajuste_temporalidad||0)!==0&&<><div style={{flex:1,minWidth:"120px",background:light?"rgba(16,185,129,0.07)":"rgba(16,185,129,0.12)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(16,185,129,0.2)"}}>
+              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#10b981",marginBottom:"4px"}}>AJUSTE TEMPORADA</div>
+              <div style={{fontSize:"17px",fontWeight:700,color:"#10b981"}}>{proyeccion.ajuste_temporalidad>0?"+":""}{proyeccion.ajuste_temporalidad}%</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div></>}
+            <div style={{flex:2,minWidth:"160px",background:light?"rgba(39,33,232,0.07)":"rgba(39,33,232,0.18)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(39,33,232,0.3)"}}>
+              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#a5b4fc",marginBottom:"4px"}}>PROYECCIÓN FINAL</div>
+              <div style={{fontSize:"26px",fontWeight:800,color:T.txt}}>{fmt(proyeccion.proyeccion_total||0)}</div>
+              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>Confianza: <span style={{color:proyeccion.confianza==="alta"?"#10b981":proyeccion.confianza==="media"?"#f0c040":"#f97316",fontWeight:700}}>{proyeccion.confianza||"—"}</span></div>
+            </div>
+          </div>
+          {/* Por sucursal con métricas del modelo */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:"10px",marginBottom:"20px"}}>
+            {sucs.map(s=>{
+              const mod=proyeccion.modeloPorSuc?.find(x=>x.s===s);
+              const sesgoPct=mod?Math.round(mod.sesgo*100):0;
+              return(<div key={s} style={{background:light?`${COLORES[s]}0d`:`${COLORES[s]}18`,borderRadius:"10px",padding:"12px 14px",border:`1px solid ${COLORES[s]}35`}}>
+                <div style={{fontSize:"10px",letterSpacing:"1px",color:COLORES[s],marginBottom:"6px"}}>{s.toUpperCase()}</div>
+                <div style={{fontSize:"20px",fontWeight:800,color:T.txt,marginBottom:"6px"}}>{fmt(proyeccion.por_sucursal?.[s]||0)}</div>
+                {mod&&<div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                  <span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:mod.idxEst>=1?"rgba(16,185,129,0.15)":"rgba(249,115,22,0.15)",color:mod.idxEst>=1?"#10b981":"#f97316",fontWeight:700}}>
+                    {mod.idxEst}x estacional
+                  </span>
+                  {mod.mape!=null&&<span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:"rgba(255,255,255,0.08)",color:T.faint}}>
+                    MAPE {mod.mape}%
+                  </span>}
+                  {sesgoPct!==0&&<span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:sesgoPct>0?"rgba(249,115,22,0.12)":"rgba(16,185,129,0.12)",color:sesgoPct>0?"#f97316":"#10b981",fontWeight:600}}>
+                    sesgo {sesgoPct>0?"+":""}{sesgoPct}% → corregido
+                  </span>}
+                  {mod.tendMensual!==0&&<span style={{fontSize:"10px",color:T.faint}}>{mod.tendMensual>0?"↑":"↓"}{Math.abs(mod.tendMensual)}%/mes</span>}
+                </div>}
+              </div>);
+            })}
+          </div>
+          {/* OKRs semanales */}
+          {proyeccion.semanas_okr&&<>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"12px"}}>OKRs SEMANALES — {etiq(sigMes).toUpperCase()}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+              {proyeccion.semanas_okr.map(s=>{
+                const monto=s.monto||Math.round((proyeccion.proyeccion_total||0)*s.pct/100);
+                return(
+                  <div key={s.sem} style={{background:light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)",borderRadius:"10px",padding:"14px 18px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
+                      <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
+                        <span style={{fontSize:"16px",fontWeight:800,color:T.txt}}>S{s.sem}</span>
+                        <span style={{fontSize:"11px",color:T.faint}}>{s.dias}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
+                        <span style={{fontSize:"22px",fontWeight:800,color:"#a5b4fc"}}>{s.pct}%</span>
+                        <span style={{fontSize:"14px",color:T.muted,fontWeight:700}}>{fmt(monto)}</span>
+                      </div>
+                    </div>
+                    <div style={{height:"6px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",borderRadius:"4px",overflow:"hidden",marginBottom:"8px"}}>
+                      <div style={{height:"100%",width:`${Math.min(s.pct*3,100)}%`,background:"linear-gradient(90deg,#a5b4fc,#2721E8)",borderRadius:"4px"}}/>
+                    </div>
+                    {s.razon&&<div style={{fontSize:"11px",color:T.faint,fontStyle:"italic"}}>{s.razon}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </>}
+          {proyeccion.insight&&<div style={{marginTop:"16px",padding:"14px 16px",background:light?"rgba(39,33,232,0.05)":"rgba(39,33,232,0.12)",borderRadius:"10px",borderLeft:"3px solid #2721E8"}}>
+            <div style={{fontSize:"10px",letterSpacing:"1px",color:"#a5b4fc",marginBottom:"6px"}}>INSIGHT DEL MODELO</div>
+            <div style={{fontSize:"13px",color:T.muted,lineHeight:"1.6"}}>{proyeccion.insight}</div>
+          </div>}
+        </>}
+        {proyeccion?.error&&<div style={{color:"#f97316",fontSize:"13px",padding:"12px 0"}}>{proyeccion.error}</div>}
+      </div>
+    );
+
+    return(
+      <div className="glass" style={{padding:"22px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px",flexWrap:"wrap",gap:"8px"}}>
+          <div>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS SEMANALES · {etiq(periodo).toUpperCase()}</div>
+            <div style={{fontSize:"11px",color:T.faint,marginTop:"2px"}}>Q{trimestre} {y} · % del total mensual por semana</div>
+          </div>
+        </div>
+        {bloquesSemanal()}
+        {bloqueProyeccion()}
+      </div>
+    );
+  };
+
   const actSucMulti=sucMulti.filter(s=>sucVisible.includes(s));
   const pc=actSucMulti.length>0?plC(actSucMulti):null;
 
@@ -3787,6 +4140,9 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
     {/* Gráfico histórico de ventas */}
     <GraficoVentas/>
+
+    {/* Análisis semanal + proyección IA */}
+    <AnalisisSemanal/>
 
     {/* Vistas P&L — overlay mientras carga para no ver cambios bruscos */}
     <div style={{position:"relative",opacity:loading?0.45:1,transition:"opacity 0.2s",pointerEvents:loading?"none":"auto"}}>
