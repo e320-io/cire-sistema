@@ -3496,7 +3496,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     const desde=`${ym}-01`;
     const diasEnMes=new Date(y,m,0).getDate();
     const hasta=`${ym}-${String(diasEnMes).padStart(2,"0")}`;
-    const tickets=await fetchTicketsDB(desde,hasta);
+    const tickets=await fetchZettleRaw(desde,hasta);
     const semanas=[];
     for(let ini=1;ini<=diasEnMes;ini+=7){
       const fin=Math.min(ini+6,diasEnMes);
@@ -3507,7 +3507,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     tickets.forEach(t=>{
       const dia=parseInt(t.fecha.slice(8,10));
       const semIdx=Math.min(Math.floor((dia-1)/7),semanas.length-1);
-      if(semanas[semIdx]&&semanas[semIdx][t.sucursal_nombre]!==undefined)semanas[semIdx][t.sucursal_nombre]+=Number(t.total);
+      if(semanas[semIdx]&&semanas[semIdx][t.sucursal]!==undefined)semanas[semIdx][t.sucursal]+=Number(t.total);
     });
     const totalMes={};SUCURSALES_NAMES.forEach(s=>{totalMes[s]=semanas.reduce((a,r)=>a+r[s],0);});
     setVentasSemanales({semanas,totalMes});
@@ -3667,17 +3667,13 @@ Responde SOLO con JSON válido:
     setLoading(true);
     const{desde,hasta}=rango(periodo);
     const{desde:dA,hasta:hA}=rango(antYM(periodo));
-    // >= 2026-04: datos manuales (nueva plataforma). < 2026-04: Zettle API.
-    const usaManual=(ym)=>ym>="2026-04";
-    const qManual=(d,h)=>supabase.from("tickets").select("sucursal_nombre,total").gte("fecha",d).lte("fecha",h).is("zettle_uuid",null);
-    const[{data:tks},{data:tksA},{data:g}]=await Promise.all([
-      usaManual(periodo)?qManual(desde,hasta):Promise.resolve({data:[]}),
-      usaManual(antYM(periodo))?qManual(dA,hA):Promise.resolve({data:[]}),
+    const[{data:g}]=await Promise.all([
       supabase.from("gastos_operativos").select("*").eq("periodo",periodo),
     ]);
-    const toMap=(arr)=>{const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});(arr||[]).forEach(t=>{if(m[t.sucursal_nombre]!==undefined)m[t.sucursal_nombre]+=Number(t.total);});return m;};
-    const ventasMap=usaManual(periodo)?toMap(tks):await fetchVentasDB(desde,hasta);
-    const ventasAntMap=usaManual(antYM(periodo))?toMap(tksA):await fetchVentasDB(dA,hA);
+    const[ventasMap,ventasAntMap]=await Promise.all([
+      fetchVentasDB(desde,hasta),
+      fetchVentasDB(dA,hA),
+    ]);
     setVentas(ventasMap);setVentasAnt(ventasAntMap);setGastos(g||[]);
     if(META_TOKEN&&META_ACCOUNT){
       try{
@@ -4567,6 +4563,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[zettleLoading,setZettleLoading]=useState(false);
   const[zettleLogs,setZettleLogs]=useState([]);// [{key,label,status,count,error}]
   const[zettleData,setZettleData]=useState([]);// ventas crudas de Zettle, estado aislado
+  const[ventasZettle,setVentasZettle]=useState({});
   const[zettleCitas,setZettleCitas]=useState([]);// cobros de recepción con ticket_zettle
   const[zettleSucFiltro,setZettleSucFiltro]=useState(null);
   const[zettleVista,setZettleVista]=useState("ventas");// "ventas" | "comparativo"
@@ -4593,12 +4590,29 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
   const cargarDatos=async()=>{
     setLoadingDB(true);
-    const[{data:tData},{data:cData}]=await Promise.all([
+    const ZETTLE_CUENTAS_DASH=[{key:"metepec"},{key:"coapa"},{key:"valle_polanco"},{key:"oriente"}];
+    const fetchZettleTotales=async()=>{
+      const todas=[];
+      for(const c of ZETTLE_CUENTAS_DASH){
+        try{
+          const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${c.key}&startDate=${desde}&raw=true`;
+          const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
+          const json=await res.json();
+          if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
+        }catch{}
+      }
+      const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
+      todas.forEach(t=>{if(m[t.sucursal]!==undefined)m[t.sucursal]+=Number(t.total);});
+      return m;
+    };
+    const[{data:tData},{data:cData},zMap]=await Promise.all([
       (hasta>="2026-04-01"?supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta).is("zettle_uuid",null):supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta)).order("created_at",{ascending:false}),
-      supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hasta)
+      supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hasta),
+      fetchZettleTotales(),
     ]);
     if(tData)setTickets(tData);
     if(cData)setCitas(cData);
+    setVentasZettle(zMap);
     setUltimaActualizacion(new Date());
     setLoadingDB(false);
   };
@@ -4877,7 +4891,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
-  const ventasTotal=tksF.reduce((s,t)=>s+Number(t.total),0);
+  const ventasTotal=sucNames.reduce((s,n)=>s+(ventasZettle[n]||0),0);
   const nuevas=tksF.filter(t=>t.tipo_clienta==="Nueva").length;
   const recompras=tksF.filter(t=>t.tipo_clienta==="Recompra").length;
   const sesionesComp=ctsF.filter(c=>c.estado==="completada").length;
@@ -4896,7 +4910,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const porSuc=sucNames.map(n=>{
     const tks=tksF.filter(t=>t.sucursal_nombre===n);
     const cts=ctsF.filter(c=>c.sucursal_nombre===n);
-    const v=tks.reduce((s,t)=>s+Number(t.total),0);
+    const v=ventasZettle[n]||0;
     const nv=tks.filter(t=>t.tipo_clienta==="Nueva").length;
     const rc=tks.filter(t=>t.tipo_clienta==="Recompra").length;
     const sc=cts.filter(c=>c.estado==="completada").length;
