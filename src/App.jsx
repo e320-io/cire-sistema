@@ -145,7 +145,7 @@ const USUARIOS=[
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
-  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true},
+  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle"]},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"]},
   {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"]},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
@@ -4569,6 +4569,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[zettleVista,setZettleVista]=useState("ventas");// "ventas" | "comparativo"
   const[editZettle,setEditZettle]=useState(null);// {id, value} — ticket POS en edición
   const[savingZettle,setSavingZettle]=useState(false);
+  const[confirmDeleteTicket,setConfirmDeleteTicket]=useState(null);// ticket POS pendiente de borrar
   const[importType,setImportType]=useState("combinado"); // "combinado" | "ics" | "csv"
   const[importSuc,setImportSuc]=useState(USUARIOS.find(u=>u.rol==="sucursal")||null);
   const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
@@ -4887,7 +4888,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const TABS_DASH=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle"];
+  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle"];
+  const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -5325,12 +5327,14 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {/* ═══ VENTAS ZETTLE ═══ */}
         {tab==="zettle"&&(()=>{
           // Cuentas Zettle: Valle y Polanco comparten una sola cuenta (valle_polanco)
-          const ZETTLE_CUENTAS=[
+          const ZETTLE_CUENTAS_ALL=[
             {key:"metepec",label:"Metepec"},
             {key:"coapa",label:"Coapa"},
             {key:"valle_polanco",label:"Valle + Polanco"},
             {key:"oriente",label:"Oriente"},
           ];
+          const ZETTLE_LABEL_MAP={"Coapa":"coapa","Metepec":"metepec","Oriente":"oriente","Valle":"valle_polanco","Polanco":"valle_polanco"};
+          const ZETTLE_CUENTAS=filtro?ZETTLE_CUENTAS_ALL.filter(c=>filtro.some(s=>ZETTLE_LABEL_MAP[s]===c.key)):ZETTLE_CUENTAS_ALL;
           // Carga datos SOLO en estado local — no toca tickets ni el dashboard
           const cargarZettle=async()=>{
             setZettleLoading(true);
@@ -5549,8 +5553,20 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                           {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
                           {k:"Método",render:t=><span style={{fontSize:"11px",color:T.faint}}>{(t.metodo_pago||"").split(" ")[0]}</span>},
                           {k:"Total",r:true,render:t=><span style={{fontWeight:700,fontFamily:"monospace"}}>{fmt(t.total)}</span>},
+                          {k:"",render:t=>{
+                            const isPending=confirmDeleteTicket?.id===t.id;
+                            if(isPending)return<div style={{display:"flex",gap:"4px",alignItems:"center"}}>
+                              <button onClick={async()=>{
+                                await supabase.from("tickets").delete().eq("id",t.id);
+                                setTickets(prev=>prev.filter(tk=>tk.id!==t.id));
+                                setConfirmDeleteTicket(null);
+                              }} style={{fontSize:"10px",padding:"3px 8px",borderRadius:"6px",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",color:"#ef4444",cursor:"pointer",fontWeight:700,whiteSpace:"nowrap"}}>Sí, borrar</button>
+                              <button onClick={()=>setConfirmDeleteTicket(null)} style={{fontSize:"10px",padding:"3px 6px",borderRadius:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.15)",color:T.faint,cursor:"pointer"}}>✕</button>
+                            </div>;
+                            return<button onClick={()=>setConfirmDeleteTicket(t)} title="Eliminar ticket" style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"13px",padding:"2px 4px",opacity:0.5,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>🗑</button>;
+                          }},
                         ]}
-                        footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasPOS.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:color(pctMonto)}}>{fmt(totalPOS)}</td></>}
+                        footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasPOS.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:color(pctMonto)}}>{fmt(totalPOS)}</td><td/></>}
                       />
                     }
                   </div>
