@@ -971,7 +971,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           </div>
           {isAdmin&&editSesionNum!=null&&editSesionNum>1&&editSesionNum!==detalle.sesion_numero&&<div style={{fontSize:"10px",color:"rgba(73,184,211,0.65)",textAlign:"right",marginTop:"-4px"}}>Las sesiones anteriores (1–{editSesionNum-1}) quedarán como completadas</div>}
         </div>
-        <div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
+        {detalle.tipo_servicio==="laser"&&<div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
           {detalle.datos_pendientes&&<div style={{padding:"8px 12px",background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",borderRadius:"8px",marginBottom:"8px",display:"flex",alignItems:"center",gap:"8px",fontSize:"11px",color:"#f59e0b",fontWeight:600}}>📋 Datos de equipo pendientes — ingresa los parámetros y guarda</div>}
           <div style={{fontSize:"10px",letterSpacing:"1px",color:T.sub,marginBottom:"8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>PARÁMETROS DE EQUIPO</span>
@@ -1018,7 +1018,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
               </div>
             ))}
           </div>}
-        </div>
+        </div>}
         {detalle.notas?.match(/Anticipo \$(\d+)/)&&!detalle.es_cobro&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>💰 {detalle.notas.match(/Anticipo \$\d+ \w+/)?.[0]} pagado · <span style={{fontWeight:700}}>pendiente de liquidar</span></div>}
         {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}</div>
         <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
