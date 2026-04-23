@@ -3395,6 +3395,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[fCat,setFCat]=useState("renta");
   const[fConc,setFConc]=useState("");
   const[fMonto,setFMonto]=useState("");
+  const[fMetodo,setFMetodo]=useState("Efectivo");
   const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
   const[fRecurrente,setFRecurrente]=useState(false);
   const[fPeriodo,setFPeriodo]=useState(hoyYM);
@@ -3732,7 +3733,7 @@ Responde SOLO con JSON válido:
         for(const p of periodos){
           const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria","nomina");
           if(de)throw de;
-          if(validas.length){const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto)})));if(ie)throw ie;}
+          if(validas.length){const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto),forma_pago:fMetodo})));if(ie)throw ie;}
         }
       }else if(fCat==="personalizado"){
         if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
@@ -3740,14 +3741,14 @@ Responde SOLO con JSON válido:
         for(const p of periodos){
           const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",catPersonal);
           if(de)throw de;
-          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto)}]);
+          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto),forma_pago:fMetodo}]);
           if(ie)throw ie;
         }
       }else{
         if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
         for(const p of periodos){
           if(fCat==="renta"||fCat==="servicios"||fCat==="contenido_digital"||fCat==="plataforma_cire"){const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",fCat);if(de)throw de;}
-          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto)}]);
+          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto),forma_pago:fMetodo}]);
           if(ie)throw ie;
         }
       }
@@ -3763,6 +3764,8 @@ Responde SOLO con JSON válido:
 
   const borrarGasto=async(id)=>{await supabase.from("gastos_operativos").delete().eq("id",id);await cargar();};
   const borrarCategoria=async(suc,cat)=>{await supabase.from("gastos_operativos").delete().eq("sucursal_id",suc).eq("periodo",periodo).eq("categoria",cat);await cargar();};
+  const[editMetodoId,setEditMetodoId]=useState(null);
+  const actualizarFormaPago=async(id,val)=>{await supabase.from("gastos_operativos").update({forma_pago:val}).eq("id",id);setEditMetodoId(null);await cargar();};
 
   const analizarIA=async()=>{
     if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
@@ -3816,7 +3819,17 @@ Responde SOLO con JSON válido:
           <span style={{fontSize:"13px",color:T.muted,paddingLeft:"14px"}}>{c.label}</span>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
             <span style={{fontSize:"13px",fontWeight:500,color:"#f97316"}}>{fmt(c.monto)}</span>
-            {!compact&&c.items.map(it=><button key={it.id} onClick={()=>borrarGasto(it.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>)}
+            {!compact&&c.items.map(it=><span key={it.id} style={{display:"flex",gap:"6px",alignItems:"center"}}>
+              {editMetodoId===it.id
+                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={it.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(it.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Tarjeta crédito">Tarjeta crédito</option>
+                  <option value="Tarjeta débito">Tarjeta débito</option>
+                </select>
+                :<button onClick={()=>setEditMetodoId(it.id)} style={{background:it.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${it.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:it.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{it.forma_pago||"Sin método +"}</button>}
+              <button onClick={()=>borrarGasto(it.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
+            </span>)}
           </div>
         </div>)}
         <FilaGL l="Total gastos" v={p.egr} neg bold/>
@@ -3829,7 +3842,18 @@ Responde SOLO con JSON válido:
           <div style={{fontSize:"10px",letterSpacing:"2px",color:T.faint,marginBottom:"6px"}}>NÓMINA REGISTRADA</div>
           {p.nomItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted,padding:"4px 0"}}>
             <span>{n.concepto}</span>
-            <div style={{display:"flex",gap:"8px",alignItems:"center"}}><span>{fmt(n.monto)}</span><button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button></div>
+            <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+              <span>{fmt(n.monto)}</span>
+              {editMetodoId===n.id
+                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={n.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(n.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Tarjeta crédito">Tarjeta crédito</option>
+                  <option value="Tarjeta débito">Tarjeta débito</option>
+                </select>
+                :<button onClick={()=>setEditMetodoId(n.id)} style={{background:n.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${n.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:n.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{n.forma_pago||"Sin método +"}</button>}
+              <button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
+            </div>
           </div>)}
         </div>}
       </div>
@@ -4207,6 +4231,13 @@ Responde SOLO con JSON válido:
           <input className="inp" style={{width:"180px",borderColor:fCat==="personalizado"?"rgba(39,33,232,0.6)":"undefined"}} placeholder={fCat==="personalizado"?"Ej: Software CRM":"Descripción (opcional)"} value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
           <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Monto</div>
           <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
+          <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Forma de pago</div>
+          <select className="inp" style={{width:"160px"}} value={fMetodo} onChange={e=>setFMetodo(e.target.value)}>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Tarjeta crédito">Tarjeta crédito</option>
+            <option value="Tarjeta débito">Tarjeta débito</option>
+          </select></div>
           <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?(fRecurrente?"Guardando 12 meses...":"Guardando..."):"Guardar"}</button>
         </>}
       </div>
