@@ -793,7 +793,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
       let paq=null;
       if(cita.paquete_id){const{data:p}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();paq=p;}
-      const paqPrecio=paq?.precio||0;
+      const paqPrecio=paq?.precio||CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.precio||0;
       // Buscar otros paquetes del mismo ticket con cobro pendiente
       let otrosPaquetes=[];
       if(paq?.ticket_id){
@@ -1057,14 +1057,14 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>{otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px"}}>
             <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"4px"}}><span>{cita.servicio}</span><span>{fmt(paq?.precio||0)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"4px"}}><span>{cita.servicio}</span><span>{fmt(otrosPaquetes.length>0?(paq?.precio||0):paqPrecio)}</span></div>
             {otrosPaquetes.map((op,idx)=>(
               <div key={idx} style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"4px"}}><span>{op.paq.servicio}</span><span>{fmt(op.paq.precio)}</span></div>
             ))}
-            <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"8px 0"}}/>
+            <div style={{height:"1px",background:T.div,margin:"8px 0"}}/>
             {otrosPaquetes.length>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:T.muted}}>Subtotal paquetes</span><span>{fmt(paqPrecio)}</span></div>}
             {anticoMonto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#f97316",marginBottom:"4px"}}><span>Anticipo pagado</span><span>− {fmt(anticoMonto)}</span></div>}
-            <div style={{height:"1px",background:"rgba(255,255,255,0.06)",margin:"6px 0"}}/>
+            <div style={{height:"1px",background:T.div,margin:"6px 0"}}/>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"16px",fontWeight:700}}><span>A cobrar hoy</span><span style={{color:"#49B8D3"}}>{fmt(descuentoAg>0&&pagosAg.length===1?totalFinalAg:restante)}</span></div>
             {descuentoAg>0&&pagosAg.length===1&&<div style={{fontSize:"11px",color:"#10b981",textAlign:"right",marginTop:"2px"}}>Desc. 5% efectivo aplicado</div>}
           </div>
@@ -1073,11 +1073,11 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             {pagosAg.length>1&&(()=>{const rest=restante-pagosAg.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}
           </div>
           {pagosAg.map((p,i)=>(
-            <div key={i} style={{marginBottom:"8px",padding:"10px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+            <div key={i} style={{marginBottom:"8px",padding:"10px",background:T.cardBg,borderRadius:"8px",border:`1px solid ${T.cardBdr}`}}>
               {pagosAg.length>1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}><span style={{fontSize:"10px",color:T.sub}}>Pago {i+1}</span><button onClick={()=>setPagosAg(pagosAg.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.55)",cursor:"pointer",fontSize:"14px",lineHeight:1,padding:"0 2px"}}>✕</button></div>}
               <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:pagosAg.length>1?"8px":"0"}}>
                 {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
-                  <button key={m} onClick={()=>{const n=[...pagosAg];n[i]={...n[i],metodo:m};if(m!=="Crédito")setMsiSelAg(0);setPagosAg(n);}} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:p.metodo===m?"#2721E8":"transparent",borderColor:p.metodo===m?"#2721E8":"rgba(255,255,255,0.1)",color:p.metodo===m?"#fff":T.faint}}>{m}</button>
+                  <button key={m} onClick={()=>{const n=[...pagosAg];n[i]={...n[i],metodo:m};if(m!=="Crédito")setMsiSelAg(0);setPagosAg(n);}} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:p.metodo===m?"#2721E8":"transparent",borderColor:p.metodo===m?"#2721E8":T.dim,color:p.metodo===m?"#fff":T.faint}}>{m}</button>
                 ))}
               </div>
               {pagosAg.length>1&&<input type="number" className="inp" value={p.monto||""} onChange={e=>{const n=[...pagosAg];n[i]={...n[i],monto:Number(e.target.value)||0};setPagosAg(n);}} style={{fontSize:"12px",padding:"6px 10px",marginTop:"6px"}} placeholder="Monto $"/>}
@@ -1097,7 +1097,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px",borderColor:!ticketZettle.trim()?"rgba(239,68,68,0.5)":undefined}}/>
             <div style={{fontSize:"9px",color:"#ef4444",marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
           </div>
-          </div><div style={{padding:"12px 28px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
+          </div><div style={{padding:"12px 28px 20px",borderTop:`1px solid ${T.div}`,display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
         </div></div>);
       })()}
 
@@ -1985,7 +1985,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           {/* Multi-pago */}
           <div><div style={{fontSize:"10px",color:T.sub,marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
             {pagos.map((p,i)=>(
-              <div key={i} style={{marginBottom:"8px",padding:"10px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div key={i} style={{marginBottom:"8px",padding:"10px",background:T.cardBg,borderRadius:"8px",border:`1px solid ${T.cardBdr}`}}>
                 {pagos.length>1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}><span style={{fontSize:"10px",color:T.sub}}>Pago {i+1}</span><button onClick={()=>setPagos(pagos.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.55)",cursor:"pointer",fontSize:"14px",lineHeight:1,padding:"0 2px"}}>✕</button></div>}
                 <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:pagos.length>1?"8px":"0"}}>
                   {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
