@@ -776,8 +776,11 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   }catch(e){console.error(e);}setSaving(false);};
   const guardarParametros=async()=>{if(!detalle)return;setSavingParams(true);try{const upd={parametros_equipo:parametrosEdit};if(detalle.datos_pendientes)upd.datos_pendientes=false;await supabase.from("citas").update(upd).eq("id",detalle.id);setDetalle({...detalle,parametros_equipo:parametrosEdit,datos_pendientes:false});cargar();}catch(e){console.error(e);}setSavingParams(false);};
   const intentarCompletar=async(cita)=>{
-    if(parametrosEdit.length===0){setCitaSinDatos(cita);setModalSinDatos(true);return;}
-    await supabase.from("citas").update({parametros_equipo:parametrosEdit}).eq("id",cita.id);
+    const sinEquipo=cita.tipo_servicio!=="laser";
+    if(!sinEquipo){
+      if(parametrosEdit.length===0){setCitaSinDatos(cita);setModalSinDatos(true);return;}
+      await supabase.from("citas").update({parametros_equipo:parametrosEdit}).eq("id",cita.id);
+    }
     abrirCobro(cita);
   };
 
@@ -5577,8 +5580,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                   // Mapa ticket_zettle → clienta_nombre desde el POS para enriquecer la tabla Zettle
                   const posClientaMap={};
                   filasPOS.forEach(t=>{if(t.ticket_zettle&&t.clienta_nombre)posClientaMap[t.ticket_zettle]=t.clienta_nombre;});
-                  // Set de tickets Zettle que ya están capturados en POS
-                  const posTicketSet=new Set(filasPOS.map(t=>t.ticket_zettle).filter(Boolean));
+                  // También incluir citas con ticket_zettle (cobros vía agenda) para sucursal/período activos
+                  const citasFiltradas=(zettleSucFiltro?zettleCitas.filter(c=>c.sucursal_nombre===zettleSucFiltro):zettleCitas).filter(c=>c.fecha>=mesDesde&&c.fecha<=mesHasta);
+                  citasFiltradas.forEach(c=>{if(c.ticket_zettle&&c.clienta_nombre)posClientaMap[c.ticket_zettle]=c.clienta_nombre;});
+                  // Set de tickets Zettle que ya están capturados en POS o citas
+                  const posTicketSet=new Set([...filasPOS.map(t=>t.ticket_zettle),...citasFiltradas.map(c=>c.ticket_zettle)].filter(Boolean));
                   return<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",alignItems:"start"}}>
                   {/* Tabla Zettle */}
                   <div>
