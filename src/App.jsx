@@ -3397,6 +3397,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[fMonto,setFMonto]=useState("");
   const[fMetodo,setFMetodo]=useState("Efectivo");
   const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
+  const[consRows,setConsRows]=useState([{nombre:"",monto:""}]);
   const[fRecurrente,setFRecurrente]=useState(false);
   const[fPeriodo,setFPeriodo]=useState(hoyYM);
   const[historialVentas,setHistorialVentas]=useState([]);
@@ -3692,7 +3693,7 @@ Responde SOLO con JSON válido:
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
   useEffect(()=>{cargarHistorial();},[]);
 
-  const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro"]);
+  const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro","consumibles"]);
   const pl=(suc)=>{
     const ing=ventas[suc]||0;
     const g=gastos.filter(x=>x.sucursal_id===suc);
@@ -3703,12 +3704,13 @@ Responde SOLO con JSON válido:
     const ren=g.filter(x=>x.categoria==="renta").reduce((s,x)=>s+Number(x.monto),0);
     const svc=g.filter(x=>x.categoria==="servicios").reduce((s,x)=>s+Number(x.monto),0);
     const otr=g.filter(x=>x.categoria==="otro").reduce((s,x)=>s+Number(x.monto),0);
+    const cons=g.filter(x=>x.categoria==="consumibles").reduce((s,x)=>s+Number(x.monto),0);
     const customCats=[...new Set(g.filter(x=>!CATS_FIJAS.has(x.categoria)).map(x=>x.categoria))];
     const customItems=customCats.map(cat=>{const items=g.filter(x=>x.categoria===cat);return{cat,label:cat,monto:items.reduce((s,x)=>s+Number(x.monto),0),items};});
     const customTotal=customItems.reduce((s,c)=>s+c.monto,0);
-    const egr=cont+plt+meta+nom+ren+svc+otr+customTotal;
+    const egr=cont+plt+meta+nom+ren+svc+otr+cons+customTotal;
     const util=ing-egr;
-    return{ing,cont,plt,meta,nom,ren,svc,otr,customItems,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina")};
+    return{ing,cont,plt,meta,nom,ren,svc,otr,cons,customItems,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina"),consItems:g.filter(x=>x.categoria==="consumibles")};
   };
 
   const plC=(sucs)=>{
@@ -3716,7 +3718,7 @@ Responde SOLO con JSON válido:
     const customMap={};ps.forEach(p=>p.customItems.forEach(c=>{customMap[c.cat]=(customMap[c.cat]||0)+c.monto;}));
     const customItems=Object.entries(customMap).map(([cat,monto])=>({cat,label:cat,monto,items:[]}));
     const ing=sm("ing"),egr=sm("egr"),util=ing-egr;
-    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),plt:sm("plt"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr"),customItems};
+    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),plt:sm("plt"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr"),cons:sm("cons"),customItems};
   };
 
   const nextPeriodos=(from,count)=>{
@@ -3735,6 +3737,14 @@ Responde SOLO con JSON válido:
           if(de)throw de;
           if(validas.length){const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto),forma_pago:fMetodo})));if(ie)throw ie;}
         }
+      }else if(fCat==="consumibles"){
+        const validas=consRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
+        if(!validas.length){setSaving(false);return;}
+        for(const p of periodos){
+          const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"consumibles",concepto:n.nombre.trim(),monto:Number(n.monto),forma_pago:fMetodo})));
+          if(ie)throw ie;
+        }
+        setConsRows([{nombre:"",monto:""}]);
       }else if(fCat==="personalizado"){
         if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
         const catPersonal=fConc.trim();
@@ -3815,6 +3825,7 @@ Responde SOLO con JSON válido:
         {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent onDelete={!compact?()=>borrarCategoria(suc,"renta"):null}/>}
         {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent onDelete={!compact?()=>borrarCategoria(suc,"servicios"):null}/>}
         {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent onDelete={!compact?()=>borrarCategoria(suc,"otro"):null}/>}
+        {p.cons>0&&<FilaGL l="Consumibles" v={p.cons} neg indent/>}
         {p.customItems.map(c=><div key={c.cat} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
           <span style={{fontSize:"13px",color:T.muted,paddingLeft:"14px"}}>{c.label}</span>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
@@ -3841,6 +3852,24 @@ Responde SOLO con JSON válido:
         {!compact&&p.nomItems.length>0&&<div style={{marginTop:"14px",paddingTop:"12px",borderTop:`1px solid ${T.div}`}}>
           <div style={{fontSize:"10px",letterSpacing:"2px",color:T.faint,marginBottom:"6px"}}>NÓMINA REGISTRADA</div>
           {p.nomItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted,padding:"4px 0"}}>
+            <span>{n.concepto}</span>
+            <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+              <span>{fmt(n.monto)}</span>
+              {editMetodoId===n.id
+                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={n.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(n.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Tarjeta crédito">Tarjeta crédito</option>
+                  <option value="Tarjeta débito">Tarjeta débito</option>
+                </select>
+                :<button onClick={()=>setEditMetodoId(n.id)} style={{background:n.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${n.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:n.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{n.forma_pago||"Sin método +"}</button>}
+              <button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
+            </div>
+          </div>)}
+        </div>}
+        {!compact&&p.consItems&&p.consItems.length>0&&<div style={{marginTop:"14px",paddingTop:"12px",borderTop:`1px solid ${T.div}`}}>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:T.faint,marginBottom:"6px"}}>CONSUMIBLES</div>
+          {p.consItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted,padding:"4px 0"}}>
             <span>{n.concepto}</span>
             <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
               <span>{fmt(n.monto)}</span>
@@ -4223,11 +4252,12 @@ Responde SOLO con JSON válido:
             <option value="renta">Renta</option>
             <option value="servicios">Servicios (agua/luz/internet)</option>
             <option value="nomina">Nómina</option>
+            <option value="consumibles">Consumibles</option>
             <option value="otro">Otro gasto</option>
             <option value="personalizado">＋ Concepto personalizado</option>
           </select>
         </div>
-        {fCat!=="nomina"&&<><div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>{fCat==="personalizado"?"Nombre del concepto *":"Concepto"}</div>
+        {fCat!=="nomina"&&fCat!=="consumibles"&&<><div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>{fCat==="personalizado"?"Nombre del concepto *":"Concepto"}</div>
           <input className="inp" style={{width:"180px",borderColor:fCat==="personalizado"?"rgba(39,33,232,0.6)":"undefined"}} placeholder={fCat==="personalizado"?"Ej: Software CRM":"Descripción (opcional)"} value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
           <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Monto</div>
           <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
@@ -4251,6 +4281,24 @@ Responde SOLO con JSON válido:
         <div style={{display:"flex",gap:"8px",marginTop:"6px"}}>
           <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setNomRows(r=>[...r,{nombre:"",monto:""}])}>+ Agregar</button>
           <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar nóminas"}</button>
+        </div>
+      </div>}
+      {fCat==="consumibles"&&<div style={{marginTop:"14px"}}>
+        <div style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Consumibles de {fSuc} · {etiq(fPeriodo)} <span style={{color:T.faint}}>(se agregan al mes, no reemplazan)</span></div>
+        {consRows.map((n,i)=><div key={i} style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
+          <input className="inp" style={{flex:2}} placeholder="Ej: Mascarilla facial, Cartucho HIFU…" value={n.nombre} onChange={e=>setConsRows(r=>{const c=[...r];c[i]={...c[i],nombre:e.target.value};return c;})}/>
+          <input className="inp" style={{width:"130px"}} type="number" placeholder="$ Monto" value={n.monto} onChange={e=>setConsRows(r=>{const c=[...r];c[i]={...c[i],monto:e.target.value};return c;})}/>
+          {consRows.length>1&&<button className="btn-ghost" style={{padding:"8px 12px"}} onClick={()=>setConsRows(r=>r.filter((_,j)=>j!==i))}>×</button>}
+        </div>)}
+        <div style={{display:"flex",gap:"8px",marginTop:"6px",alignItems:"center"}}>
+          <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setConsRows(r=>[...r,{nombre:"",monto:""}])}>+ Agregar ítem</button>
+          <select className="inp" style={{width:"160px",fontSize:"12px"}} value={fMetodo} onChange={e=>setFMetodo(e.target.value)}>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Tarjeta crédito">Tarjeta crédito</option>
+            <option value="Tarjeta débito">Tarjeta débito</option>
+          </select>
+          <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar consumibles"}</button>
         </div>
       </div>}
     </div>
