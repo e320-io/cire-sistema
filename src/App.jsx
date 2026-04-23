@@ -788,9 +788,10 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const abrirCobro=async(cita)=>{
     const mAnticipo=cita.notas?.match(/Anticipo \$(\d+)/);
     const sinAnt=cita.notas?.includes("Sin anticipo");
-    if((mAnticipo||sinAnt)&&!cita.es_cobro&&cita.paquete_id){
+    if((mAnticipo||sinAnt)&&!cita.es_cobro){
       const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
-      const{data:paq}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
+      let paq=null;
+      if(cita.paquete_id){const{data:p}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();paq=p;}
       const paqPrecio=paq?.precio||0;
       // Buscar otros paquetes del mismo ticket con cobro pendiente
       let otrosPaquetes=[];
@@ -802,7 +803,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         }
       }
       const totalPrecio=paqPrecio+otrosPaquetes.reduce((s,x)=>s+x.paq.precio,0);
-      const restante=totalPrecio-anticoMonto;
+      const restante=Math.max(0,totalPrecio-anticoMonto);
       setCitaCobro({cita,paqPrecio:totalPrecio,anticoMonto,restante,paq,otrosPaquetes});
       setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());
       setShowCobro(true);
