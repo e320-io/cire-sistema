@@ -84,6 +84,7 @@ const CSS = `
   .tab-dash:hover{color:var(--tab-hover);}
   .tab-dash.active{color:var(--tab-active);}
   @keyframes meta-spin{to{transform:rotate(360deg)}}
+  @keyframes loading-bar{0%{background-position:100% 0}100%{background-position:-100% 0}}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
   .meta-spinner{width:28px;height:28px;border:2.5px solid var(--spinner-border);border-top-color:#a855f7;border-radius:50%;animation:meta-spin 0.8s linear infinite;}
   .meta-loading-overlay{position:absolute;inset:-4px;z-index:10;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:var(--meta-loading-bg);border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.3s;}
@@ -5073,7 +5074,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       </div>
 
       <div style={{padding:"24px 28px",maxWidth:"1400px",margin:"0 auto",position:"relative",opacity:loadingDB?0.5:1,transition:"opacity 0.2s",pointerEvents:loadingDB?"none":"auto"}}>
-        {loadingDB&&<div style={{position:"fixed",top:"56px",left:0,right:0,height:"3px",zIndex:200,background:"linear-gradient(90deg,#2721E8,#49B8D3,#2721E8)",backgroundSize:"200% 100%",animation:"meta-spin 1.2s linear infinite"}}/>}
+        {loadingDB&&<div style={{position:"fixed",top:"56px",left:0,right:0,height:"3px",zIndex:200,background:"linear-gradient(90deg,#2721E8,#49B8D3,#2721E8)",backgroundSize:"200% 100%",animation:"loading-bar 1.4s linear infinite"}}/>}
 
         {/* ═══ RESUMEN ═══ */}
         {tab==="resumen"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
