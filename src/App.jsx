@@ -5524,15 +5524,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               const pctMonto=totalZ>0?Math.round(totalPOS/totalZ*100):0;
               const color=p=>p>=90?"#10b981":p>=70?"#f59e0b":"#ef4444";
               // Tabla helper
-              const TablaComp=({filas,cols,footer})=><div className="glass" style={{padding:0,overflow:"hidden"}}>
+              const TablaComp=({filas,cols,footer,rowStyle})=><div className="glass" style={{padding:0,overflow:"hidden"}}>
                 <div style={{overflowX:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
                     <thead><tr style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`}}>
                       {cols.map(h=><th key={h.k} style={{padding:"10px 14px",textAlign:h.r?"right":"left",fontWeight:600,fontSize:"10px",letterSpacing:"1px",color:T.sub}}>{h.k.toUpperCase()}</th>)}
                     </tr></thead>
-                    <tbody>{filas.map((row,i)=><tr key={i} style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)"}`,background:i%2===0?"transparent":(light?"rgba(0,0,0,0.015)":"rgba(255,255,255,0.015)")}}>
+                    <tbody>{filas.map((row,i)=>{const extraStyle=rowStyle?rowStyle(row,i):{};return<tr key={i} style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)"}`,background:i%2===0?"transparent":(light?"rgba(0,0,0,0.015)":"rgba(255,255,255,0.015)"),...extraStyle}}>
                       {cols.map(h=><td key={h.k} style={{padding:"8px 14px",textAlign:h.r?"right":"left",...(h.style||{})}}>{h.render(row)}</td>)}
-                    </tr>)}</tbody>
+                    </tr>;})}</tbody>
                     {footer&&<tfoot><tr style={{borderTop:`2px solid ${light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}`}}>{footer}</tr></tfoot>}
                   </table>
                 </div>
@@ -5577,13 +5577,16 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                   // Mapa ticket_zettle → clienta_nombre desde el POS para enriquecer la tabla Zettle
                   const posClientaMap={};
                   filasPOS.forEach(t=>{if(t.ticket_zettle&&t.clienta_nombre)posClientaMap[t.ticket_zettle]=t.clienta_nombre;});
+                  // Set de tickets Zettle que ya están capturados en POS
+                  const posTicketSet=new Set(filasPOS.map(t=>t.ticket_zettle).filter(Boolean));
                   return<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",alignItems:"start"}}>
                   {/* Tabla Zettle */}
                   <div>
                     <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"8px",paddingLeft:"4px"}}>ZETTLE</div>
                     <TablaComp filas={filasZ}
+                      rowStyle={row=>{const key=row.ticket_num?`#${row.ticket_num}`:null;return key&&posTicketSet.has(key)?{background:light?"rgba(16,185,129,0.08)":"rgba(16,185,129,0.1)",borderLeft:"3px solid #10b981"}:{};}}
                       cols={[
-                        {k:"# Ticket",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.ticket_num??<span style={{color:T.faint}}>—</span>}</span>},
+                        {k:"# Ticket",render:t=>{const key=t.ticket_num?`#${t.ticket_num}`:null;const captured=key&&posTicketSet.has(key);return<span style={{fontFamily:"monospace",color:captured?"#10b981":T.muted,fontSize:"11px",fontWeight:captured?700:400}}>{t.ticket_num??<span style={{color:T.faint}}>—</span>}</span>;}},
                         {k:"Fecha",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.fecha}</span>},
                         {k:"Clienta",render:t=>{const n=t.ticket_num?posClientaMap[`#${t.ticket_num}`]||posClientaMap[String(t.ticket_num)]:null;return<span style={{fontSize:"11px",color:n?T.muted:T.faint,fontStyle:n?"normal":"italic"}}>{n||"—"}</span>;}},
                         {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
@@ -5619,7 +5622,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                             if(isEditing)return<div style={{display:"flex",gap:"4px",alignItems:"center"}}>
                               <input autoFocus value={editZettle.value} onChange={e=>setEditZettle({...editZettle,value:e.target.value})}
                                 onKeyDown={e=>{if(e.key==="Enter")guardarZettle();if(e.key==="Escape")setEditZettle(null);}}
-                                placeholder="#123" style={{width:"72px",fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid #49B8D3",background:"transparent",color:"#fff",fontFamily:"monospace",outline:"none"}}/>
+                                placeholder="#123" style={{width:"72px",fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid #49B8D3",background:light?"rgba(0,0,0,0.04)":"transparent",color:light?"#1a1a2e":"#fff",fontFamily:"monospace",outline:"none"}}/>
                               <button onClick={guardarZettle} disabled={savingZettle} style={{fontSize:"11px",padding:"3px 8px",borderRadius:"6px",background:"#49B8D3",border:"none",color:"#fff",cursor:"pointer",fontWeight:600}}>{savingZettle?"...":"✓"}</button>
                               <button onClick={()=>setEditZettle(null)} style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.15)",color:T.faint,cursor:"pointer"}}>✕</button>
                             </div>;
