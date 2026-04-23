@@ -776,7 +776,8 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   }catch(e){console.error(e);}setSaving(false);};
   const guardarParametros=async()=>{if(!detalle)return;setSavingParams(true);try{const upd={parametros_equipo:parametrosEdit};if(detalle.datos_pendientes)upd.datos_pendientes=false;await supabase.from("citas").update(upd).eq("id",detalle.id);setDetalle({...detalle,parametros_equipo:parametrosEdit,datos_pendientes:false});cargar();}catch(e){console.error(e);}setSavingParams(false);};
   const intentarCompletar=async(cita)=>{
-    const sinEquipo=cita.tipo_servicio!=="laser";
+    const tipoSvc=cita.tipo_servicio||detectTipo(cita.servicio||"").id;
+    const sinEquipo=tipoSvc!=="laser";
     if(!sinEquipo){
       if(parametrosEdit.length===0){setCitaSinDatos(cita);setModalSinDatos(true);return;}
       await supabase.from("citas").update({parametros_equipo:parametrosEdit}).eq("id",cita.id);
@@ -972,7 +973,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           </div>
           {isAdmin&&editSesionNum!=null&&editSesionNum>1&&editSesionNum!==detalle.sesion_numero&&<div style={{fontSize:"10px",color:"rgba(73,184,211,0.65)",textAlign:"right",marginTop:"-4px"}}>Las sesiones anteriores (1–{editSesionNum-1}) quedarán como completadas</div>}
         </div>
-        {detalle.tipo_servicio==="laser"&&<div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
+        {(()=>{const _t=detalle.tipo_servicio||detectTipo(detalle.servicio||"").id;return _t==="laser";})()&&<div style={{marginBottom:"12px",background:"rgba(0,0,0,0.25)",borderRadius:"10px",padding:"12px",border:"1px solid rgba(255,255,255,0.06)"}}>
           {detalle.datos_pendientes&&<div style={{padding:"8px 12px",background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",borderRadius:"8px",marginBottom:"8px",display:"flex",alignItems:"center",gap:"8px",fontSize:"11px",color:"#f59e0b",fontWeight:600}}>📋 Datos de equipo pendientes — ingresa los parámetros y guarda</div>}
           <div style={{fontSize:"10px",letterSpacing:"1px",color:T.sub,marginBottom:"8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>PARÁMETROS DE EQUIPO</span>
