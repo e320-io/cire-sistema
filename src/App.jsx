@@ -700,7 +700,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const{light,T}=useT();
   const[semana,setSemana]=useState(semanaD(hoy()));const[citas,setCitas]=useState([]);const[detalle,setDetalle]=useState(null);const[saving,setSaving]=useState(false);
   const[modalSig,setModalSig]=useState(false);const[citaComp,setCitaComp]=useState(null);const[horaSig,setHoraSig]=useState("");const[fechaSig,setFechaSig]=useState("");
-  const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);
+  const[showCobro,setShowCobro]=useState(false);const[citaCobro,setCitaCobro]=useState(null);const[pagosAg,setPagosAg]=useState([{metodo:"",monto:0}]);const[msiSelAg,setMsiSelAg]=useState(0);const[descuentoAg,setDescuentoAg]=useState(0);const[savingCobro,setSavingCobro]=useState(false);const[montoCustom,setMontoCustom]=useState(null);
   const[terminalesAg,setTerminalesAg]=useState([]);const[termSelAg,setTermSelAg]=useState({});const[ticketZettle,setTicketZettle]=useState("");const[fechaTicketAg,setFechaTicketAg]=useState(hoy());
   const[parametrosEdit,setParametrosEdit]=useState([]);const[savingParams,setSavingParams]=useState(false);const[zonaNew,setZonaNew]=useState("");const[valNew,setValNew]=useState("");const[historialParams,setHistorialParams]=useState([]);const[modalReagendar,setModalReagendar]=useState(false);const[citaReagendar,setCitaReagendar]=useState(null);const[fechaRe,setFechaRe]=useState("");const[horaRe,setHoraRe]=useState("");const[modalSinDatos,setModalSinDatos]=useState(false);const[citaSinDatos,setCitaSinDatos]=useState(null);const[datosPendientesMode,setDatosPendientesMode]=useState(false);const[confirmDelCita,setConfirmDelCita]=useState(false);
   const[hoverCita,setHoverCita]=useState(null);const[hoverPos,setHoverPos]=useState({x:0,y:0});const hoverTimer=useRef(null);
@@ -806,7 +806,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const totalPrecio=paqPrecio+otrosPaquetes.reduce((s,x)=>s+x.paq.precio,0);
       const restante=Math.max(0,totalPrecio-anticoMonto);
       setCitaCobro({cita,paqPrecio:totalPrecio,anticoMonto,restante,paq,otrosPaquetes});
-      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());
+      setPagosAg([{metodo:"",monto:restante}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());setMontoCustom(null);
       setShowCobro(true);
     }else{completar(cita);}
   };
@@ -818,7 +818,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
     try{
       const{cita,paqPrecio,anticoMonto,restante,otrosPaquetes=[]}=citaCobro;
       const mpago=pagosAg.length===1?(pagosAg[0].metodo+(msiSelAg>0?` ${msiSelAg}MSI`:"")+( ["Débito","Crédito"].includes(pagosAg[0].metodo)&&termSelAg[0]?` · ${termSelAg[0]}`:"")):pagosAg.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSelAg[i]?` · ${termSelAg[i]}`:""} ${fmt(p.monto)}`).join(" + ");
-      const totalFinal=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
+      const totalFinal=pagosAg.length===1?(montoCustom!==null?montoCustom:Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto)):pagosAg.reduce((s,p)=>s+p.monto,0);
       const tNum=await nextTicketNum();
       const todosServicios=[cita.servicio,...otrosPaquetes.map(x=>x.cita.servicio)];
       const tzVal=ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim();
@@ -882,25 +882,25 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         </div>
       </div>
       {modalBloque&&<div className="overlay" onClick={()=>setModalBloque(false)}><div className="glass" onClick={e=>e.stopPropagation()} style={{width:340,padding:"24px",display:"flex",flexDirection:"column",gap:"14px"}}>
-        <div><div style={{fontSize:"10px",letterSpacing:"2px",color:"rgba(255,255,255,0.4)",marginBottom:"4px"}}>NUEVO BLOQUE</div><div style={{fontSize:"16px",fontWeight:700}}>Crear evento en agenda</div></div>
+        <div><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>NUEVO BLOQUE</div><div style={{fontSize:"16px",fontWeight:700}}>Crear evento en agenda</div></div>
         <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-          {TIPOS_BLOQUE.map(t=><button key={t.id} onClick={()=>setNuevoBloque(p=>({...p,tipo:t.id}))} style={{padding:"6px 12px",borderRadius:"20px",border:`1px solid ${nuevoBloque.tipo===t.id?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.12)"}`,background:nuevoBloque.tipo===t.id?"rgba(255,255,255,0.15)":"transparent",color:nuevoBloque.tipo===t.id?"#fff":"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>{t.icon} {t.label}</button>)}
+          {TIPOS_BLOQUE.map(t=><button key={t.id} onClick={()=>setNuevoBloque(p=>({...p,tipo:t.id}))} style={{padding:"6px 12px",borderRadius:"20px",border:`1px solid ${nuevoBloque.tipo===t.id?(light?"rgba(0,0,0,0.45)":"rgba(255,255,255,0.5)"):(light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.12)")}`,background:nuevoBloque.tipo===t.id?(light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.15)"):"transparent",color:nuevoBloque.tipo===t.id?(light?"#111":"#fff"):T.faint,cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>{t.icon} {t.label}</button>)}
         </div>
-        {nuevoBloque.tipoRec!=="diario"&&<div><label style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",display:"block",marginBottom:"5px",letterSpacing:"1px"}}>{nuevoBloque.tipoRec==="semanal"?"FECHA (define el día de la semana)":"FECHA"}</label><input type="date" className="inp" value={nuevoBloque.fecha} onChange={e=>setNuevoBloque(p=>({...p,fecha:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:"dark"}}/>{nuevoBloque.tipoRec==="semanal"&&nuevoBloque.fecha&&<div style={{fontSize:"11px",color:"rgba(16,185,129,0.8)",marginTop:"5px",paddingLeft:"2px"}}>Se repetirá todos los {["domingos","lunes","martes","miércoles","jueves","viernes","sábados"][new Date(nuevoBloque.fecha+"T12:00:00").getDay()]}</div>}</div>}
+        {nuevoBloque.tipoRec!=="diario"&&<div><label style={{fontSize:"10px",color:T.sub,display:"block",marginBottom:"5px",letterSpacing:"1px"}}>{nuevoBloque.tipoRec==="semanal"?"FECHA (define el día de la semana)":"FECHA"}</label><input type="date" className="inp" value={nuevoBloque.fecha} onChange={e=>setNuevoBloque(p=>({...p,fecha:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:light?"light":"dark"}}/>{nuevoBloque.tipoRec==="semanal"&&nuevoBloque.fecha&&<div style={{fontSize:"11px",color:light?"#059669":"rgba(16,185,129,0.9)",marginTop:"5px",paddingLeft:"2px"}}>Se repetirá todos los {["domingos","lunes","martes","miércoles","jueves","viernes","sábados"][new Date(nuevoBloque.fecha+"T12:00:00").getDay()]}</div>}</div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
-          <div><label style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",display:"block",marginBottom:"5px",letterSpacing:"1px"}}>INICIO</label><input type="time" className="inp" value={nuevoBloque.horaInicio} onChange={e=>setNuevoBloque(p=>({...p,horaInicio:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:"dark",textAlign:"center"}}/></div>
-          <div><label style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",display:"block",marginBottom:"5px",letterSpacing:"1px"}}>FIN</label><input type="time" className="inp" value={nuevoBloque.horaFin} onChange={e=>setNuevoBloque(p=>({...p,horaFin:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:"dark",textAlign:"center"}}/></div>
+          <div><label style={{fontSize:"10px",color:T.sub,display:"block",marginBottom:"5px",letterSpacing:"1px"}}>INICIO</label><input type="time" className="inp" value={nuevoBloque.horaInicio} onChange={e=>setNuevoBloque(p=>({...p,horaInicio:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:light?"light":"dark",textAlign:"center"}}/></div>
+          <div><label style={{fontSize:"10px",color:T.sub,display:"block",marginBottom:"5px",letterSpacing:"1px"}}>FIN</label><input type="time" className="inp" value={nuevoBloque.horaFin} onChange={e=>setNuevoBloque(p=>({...p,horaFin:e.target.value}))} style={{width:"100%",fontSize:"13px",fontWeight:600,padding:"7px 8px",colorScheme:light?"light":"dark",textAlign:"center"}}/></div>
         </div>
-        <div><label style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",display:"block",marginBottom:"5px",letterSpacing:"1px"}}>COMENTARIO (opcional)</label><input className="inp" value={nuevoBloque.comentario} onChange={e=>setNuevoBloque(p=>({...p,comentario:e.target.value}))} placeholder="ej. Comida equipo Valle" style={{width:"100%",fontSize:"12px",padding:"7px 10px"}}/></div>
-        <div><label style={{fontSize:"10px",color:"rgba(255,255,255,0.45)",display:"block",marginBottom:"8px",letterSpacing:"1px"}}>REPETICIÓN</label>
+        <div><label style={{fontSize:"10px",color:T.sub,display:"block",marginBottom:"5px",letterSpacing:"1px"}}>COMENTARIO (opcional)</label><input className="inp" value={nuevoBloque.comentario} onChange={e=>setNuevoBloque(p=>({...p,comentario:e.target.value}))} placeholder="ej. Comida equipo Valle" style={{width:"100%",fontSize:"12px",padding:"7px 10px"}}/></div>
+        <div><label style={{fontSize:"10px",color:T.sub,display:"block",marginBottom:"8px",letterSpacing:"1px"}}>REPETICIÓN</label>
           <div style={{display:"flex",gap:"6px"}}>
-            {[{id:"diario",label:"🔁 Diario"},{id:"semanal",label:"📅 Cada semana"}].map(op=><button key={op.id} onClick={()=>setNuevoBloque(p=>({...p,tipoRec:p.tipoRec===op.id?"unico":op.id}))} style={{flex:1,padding:"8px 4px",borderRadius:"8px",border:`1px solid ${nuevoBloque.tipoRec===op.id?"rgba(16,185,129,0.7)":"rgba(255,255,255,0.12)"}`,background:nuevoBloque.tipoRec===op.id?"rgba(16,185,129,0.15)":"transparent",color:nuevoBloque.tipoRec===op.id?"#10b981":"rgba(255,255,255,0.45)",cursor:"pointer",fontSize:"11px",fontWeight:nuevoBloque.tipoRec===op.id?700:400,fontFamily:"inherit",transition:"all 0.15s"}}>{op.label}</button>)}
+            {[{id:"diario",label:"🔁 Diario"},{id:"semanal",label:"📅 Cada semana"}].map(op=><button key={op.id} onClick={()=>setNuevoBloque(p=>({...p,tipoRec:p.tipoRec===op.id?"unico":op.id}))} style={{flex:1,padding:"8px 4px",borderRadius:"8px",border:`1px solid ${nuevoBloque.tipoRec===op.id?"rgba(16,185,129,0.7)":(light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.12)")}`,background:nuevoBloque.tipoRec===op.id?"rgba(16,185,129,0.15)":"transparent",color:nuevoBloque.tipoRec===op.id?(light?"#059669":"#10b981"):T.faint,cursor:"pointer",fontSize:"11px",fontWeight:nuevoBloque.tipoRec===op.id?700:400,fontFamily:"inherit",transition:"all 0.15s"}}>{op.label}</button>)}
           </div>
-          {nuevoBloque.tipoRec==="unico"&&<div style={{fontSize:"10px",color:"rgba(255,255,255,0.3)",marginTop:"5px",paddingLeft:"2px"}}>Sin repetición — evento único</div>}
+          {nuevoBloque.tipoRec==="unico"&&<div style={{fontSize:"10px",color:T.faint,marginTop:"5px",paddingLeft:"2px"}}>Sin repetición — evento único</div>}
         </div>
         <div style={{display:"flex",gap:"8px"}}>
           <button onClick={()=>setModalBloque(false)} className="btn-ghost" style={{flex:1,padding:"9px",fontSize:"13px"}}>Cancelar</button>
-          <button onClick={crearBloque} disabled={savingBloque} style={{flex:1,padding:"9px",fontSize:"13px",fontWeight:700,background:"rgba(80,80,90,0.5)",border:"1px solid rgba(160,160,170,0.4)",borderRadius:"8px",color:"rgba(255,255,255,0.9)",cursor:"pointer",fontFamily:"inherit"}}>{savingBloque?"...":"Crear bloque"}</button>
+          <button onClick={crearBloque} disabled={savingBloque} className="btn-blue" style={{flex:1,padding:"9px",fontSize:"13px",fontWeight:700}}>{savingBloque?"...":"Crear bloque"}</button>
         </div>
       </div></div>}
       {pendingMoveBloque&&<div className="overlay" onClick={cancelarMoveBloque}><div className="glass" onClick={e=>e.stopPropagation()} style={{width:300,padding:"22px",display:"flex",flexDirection:"column",gap:"14px"}}>
@@ -1051,11 +1051,15 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       {showCobro&&citaCobro&&(()=>{
         const{cita,paqPrecio,anticoMonto,restante,paq,otrosPaquetes=[]}=citaCobro;
         const msiOpts=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.msi||[];
-        const totalFinalAg=pagosAg.length===1?Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto):pagosAg.reduce((s,p)=>s+p.monto,0);
-        const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===restante);
-        return(<div className="overlay"><div className="glass" style={{width:460,borderColor:"rgba(249,115,22,0.3)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}><div style={{overflowY:"auto",flex:1,padding:"28px",paddingBottom:"12px"}}>
+        const montoEfectivo=montoCustom!==null?montoCustom:restante;
+        const totalFinalAg=pagosAg.length===1?(montoCustom!==null?montoCustom:Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto)):pagosAg.reduce((s,p)=>s+p.monto,0);
+        const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===montoEfectivo);
+        const colorAnticipo=light?"#c2410c":"#f97316";
+        const colorMonto=light?"#0369a1":"#49B8D3";
+        const colorDesc=light?"#059669":"#10b981";
+        return(<div className="overlay"><div className="glass" style={{width:460,borderColor:light?"rgba(194,65,12,0.35)":"rgba(249,115,22,0.3)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}><div style={{overflowY:"auto",flex:1,padding:"28px",paddingBottom:"12px"}}>
           <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>{otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
-          <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px"}}>
+          <div style={{padding:"14px",background:light?"rgba(0,0,0,0.05)":"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px",border:light?"1px solid rgba(0,0,0,0.08)":"none"}}>
             <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"4px"}}><span>{cita.servicio}</span><span>{fmt(otrosPaquetes.length>0?(paq?.precio||0):paqPrecio)}</span></div>
             {otrosPaquetes.map((op,idx)=>(
@@ -1063,14 +1067,18 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             ))}
             <div style={{height:"1px",background:T.div,margin:"8px 0"}}/>
             {otrosPaquetes.length>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:T.muted}}>Subtotal paquetes</span><span>{fmt(paqPrecio)}</span></div>}
-            {anticoMonto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#f97316",marginBottom:"4px"}}><span>Anticipo pagado</span><span>− {fmt(anticoMonto)}</span></div>}
+            {anticoMonto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",fontWeight:600,color:colorAnticipo,marginBottom:"4px"}}><span>Anticipo pagado</span><span>− {fmt(anticoMonto)}</span></div>}
             <div style={{height:"1px",background:T.div,margin:"6px 0"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"16px",fontWeight:700}}><span>A cobrar hoy</span><span style={{color:"#49B8D3"}}>{fmt(descuentoAg>0&&pagosAg.length===1?totalFinalAg:restante)}</span></div>
-            {descuentoAg>0&&pagosAg.length===1&&<div style={{fontSize:"11px",color:"#10b981",textAlign:"right",marginTop:"2px"}}>Desc. 5% efectivo aplicado</div>}
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"16px",fontWeight:700}}><span>A cobrar hoy</span><span style={{color:colorMonto}}>{fmt(montoCustom!==null?montoCustom:(descuentoAg>0&&pagosAg.length===1?totalFinalAg:restante))}</span></div>
+            {descuentoAg>0&&pagosAg.length===1&&montoCustom===null&&<div style={{fontSize:"11px",color:colorDesc,textAlign:"right",marginTop:"2px"}}>Desc. 5% efectivo aplicado</div>}
+            <div style={{marginTop:"8px",display:"flex",alignItems:"center",gap:"6px"}}>
+              <input type="number" className="inp" value={montoCustom===null?"":montoCustom} onChange={e=>{const v=e.target.value;setMontoCustom(v===''?null:(Number(v)||0));}} style={{fontSize:"12px",padding:"5px 10px",flex:1}} placeholder={`Otro monto (default: ${fmt(restante)})`}/>
+              {montoCustom!==null&&<button onClick={()=>setMontoCustom(null)} style={{background:"none",border:`1px solid ${light?"rgba(185,28,28,0.5)":"rgba(255,100,100,0.4)"}`,borderRadius:"6px",color:light?"#b91c1c":"rgba(255,100,100,0.85)",cursor:"pointer",fontSize:"10px",padding:"5px 8px",whiteSpace:"nowrap",fontFamily:"inherit"}}>Restablecer</button>}
+            </div>
           </div>
           <div style={{fontSize:"10px",color:T.sub,marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>FORMA DE PAGO</span>
-            {pagosAg.length>1&&(()=>{const rest=restante-pagosAg.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}
+            {pagosAg.length>1&&(()=>{const rest=montoEfectivo-pagosAg.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}
           </div>
           {pagosAg.map((p,i)=>(
             <div key={i} style={{marginBottom:"8px",padding:"10px",background:T.cardBg,borderRadius:"8px",border:`1px solid ${T.cardBdr}`}}>
@@ -1086,7 +1094,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
               {p.metodo==="Efectivo"&&pagosAg.length===1&&<div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",marginTop:"8px",background:"rgba(16,185,129,0.06)",borderRadius:"8px",border:"1px solid rgba(16,185,129,0.2)"}}><span style={{fontSize:"11px",color:T.muted}}>Desc. 5%</span><button className="btn-ghost" style={{borderColor:descuentoAg===5?"#10b981":"rgba(255,255,255,0.1)",color:descuentoAg===5?"#10b981":T.faint,padding:"5px 12px",fontSize:"11px"}} onClick={()=>setDescuentoAg(descuentoAg===5?0:5)}>{descuentoAg===5?"✓ Aplicado":"Aplicar"}</button></div>}
             </div>
           ))}
-          {pagosAg[pagosAg.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagosAg.length===1?0:pagosAg.reduce((s,p)=>s+p.monto,0);setPagosAg(pagosAg.length===1?[{...pagosAg[0],monto:Math.round(restante/2)},{metodo:"",monto:restante-Math.round(restante/2)}]:[...pagosAg,{metodo:"",monto:Math.max(0,restante-suma)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px",marginBottom:"12px"}}>+ Agregar otro método de pago</button>}
+          {pagosAg[pagosAg.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagosAg.length===1?0:pagosAg.reduce((s,p)=>s+p.monto,0);setPagosAg(pagosAg.length===1?[{...pagosAg[0],monto:Math.round(montoEfectivo/2)},{metodo:"",monto:montoEfectivo-Math.round(montoEfectivo/2)}]:[...pagosAg,{metodo:"",monto:Math.max(0,montoEfectivo-suma)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px",marginBottom:"12px"}}>+ Agregar otro método de pago</button>}
           <div style={{marginTop:"12px",padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px",marginBottom:"8px"}}>
             <div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div>
             <input type="date" className="inp" value={fechaTicketAg} max={hoy()} onChange={e=>setFechaTicketAg(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>
