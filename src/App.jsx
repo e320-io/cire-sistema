@@ -1675,7 +1675,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     for(let idx=0;idx<carrito.length;idx++){
       const item=carrito[idx];const esPrimero=idx===0;
       let pId=null;
-      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:montoAnt,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
@@ -1692,7 +1692,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     for(const item of carrito){
       let pId=null;
-      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
