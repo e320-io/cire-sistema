@@ -884,6 +884,28 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           <button onClick={semAnt} style={{background:"none",border:"1px solid #ccc",borderRadius:"8px",color:"#333",cursor:"pointer",padding:"6px 10px",fontSize:"14px"}}>‹</button>
           <button onClick={semSig} style={{background:"none",border:"1px solid #ccc",borderRadius:"8px",color:"#333",cursor:"pointer",padding:"6px 10px",fontSize:"14px"}}>›</button>
           <div style={{fontSize:"16px",fontWeight:600,textTransform:"capitalize",color:"#111"}}>{new Date(semana[0]+"T12:00:00").toLocaleDateString("es-MX",{month:"long",year:"numeric"})}</div>
+          <div ref={searchRef} style={{position:"relative"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"6px",background:"#f5f5f5",border:"1px solid #ddd",borderRadius:"20px",padding:"5px 12px",width:"200px"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);}} onFocus={()=>{if(searchResults.length>0)setSearchOpen(true);}} placeholder="Buscar clienta…" style={{border:"none",background:"transparent",outline:"none",fontSize:"12px",color:"#333",width:"100%",fontFamily:"inherit"}}/>
+              {searchQuery&&<span onClick={()=>{setSearchQuery("");setSearchResults([]);setSearchOpen(false);}} style={{cursor:"pointer",color:"#aaa",fontSize:"14px",lineHeight:1}}>×</span>}
+            </div>
+            {searchOpen&&(
+              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,width:"320px",background:"#fff",border:"1px solid #e0e0e0",borderRadius:"10px",boxShadow:"0 4px 20px rgba(0,0,0,0.12)",zIndex:200,overflow:"hidden",maxHeight:"360px",overflowY:"auto"}}>
+                {searchResults.length===0?(
+                  <div style={{padding:"16px",textAlign:"center",fontSize:"12px",color:"#aaa"}}>Sin resultados</div>
+                ):searchResults.map(r=>{const col=colorCita(r);const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];const d=new Date(r.fecha+"T12:00:00");const fechaStr=`${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;return(
+                  <div key={r.id} onClick={()=>{setSemana(semanaD(r.fecha));setDetalle(r);setSearchOpen(false);setSearchQuery("");}} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f5f5f5",transition:"background 0.12s"}} onMouseEnter={e=>e.currentTarget.style.background="#f9f9f9"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <div style={{width:"6px",height:"36px",borderRadius:"3px",background:col,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"13px",fontWeight:600,color:"#111",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.clienta_nombre}</div>
+                      <div style={{fontSize:"11px",color:"#777",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.hora_inicio} · {fechaStr} · {r.servicio}</div>
+                    </div>
+                    <div style={{fontSize:"10px",padding:"2px 7px",borderRadius:"10px",background:r.estado==="completada"?"#dcfce7":r.estado==="perdida"?"#fef9c3":r.estado==="abierta"?"#fee2e2":"#e0f2fe",color:r.estado==="completada"?"#15803d":r.estado==="perdida"?"#854d0e":r.estado==="abierta"?"#b91c1c":"#0369a1",flexShrink:0}}>{r.estado}</div>
+                  </div>);})}
+              </div>
+            )}
+          </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>{[{color:"#039BE5",label:"Láser"},{color:"#3F51B5",label:"HIFU 4D"},{color:"#E67C73",label:"Facial"},{color:"#8E24AA",label:"Moldeo"},{color:"#33B679",label:"Cera"},{color:"#10b981",label:"Post Op"},{color:"#D50000",label:"1ª sesión"}].map(t=><div key={t.label} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"#555"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:t.color}}/>{t.label}</div>)}</div>
