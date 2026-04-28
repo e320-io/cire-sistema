@@ -294,6 +294,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const[editingTotalId,setEditingTotalId]=useState(null);const[newTotalVal,setNewTotalVal]=useState("");
   const[editCitasParams,setEditCitasParams]=useState([]);const[zonaNewMap,setZonaNewMap]=useState({});const[valNewMap,setValNewMap]=useState({});
   const[reagendarAbierta,setReagendarAbierta]=useState(null);const[fechaRAb,setFechaRAb]=useState("");const[horaRAb,setHoraRAb]=useState("");const[savingReag,setSavingReag]=useState(false);
+  const[editingCitaFecha,setEditingCitaFecha]=useState(null);const[newCitaFecha,setNewCitaFecha]=useState("");
 
   const cargar=async()=>{setLoading(true);const{data:c}=await supabase.from("clientas").select("*").eq("id",clientaId).single();const{data:p}=await supabase.from("paquetes").select("*").eq("clienta_id",clientaId).order("fecha_compra",{ascending:false});const{data:ci}=await supabase.from("citas").select("*").eq("clienta_id",clientaId).order("fecha",{ascending:false});setClienta(c);setPaquetes(p||[]);setCitasH(ci||[]);setLoading(false);};
   useEffect(()=>{cargar();},[clientaId]);
@@ -336,6 +337,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const eliminarPaquete=async(paqId)=>{setConfirmDelPaq(null);try{await supabase.from("citas").update({paquete_id:null}).eq("paquete_id",paqId);await supabase.from("paquetes").delete().eq("id",paqId);setEditPaquetes(prev=>prev.filter(p=>p.id!==paqId));await cargar();}catch(e){console.error(e);}};
   const agregarPaquete=async()=>{if(!newPaqForm?.servicio)return;setSavingNewPaq(true);try{const ms=newPaqForm.servicio.match(/(\d+)[ªa°]?\s*ses/i);const tot=newPaqForm.totalEdit?parseInt(newPaqForm.totalEdit):(ms?parseInt(ms[1]):8);const ses=parseInt(newPaqForm.sesEdit||"0")||0;const pre=parseInt(newPaqForm.precioEdit||"0")||0;const{data:pD,error}=await supabase.from("paquetes").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:newPaqForm.servicio,total_sesiones:tot,sesiones_usadas:ses,precio:pre,fecha_compra:hoy(),activo:ses<tot}]).select();if(error)throw error;setNewPaqForm(null);await cargar();}catch(e){console.error(e);}setSavingNewPaq(false);};
   const reagendarDesdeAbierta=async()=>{if(!reagendarAbierta||!fechaRAb||!horaRAb)return;setSavingReag(true);try{const tipoRA=TIPOS_SVC.find(t=>t.id===reagendarAbierta.tipo_servicio);const dur=getDuracionServicio(reagendarAbierta.servicio,reagendarAbierta.tipo_servicio)??tipoRA?.duracion??60;await supabase.from("citas").update({estado:"agendada",fecha:fechaRAb,hora_inicio:horaRAb,hora_fin:horaFin(horaRAb,dur)}).eq("id",reagendarAbierta.id);setReagendarAbierta(null);setFechaRAb("");setHoraRAb("");await cargar();}catch(e){console.error(e);}setSavingReag(false);};
+  const guardarFechaCita=async()=>{if(!editingCitaFecha||!newCitaFecha)return;await supabase.from("citas").update({fecha:newCitaFecha}).eq("id",editingCitaFecha.id);setEditingCitaFecha(null);setNewCitaFecha("");await cargar();};
 
   if(loading)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>Cargando ficha...</div>;
   if(!clienta)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>No encontrada</div>;
@@ -465,7 +467,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
         {editCitasParams.length===0&&<div style={{fontSize:"12px",color:T.faint}}>No hay sesiones con parámetros registrados</div>}
       </div>}
 
-      <div className="glass" style={{padding:"18px"}}>
+      {isAdmin&&<div className="glass" style={{padding:"18px"}}>
         <div style={{fontSize:"10px",letterSpacing:"1px",color:T.sub,marginBottom:"12px"}}>SESIONES — ELIMINAR REGISTRO</div>
         {citasH.length===0&&<div style={{fontSize:"12px",color:T.dim}}>Sin sesiones registradas</div>}
         {citasH.map(c=><div key={c.id} style={{display:"flex",gap:"10px",alignItems:"center",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
@@ -476,7 +478,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
           <div style={{fontSize:"10px",fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?"#49B8D3":T.dim,marginRight:"4px"}}>{c.estado==="completada"?"✓":c.estado==="agendada"?"Próx.":"✕"}</div>
           <button onClick={()=>setDeletingCita(c)} style={{background:"rgba(255,60,60,0.12)",border:"1px solid rgba(255,60,60,0.3)",borderRadius:"6px",color:"#ff6b6b",cursor:"pointer",padding:"4px 10px",fontSize:"11px",fontWeight:600}}>Borrar</button>
         </div>)}
-      </div>
+      </div>}
 
       {deletingCita&&<div className="overlay" onClick={()=>setDeletingCita(null)}><div className="glass" style={{width:380,padding:"28px",borderColor:"rgba(255,80,80,0.3)"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontSize:"16px",fontWeight:700,marginBottom:"8px",color:"#ff6b6b"}}>¿Eliminar sesión?</div>
@@ -619,7 +621,12 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
             <div style={{width:"8px",height:"8px",borderRadius:"50%",background:esComp?"#10b981":esProx?colorCita(c):esAb?"#f59e0b":esPerd?"#eab308":T.dim,flexShrink:0}}/>
             <div style={{flex:1}}>
               <div style={{fontSize:"14px",fontWeight:600,marginBottom:"2px"}}>{c.servicio} <span style={{color:T.muted,fontWeight:400}}>· S{c.sesion_numero}</span></div>
-              <div style={{fontSize:"12px",color:T.muted}}>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})} · {c.hora_inicio}</div>
+              <div style={{fontSize:"12px",color:T.muted,display:"flex",alignItems:"center",gap:"5px",flexWrap:"wrap"}}>
+                {editingCitaFecha?.id===c.id
+                  ?<><input type="date" className="inp" value={newCitaFecha} onChange={e=>setNewCitaFecha(e.target.value)} style={{fontSize:"11px",padding:"2px 6px",colorScheme:"dark",width:"130px"}} autoFocus/><button onClick={guardarFechaCita} disabled={!newCitaFecha} style={{fontSize:"10px",padding:"2px 8px",borderRadius:"5px",background:"#10b981",border:"none",color:"#fff",cursor:"pointer",fontWeight:700}}>OK</button><button onClick={()=>{setEditingCitaFecha(null);setNewCitaFecha("");}} style={{fontSize:"10px",padding:"2px 6px",borderRadius:"5px",background:"rgba(255,255,255,0.08)",border:"none",color:T.muted,cursor:"pointer"}}>✕</button></>
+                  :<><span>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})} · {c.hora_inicio}</span>{isAdmin&&<button onClick={()=>{setEditingCitaFecha(c);setNewCitaFecha(c.fecha);}} style={{background:"none",border:"none",color:T.faint,cursor:"pointer",fontSize:"16px",padding:"0 4px",lineHeight:1}} title="Corregir fecha">✎</button>}</>
+                }
+              </div>
               {esPerd&&c.razon_perdida&&<div style={{fontSize:"11px",color:"rgba(234,179,8,0.7)",marginTop:"2px"}}>✗ {c.razon_perdida}</div>}
             </div>
             <div style={{fontSize:"12px",fontWeight:700,color:esComp?"#10b981":esProx?"#49B8D3":esAb?"#f59e0b":esPerd?"#eab308":T.dim}}>{esComp?"✓":esProx?"Próx.":esAb?"📅":esPerd?"✗":"✕"}</div>
