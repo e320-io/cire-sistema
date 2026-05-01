@@ -3884,8 +3884,9 @@ Responde SOLO con JSON válido:
         headers:{"x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","content-type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:900,messages:[{role:"user",content:prompt}]})});
       const json=await res.json();
+      if(!res.ok){setAiTxt(`Error de la IA (${res.status}): ${json.error?.message||JSON.stringify(json)}`);return;}
       setAiTxt(json.content?.[0]?.text||"Sin respuesta de la IA.");
-    }catch{setAiTxt("Error al conectar con la IA. Verifica tu VITE_CLAUDE_KEY en .env.local");}
+    }catch(e){setAiTxt(`Error al conectar con la IA: ${e.message}. Verifica tu VITE_CLAUDE_KEY en .env.local`);}
     setAiLoad(false);
   };
 
