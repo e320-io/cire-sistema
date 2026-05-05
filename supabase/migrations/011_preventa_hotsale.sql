@@ -1,0 +1,7 @@
+ALTER TABLE paquetes
+  ADD COLUMN IF NOT EXISTS es_preventa BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS preventa_monto_inicial NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS preventa_pendiente NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS preventa_fecha_limite DATE DEFAULT '2025-05-31',
+  ADD COLUMN IF NOT EXISTS preventa_liquidado BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS preventa_vencida BOOLEAN DEFAULT false;
