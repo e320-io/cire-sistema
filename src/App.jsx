@@ -171,16 +171,86 @@ const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f
 const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
 const defaultMes=()=>{const d=new Date();if(d.getDate()<=5){const p=new Date(d.getFullYear(),d.getMonth()-1,1);return`${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}`;}return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
 
+const PROMO_EXPIRY=new Date('2026-05-31T23:59:59');
+const getPrecioActual=(item)=>(item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY)?item.precioPromo:item.precio;
 const CATALOGO=[
-  {categoria:"Combos Láser",items:[{nombre:"Full Body (8 ses)",precio:10000,msi:[3,6,9]},{nombre:"Combo Rostro (8 ses)",precio:9000,msi:[3,6,9]},{nombre:"Combo Sexy (8 ses)",precio:8000,msi:[3,6,9]},{nombre:"Combo Playa (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Piernas (8 ses)",precio:6500,msi:[3,6]},{nombre:"Combo Bikini (8 ses)",precio:5500,msi:[3,6]},{nombre:"Combo Axilas (8 ses)",precio:5500,msi:[3,6]}]},
-  {categoria:"Zonas Individuales",items:[{nombre:"Piernas Completas (8 ses)",precio:3500,msi:[3]},{nombre:"Medias Piernas (8 ses)",precio:2500,msi:[3]},{nombre:"Brazos (8 ses)",precio:3500,msi:[3]},{nombre:"Medios Brazos (8 ses)",precio:2500,msi:[3]},{nombre:"Axilas (8 ses)",precio:1500,msi:[3]},{nombre:"Espalda Completa (8 ses)",precio:4000,msi:[3]},{nombre:"Media Espalda (8 ses)",precio:2500,msi:[3]},{nombre:"Glúteos (8 ses)",precio:2500,msi:[3]},{nombre:"Zona Interglútea (8 ses)",precio:1500,msi:[3]},{nombre:"Abdomen (8 ses)",precio:2500,msi:[3]},{nombre:"Línea Abdomen (8 ses)",precio:1500,msi:[3]},{nombre:"Pecho (8 ses)",precio:2500,msi:[3]}]},
-  {categoria:"Facial Láser",items:[{nombre:"Rostro Completo (8 ses)",precio:2500,msi:[3]},{nombre:"Medio Rostro (8 ses)",precio:2000,msi:[3]},{nombre:"Bigote/Mentón/Patillas (8s)",precio:1000,msi:[3]},{nombre:"Bikini Brazilian (8 ses)",precio:3500,msi:[3]},{nombre:"French Bikini (8 ses)",precio:3000,msi:[3]},{nombre:"Sexy Bikini (8 ses)",precio:2500,msi:[3]},{nombre:"Bikini Básico (8 ses)",precio:2000,msi:[3]}]},
-  {categoria:"Faciales",items:[{nombre:"Baby Clean (1 ses)",precio:549,msi:[]},{nombre:"FullFace (1 ses)",precio:849,msi:[]},{nombre:"6 ses FullFace",precio:3500,msi:[3]},{nombre:"10 ses FullFace",precio:6000,msi:[3]}]},
-  {categoria:"HIFU 4D",items:[{nombre:"HIFU 1 persona",precio:3000,msi:[3]},{nombre:"HIFU 2 personas",precio:5000,msi:[3]}]},
-  {categoria:"Corporal",items:[{nombre:"Moldeo 1ª sesión",precio:699,msi:[]},{nombre:"Moldeo Subsecuente",precio:999,msi:[]},{nombre:"6 ses Moldeo",precio:3999,msi:[3]},{nombre:"12 ses Moldeo + Facial",precio:6999,msi:[3]},{nombre:"Anticelulítico 1ª ses",precio:699,msi:[]},{nombre:"6 ses Anticelulítico",precio:3999,msi:[3]},{nombre:"Moldeo Brasileño 1ª ses",precio:699,msi:[]},{nombre:"6 ses Moldeo Brasileño",precio:3999,msi:[3]},{nombre:"Aparatología 1 zona (Radiofrecuencia, ultrasonido, vacum)",precio:649,msi:[]}]},
-  {categoria:"Post Operatorio",items:[{nombre:"Post Op 1ª ses",precio:999,msi:[]},{nombre:"10 ses Post Op",precio:9999,msi:[3]},{nombre:"15 ses Post Op",precio:13999,msi:[3]},{nombre:"20 ses Post Op + Facial",precio:17999,msi:[3]}]},
+  {categoria:"Combos Láser",items:[
+    {nombre:"Full Body (8 ses)",precio:10000,precioPromo:8500,msi:[3,6,9]},
+    {nombre:"Combo Rostro (8 ses)",precio:9000,msi:[3,6,9]},
+    {nombre:"Combo Sexy (8 ses)",precio:8000,precioPromo:7500,msi:[3,6,9]},
+    {nombre:"Combo Playa (8 ses)",precio:6500,msi:[3,6]},
+    {nombre:"Combo Piernas (8 ses)",precio:6500,msi:[3,6]},
+    {nombre:"Combo Bikini (8 ses)",precio:5500,precioPromo:4500,msi:[3,6]},
+    {nombre:"Combo Axilas (8 ses)",precio:5500,precioPromo:4500,msi:[3,6]},
+  ]},
+  {categoria:"Zonas Individuales",items:[
+    {nombre:"Piernas Completas (8 ses)",precio:3500,msi:[3]},
+    {nombre:"Medias Piernas (8 ses)",precio:2500,precioPromo:2400,msi:[3]},
+    {nombre:"Brazos (8 ses)",precio:3500,precioPromo:3000,msi:[3]},
+    {nombre:"Medios Brazos (8 ses)",precio:2500,precioPromo:2000,msi:[3]},
+    {nombre:"Axilas (8 ses)",precio:1500,precioPromo:1200,msi:[3]},
+    {nombre:"Espalda Completa (8 ses)",precio:4000,precioPromo:3600,msi:[3]},
+    {nombre:"Media Espalda (8 ses)",precio:2500,msi:[3]},
+    {nombre:"Glúteos (8 ses)",precio:2500,precioPromo:1600,msi:[3]},
+    {nombre:"Zona Interglútea (8 ses)",precio:1500,precioPromo:1300,msi:[3]},
+    {nombre:"Abdomen (8 ses)",precio:2500,precioPromo:1600,msi:[3]},
+    {nombre:"Línea Abdomen (8 ses)",precio:1500,precioPromo:1000,msi:[3]},
+    {nombre:"Pecho (8 ses)",precio:2500,msi:[3]},
+  ]},
+  {categoria:"Facial Láser",items:[
+    {nombre:"Rostro Completo (8 ses)",precio:2500,precioPromo:2000,msi:[3]},
+    {nombre:"Medio Rostro (8 ses)",precio:2000,precioPromo:1600,msi:[3]},
+    {nombre:"Bigote/Mentón/Patillas (8s)",precio:1000,msi:[3]},
+    {nombre:"Bikini Brazilian (8 ses)",precio:3500,precioPromo:3200,msi:[3]},
+    {nombre:"French Bikini (8 ses)",precio:3000,precioPromo:2800,msi:[3]},
+    {nombre:"Sexy Bikini (8 ses)",precio:2500,precioPromo:2000,msi:[3]},
+    {nombre:"Bikini Básico (8 ses)",precio:2000,precioPromo:1800,msi:[3]},
+  ]},
+  {categoria:"Faciales",items:[
+    {nombre:"Skin Renew (1 ses)",precio:549,msi:[]},
+    {nombre:"Skin Renew (3 ses)",precio:1399,msi:[]},
+    {nombre:"Skin Renew (5 ses)",precio:1999,msi:[]},
+    {nombre:"Skin Repair (1 ses)",precio:849,msi:[]},
+    {nombre:"Skin Repair (5 ses)",precio:2975,msi:[]},
+    {nombre:"Skin Repair (6 ses)",precio:3500,msi:[3]},
+    {nombre:"Skin Repair (10 ses)",precio:6000,precioPromo:5100,msi:[3]},
+    {nombre:"Skin Reset (5 ses)",precio:3999,msi:[]},
+    {nombre:"Skin Reset (10 ses)",precio:5499,msi:[]},
+  ]},
+  {categoria:"Cire Lift (HIFU 4D)",items:[
+    {nombre:"Cire Lift 1 persona",precio:3000,precioPromo:2500,msi:[3]},
+    {nombre:"Cire Lift 2 personas",precio:5000,msi:[3]},
+  ]},
+  {categoria:"Cire Body (Moldeo Corporal)",items:[
+    {nombre:"Cire Body 1ª sesión",precio:699,precioPromo:625,msi:[]},
+    {nombre:"Cire Body subsecuente",precio:999,msi:[]},
+    {nombre:"Cire Body 6 sesiones",precio:3999,precioPromo:3399,msi:[3]},
+    {nombre:"Cire Body 12 ses + Facial",precio:6999,precioPromo:5949,msi:[3]},
+  ]},
+  {categoria:"Moldeo Cire-Ná",items:[
+    {nombre:"Moldeo Cire-Ná 1ª ses",precio:699,precioPromo:625,msi:[]},
+    {nombre:"Moldeo Cire-Ná subsecuente",precio:999,msi:[]},
+    {nombre:"Moldeo Cire-Ná 6 ses",precio:3999,precioPromo:3399,msi:[3]},
+    {nombre:"Moldeo Cire-Ná 12 ses + Facial",precio:6999,precioPromo:5949,msi:[3]},
+  ]},
+  {categoria:"Cire Sculpt Anticelulítico",items:[
+    {nombre:"Cire Sculpt Anti 1ª ses",precio:699,precioPromo:625,msi:[]},
+    {nombre:"Cire Sculpt Anti subsecuente",precio:999,msi:[]},
+    {nombre:"Cire Sculpt Anti 6 ses",precio:3999,precioPromo:3399,msi:[3]},
+    {nombre:"Cire Sculpt Anti 12 ses + Facial",precio:6999,precioPromo:5949,msi:[3]},
+  ]},
+  {categoria:"Cire Sculpt Post Operatorio",items:[
+    {nombre:"Post Op 1ª ses",precio:999,precioPromo:899,msi:[]},
+    {nombre:"Post Op subsecuente",precio:1199,msi:[]},
+    {nombre:"Post Op 10 sesiones",precio:9999,msi:[3]},
+    {nombre:"Post Op 15 sesiones",precio:13999,msi:[3]},
+    {nombre:"Post Op 20 ses + Facial",precio:17999,msi:[3]},
+  ]},
+  {categoria:"Aparatología",items:[
+    {nombre:"Aparatología 1 zona",precio:649,precioPromo:625,msi:[]},
+  ]},
 ];
-const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Baby Clean",duracion:60,color:"#E67C73"},{id:"facial_full",label:"FullFace",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"HIFU 4D",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"},{id:"valoracion",label:"Valoración",duracion:30,color:"#EAB308"}];
+const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Skin Renew",duracion:60,color:"#E67C73"},{id:"facial_full",label:"Skin Repair/Reset",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"Cire Lift",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"},{id:"valoracion",label:"Valoración",duracion:30,color:"#EAB308"}];
 // Tiempos reales por zona según tabla de tiempos (minutos)
 const TIEMPOS_ZONA={
   laser:{
@@ -229,12 +299,12 @@ const colorCita=(c)=>{
   if(c.sesion_numero===1)return"#D50000";
   return"#039BE5";
 };
-const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("baby"))return TIPOS_SVC[1];if(l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("corporal")||l.includes("anticel"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];if(l.includes("valor"))return TIPOS_SVC[7];return TIPOS_SVC[0];};
+const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("skin renew")||l.includes("baby"))return TIPOS_SVC[1];if(l.includes("skin repair")||l.includes("skin reset")||l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("cire lift")||l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("cire body")||l.includes("cire sculpt")||l.includes("corporal")||l.includes("anticel")||l.includes("aparatol"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];if(l.includes("valor"))return TIPOS_SVC[7];return TIPOS_SVC[0];};
 const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);const f=hh*60+mm+dur;return`${String(Math.floor(f/60)).padStart(2,"0")}:${String(f%60).padStart(2,"0")}`;};
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
-const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","Corporales","Mantenimiento","Personalizado","Cera"];
+const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","HIFU","Corporales","Mantenimiento","Personalizado","Cera"];
 const ZONAS_CERA=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","Ingles"];
-const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();if(f==="Combos")return n.includes("combo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","línea abdomen","glúteos","zona interg"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","medias piernas"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french","sexy bikini"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("baby clean")||n.includes("fullface")||n.includes("hifu");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog"].some(k=>n.includes(k));return true;};
+const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();if(f==="Combos")return n.includes("combo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","línea abdomen","glúteos","zona interg"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","medias piernas"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french","sexy bikini"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("baby clean")||n.includes("fullface")||n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt"].some(k=>n.includes(k));return true;};
 const MESES_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Pezones","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
 const ZONAS_PACK=["Cuerpo Completo","Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Coxis","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico"];
@@ -380,7 +450,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
                 const nombre=e.target.value;
                 const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);
                 const ses=nombre.match(/(\d+)[ªa°]?\s*ses/i)?.[1];
-                setEditPaquetes(prev=>prev.map((p,idx)=>idx!==i?p:{...p,servicioEdit:nombre,precioEdit:item?String(item.precio):p.precioEdit,totalEdit:ses?ses:p.totalEdit}));
+                setEditPaquetes(prev=>prev.map((p,idx)=>idx!==i?p:{...p,servicioEdit:nombre,precioEdit:item?String(getPrecioActual(item)):p.precioEdit,totalEdit:ses?ses:p.totalEdit}));
               }} style={{fontSize:"13px"}}>
                 {CATALOGO.map(cat=>(
                   <optgroup key={cat.categoria} label={cat.categoria}>
@@ -415,7 +485,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
             <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
               <div>
                 <div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>SERVICIO</div>
-                <select className="inp" value={newPaqForm.servicio||""} onChange={e=>{const nombre=e.target.value;const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);const ms=nombre.match(/(\d+)[ªa°]?\s*ses/i);setNewPaqForm(f=>({...f,servicio:nombre,precioEdit:item?String(item.precio):f.precioEdit,totalEdit:ms?ms[1]:f.totalEdit}));}} style={{fontSize:"13px"}}>
+                <select className="inp" value={newPaqForm.servicio||""} onChange={e=>{const nombre=e.target.value;const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);const ms=nombre.match(/(\d+)[ªa°]?\s*ses/i);setNewPaqForm(f=>({...f,servicio:nombre,precioEdit:item?String(getPrecioActual(item)):f.precioEdit,totalEdit:ms?ms[1]:f.totalEdit}));}} style={{fontSize:"13px"}}>
                   <option value="">Seleccionar servicio...</option>
                   {CATALOGO.map(cat=><optgroup key={cat.categoria} label={cat.categoria}>{cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}</optgroup>)}
                 </select>
@@ -827,15 +897,31 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
     abrirCobro(cita);
   };
 
+  const completarSinCobrar=async()=>{if(!citaCobro)return;const c=citaCobro.cita;setShowCobro(false);setCitaCobro(null);await completar(c);};
   // Intercepta "Completada" — si hay anticipo pendiente o cita sin anticipo, abre modal de cobro primero
   const abrirCobro=async(cita)=>{
+    if(cita.paquete_id){
+      const{data:paqCheck}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
+      if(paqCheck?.es_preventa&&!paqCheck?.preventa_liquidado){
+        const isMitad=cita.notas?.includes("50% pagado");
+        if(isMitad){await completar(cita);return;}
+        // Anticipo $250 preventa: cobrar quincena 1 (total/2 - anticipo) con opción de diferir
+        const anticoMonto=paqCheck.preventa_monto_inicial||250;
+        const q1=Math.max(0,Math.round(paqCheck.precio/2)-anticoMonto);
+        const q2=Math.round(paqCheck.precio/2);
+        const mitad=q1+anticoMonto; // = precio/2, usado como paqPrecio para que totalFinal calcule bien
+        setCitaCobro({cita,paqPrecio:mitad,anticoMonto,restante:q1,paq:paqCheck,otrosPaquetes:[],esPreventa:true,preventaQ2:q2});
+        setPagosAg([{metodo:"",monto:q1}]);setMsiSelAg(0);setDescuentoAg(0);setTicketZettle("");setFechaTicketAg(hoy());setMontoCustom(null);
+        setShowCobro(true);return;
+      }
+    }
     const mAnticipo=cita.notas?.match(/Anticipo \$(\d+)/);
     const sinAnt=cita.notas?.includes("Sin anticipo");
     if((mAnticipo||sinAnt)&&!cita.es_cobro){
       const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
       let paq=null;
       if(cita.paquete_id){const{data:p}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();paq=p;}
-      const paqPrecio=paq?.precio||CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.precio||0;
+      const _catItem=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio);const paqPrecio=paq?.precio||(_catItem?getPrecioActual(_catItem):0);
       // Buscar otros paquetes del mismo ticket con cobro pendiente
       let otrosPaquetes=[];
       if(paq?.ticket_id){
@@ -864,10 +950,14 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const tNum=await nextTicketNum();
       const todosServicios=[cita.servicio,...otrosPaquetes.map(x=>x.cita.servicio)];
       const tzVal=ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`Liquidación ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null,ticket_zettle:tzVal}]);
+      const etiquetaCobro=citaCobro.esPreventa?"Preventa Hot Sale Q1":"Liquidación";
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`${etiquetaCobro} · ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null,ticket_zettle:tzVal}]);
       await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,ticket_zettle:tzVal}).eq("id",cita.id);
       for(const op of otrosPaquetes){
         await supabase.from("citas").update({es_cobro:true,metodo_pago:`Liquidación conjunta · ${mpago}`,total_pagado:0}).eq("id",op.cita.id);
+      }
+      if(citaCobro.esPreventa&&citaCobro.preventaQ2&&cita.paquete_id){
+        await supabase.from("paquetes").update({preventa_pendiente:citaCobro.preventaQ2}).eq("id",cita.paquete_id);
       }
       setShowCobro(false);setCitaCobro(null);
       await completar(cita);
@@ -1134,7 +1224,8 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         const colorMonto=light?"#0369a1":"#49B8D3";
         const colorDesc=light?"#059669":"#10b981";
         return(<div className="overlay"><div className="glass" style={{width:460,borderColor:light?"rgba(194,65,12,0.35)":"rgba(249,115,22,0.3)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}><div style={{overflowY:"auto",flex:1,padding:"28px",paddingBottom:"12px"}}>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>{otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>{citaCobro.esPreventa?"PREVENTA HOT SALE · QUINCENA 1":otrosPaquetes.length>0?"LIQUIDACIÓN DE PAQUETES":"LIQUIDACIÓN DE PAQUETE"}</div>
+          {citaCobro.esPreventa&&<div style={{padding:"8px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",marginBottom:"12px",fontSize:"11px",color:"#f97316",fontWeight:600}}>🔥 Cobrar 1ª quincena ahora · 2ª quincena {fmt(citaCobro.preventaQ2)} queda pendiente (límite 31 mayo)</div>}
           <div style={{padding:"14px",background:light?"rgba(0,0,0,0.05)":"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"14px",border:light?"1px solid rgba(0,0,0,0.08)":"none"}}>
             <div style={{fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>{cita.clienta_nombre} · Ses. {cita.sesion_numero}</div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"4px"}}><span>{cita.servicio}</span><span>{fmt(otrosPaquetes.length>0?(paq?.precio||0):paqPrecio)}</span></div>
@@ -1181,7 +1272,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             <input className="inp" value={ticketZettle} onChange={e=>setTicketZettle(e.target.value)} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px",letterSpacing:"0.5px",borderColor:!ticketZettle.trim()?"rgba(239,68,68,0.5)":undefined}}/>
             <div style={{fontSize:"9px",color:"#ef4444",marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
           </div>
-          </div><div style={{padding:"12px 28px 20px",borderTop:`1px solid ${T.div}`,display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:2,padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
+          </div><div style={{padding:"12px 28px 20px",borderTop:`1px solid ${T.div}`,display:"flex",gap:"10px",flexWrap:"wrap"}}><button className="btn-ghost" onClick={()=>{setShowCobro(false);setCitaCobro(null);}} style={{flex:"1 1 80px",padding:"13px"}}>Cancelar</button>{citaCobro.esPreventa&&<button onClick={completarSinCobrar} style={{flex:"1 1 100px",padding:"12px",background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.4)",borderRadius:"10px",color:"#f97316",fontFamily:"inherit",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>Diferir pago →</button>}<button className="btn-blue" onClick={cobrarYCompletar} disabled={savingCobro||!pagoOkAg} style={{flex:"2 1 140px",padding:"13px",fontSize:"15px"}}>{savingCobro?"Guardando...":"✓ Cobrar y completar"}</button></div>
         </div></div>);
       })()}
 
@@ -1664,6 +1755,107 @@ function ConfirmacionesManana({session}){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+function PreventaView({session,isAdmin}){
+  const{light,T}=useT();
+  const[preventas,setPreventas]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[liquidando,setLiquidando]=useState(null);
+  const[liqMetodo,setLiqMetodo]=useState("");
+  const[liqTerminal,setLiqTerminal]=useState("");
+  const[liqMsi,setLiqMsi]=useState(0);
+  const[liqTicket,setLiqTicket]=useState("");
+  const[liqSaving,setLiqSaving]=useState(false);
+  const[terminalesLiq,setTerminalesLiq]=useState([]);
+  const[statusFiltro,setStatusFiltro]=useState("activas");
+  const cargar=async()=>{setLoading(true);const{data}=await supabase.from("paquetes").select("*").eq("sucursal_id",session.id).eq("es_preventa",true).order("fecha_compra",{ascending:false});setPreventas(data||[]);setLoading(false);};
+  useEffect(()=>{cargar();(async()=>{try{const{data}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");setTerminalesLiq(data||[]);}catch(e){}})();},[]);
+  const estaVencida=(p)=>p.preventa_vencida===true;
+  const esCompletada=(p)=>p.preventa_liquidado===true&&!p.preventa_vencida;
+  const fechaLimitePasada=(p)=>p.preventa_fecha_limite&&hoy()>p.preventa_fecha_limite&&!p.preventa_vencida&&!p.preventa_liquidado;
+  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");};
+  const liquidar=async()=>{
+    if(!liquidando)return;
+    if(!liqTicket.trim()){alert("El número de ticket Zettle es obligatorio.");return;}
+    if(!liqMetodo){alert("Selecciona el método de pago.");return;}
+    setLiqSaving(true);
+    try{
+      const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
+      const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
+      const tNum=await nextTicketNum();
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
+      setLiquidando(null);cargar();
+    }catch(e){console.error(e);alert("Error: "+e.message);}
+    setLiqSaving(false);
+  };
+  const vencer=async(p)=>{
+    if(!window.confirm(`¿Marcar preventa de ${p.clienta_nombre} como vencida? El paquete quedará bloqueado sin acceso a sesiones restantes.`))return;
+    await supabase.from("paquetes").update({preventa_liquidado:true,preventa_vencida:true,activo:false,preventa_pendiente:0}).eq("id",p.id);
+    cargar();
+  };
+  const activasList=preventas.filter(p=>!estaVencida(p)&&!esCompletada(p));
+  const completadasList=preventas.filter(p=>esCompletada(p));
+  const vencidasList=preventas.filter(p=>estaVencida(p));
+  const preventasFilt=statusFiltro==="activas"?activasList:statusFiltro==="completadas"?completadasList:statusFiltro==="vencidas"?vencidasList:preventas;
+  const STATUS_TABS=[{k:"activas",label:"Activas",count:activasList.length},{k:"completadas",label:"Completadas",count:completadasList.length},{k:"vencidas",label:"Vencidas",count:vencidasList.length},{k:"todas",label:"Todas",count:preventas.length}];
+  return(
+    <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>🔥 PREVENTA HOT SALE · {session.nombre}</div>
+        <button className="btn-ghost" onClick={cargar} style={{fontSize:"11px",marginLeft:"auto"}}>↺ Actualizar</button>
+      </div>
+      <div style={{display:"flex",gap:"6px",marginBottom:"16px",flexWrap:"wrap"}}>
+        {STATUS_TABS.map(t=><button key={t.k} onClick={()=>setStatusFiltro(t.k)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:statusFiltro===t.k?"#2721E8":"transparent",borderColor:statusFiltro===t.k?"#2721E8":T.div,color:statusFiltro===t.k?"#fff":T.sub,fontFamily:"inherit",fontWeight:statusFiltro===t.k?700:400}}>{t.label} <span style={{opacity:0.7}}>({t.count})</span></button>)}
+      </div>
+      {loading&&<div style={{textAlign:"center",padding:"40px",color:T.sub}}>Cargando...</div>}
+      {!loading&&<div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px",marginBottom:"4px"}}>
+          <div className="kpi"><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>ACTIVAS</div><div style={{fontSize:"22px",fontWeight:700}}>{activasList.length}</div></div>
+          <div className="kpi" style={{borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>COMPLETADAS</div><div style={{fontSize:"22px",fontWeight:700,color:"#10b981"}}>{completadasList.length}</div></div>
+          <div className="kpi orange"><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>PENDIENTE POR COBRAR</div><div style={{fontSize:"22px",fontWeight:700,color:"#f97316"}}>{fmt(activasList.reduce((s,p)=>s+Number(p.preventa_pendiente),0))}</div></div>
+        </div>
+        {preventasFilt.length===0&&<div style={{textAlign:"center",padding:"40px",color:T.sub,border:`1px dashed ${T.div}`,borderRadius:"12px"}}><div style={{fontSize:"24px",marginBottom:"8px"}}>🔥</div><div style={{fontSize:"14px",fontWeight:600,marginBottom:"4px"}}>Sin preventas en esta categoría</div></div>}
+        {preventasFilt.map(p=>{const vencida=estaVencida(p);const completada=esCompletada(p);const limitePasado=fechaLimitePasada(p);return(
+          <div key={p.id} className="glass" style={{padding:"16px 20px",borderColor:completada?"rgba(16,185,129,0.3)":vencida?"rgba(239,68,68,0.3)":limitePasado?"rgba(234,179,8,0.3)":"rgba(249,115,22,0.2)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
+                  <span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>
+                  {completada?<span style={{fontSize:"9px",background:"rgba(16,185,129,0.15)",color:"#10b981",border:"1px solid rgba(16,185,129,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>✅ COMPLETADA</span>:vencida?<span style={{fontSize:"9px",background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>VENCIDA</span>:limitePasado?<span style={{fontSize:"9px",background:"rgba(234,179,8,0.12)",color:"#eab308",border:"1px solid rgba(234,179,8,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>⚠ LÍMITE PASADO</span>:<span style={{fontSize:"9px",background:"rgba(249,115,22,0.12)",color:"#f97316",border:"1px solid rgba(249,115,22,0.35)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>🔥 PREVENTA</span>}
+                </div>
+                <div style={{fontSize:"12px",color:T.muted,marginBottom:"4px"}}>{p.servicio}</div>
+                <div style={{fontSize:"11px",color:T.sub}}>Pagado: <span style={{color:"#10b981",fontWeight:600}}>{fmt((p.precio||0)-(p.preventa_pendiente||0))}</span>{" · "}Pendiente: <span style={{color:completada?"#10b981":vencida?"#ef4444":limitePasado?"#eab308":"#f97316",fontWeight:600}}>{fmt(p.preventa_pendiente)}</span>{" · "}Límite: <span style={{color:vencida?"#ef4444":limitePasado?"#eab308":T.muted}}>31 mayo 2025</span></div>
+              </div>
+              <div style={{display:"flex",gap:"8px",flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+                {!vencida&&!completada&&<button onClick={()=>abrirLiquidar(p)} style={{fontSize:"12px",padding:"8px 16px",background:limitePasado?"#eab308":"#f97316",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Liquidar →</button>}
+                {!vencida&&!completada&&(isAdmin||limitePasado)&&<button className="btn-ghost" onClick={()=>vencer(p)} style={{fontSize:"10px",color:"#ef4444",borderColor:"rgba(239,68,68,0.3)",padding:"5px 10px"}}>✕ Vencer paquete</button>}
+              </div>
+            </div>
+          </div>
+        );})}
+      </div>}
+      {liquidando&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>LIQUIDAR PREVENTA</div>
+        <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"16px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,marginBottom:"4px"}}>{liquidando.clienta_nombre}</div>
+          <div style={{fontSize:"12px",color:T.muted,marginBottom:"8px"}}>{liquidando.servicio}</div>
+          <div style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>Cobrar: {fmt(liquidando.preventa_pendiente)}</div>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
+          {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
+            <button key={m} onClick={()=>{setLiqMetodo(m);if(m!=="Crédito")setLiqMsi(0);}} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"12px",cursor:"pointer",background:liqMetodo===m?"#2721E8":"transparent",borderColor:liqMetodo===m?"#2721E8":T.div,color:liqMetodo===m?"#fff":T.muted,fontFamily:"inherit"}}>{m}</button>
+          ))}
+        </div>
+        {liqMetodo==="Crédito"&&<div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}><span style={{fontSize:"10px",color:T.sub,alignSelf:"center"}}>MSI:</span>{[0,3,6,12].map(m=><button key={m} onClick={()=>setLiqMsi(m)} style={{padding:"5px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:liqMsi===m?"#2721E8":"transparent",borderColor:liqMsi===m?"#2721E8":T.div,color:liqMsi===m?"#fff":T.sub,fontFamily:"inherit"}}>{m===0?"Sin MSI":`${m} MSI`}</button>)}</div>}
+        {["Débito","Crédito"].includes(liqMetodo)&&terminalesLiq.length>0&&<div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{terminalesLiq.map(t=><button key={t.nombre} onClick={()=>setLiqTerminal(t.nombre)} style={{padding:"6px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:liqTerminal===t.nombre?"rgba(73,184,211,0.15)":"transparent",borderColor:liqTerminal===t.nombre?"#49B8D3":T.div,color:liqTerminal===t.nombre?"#49B8D3":T.muted,fontFamily:"inherit"}}>{t.nombre}</button>)}</div>}
+        <div style={{marginBottom:"16px"}}><div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div><input className="inp" value={liqTicket} onChange={e=>setLiqTicket(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
+        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setLiquidando(null)} style={{flex:1,padding:"12px"}}>Cancelar</button><button className="btn-blue" onClick={liquidar} disabled={liqSaving||!liqMetodo||!liqTicket.trim()} style={{flex:2,padding:"12px",fontSize:"14px"}}>{liqSaving?"Guardando...":"✓ Liquidar preventa"}</button></div>
+      </div></div>}
+    </div>
+  );
+}
+
 // POS — Paquete → Datos → Agendar (con vista de agenda) → Cobrar
 // ══════════════════════════════════════════════════════════════════════════════
 function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
@@ -1679,6 +1871,11 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
   const[montoAnticipoCustom,setMontoAnticipoCustom]=useState("");
   const[metodoAnticipoCust,setMetodoAnticipoCust]=useState("transferencia");
+  const[preventaOpt,setPreventaOpt]=useState("no"); // "no"|"anticipo_250"|"mitad"
+  const[preventaMetodo,setPreventaMetodo]=useState("");
+  const[preventaTicket,setPreventaTicket]=useState("");
+  const[preventaTerminal,setPreventaTerminal]=useState("");
+  const[preventaMsi,setPreventaMsi]=useState(0);
   const[pagos,setPagos]=useState([{metodo:"",monto:0}]); // multi-pago en modal cobro
   const[termSel,setTermSel]=useState({}); // {pagoIdx: terminalNombre}
   const[terminalesPOS,setTerminalesPOS]=useState([]);
@@ -1690,7 +1887,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
-  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,qty:1}]);};
+  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,precio:getPrecioActual(item),qty:1}]);};
   const total=carrito.reduce((s,i)=>s+i.precio,0);const totalCD=Math.round(total*(1-descuento/100));const msiD=[...new Set(carrito.flatMap(i=>i.msi||[]))].sort((a,b)=>a-b);
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
@@ -1701,7 +1898,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);};
 
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
   const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
@@ -1777,6 +1974,39 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
+  const cerrarPreventa=async()=>{
+    if(!preventaTicket.trim()){setErrGuardar("El número de ticket Zettle es obligatorio.");return;}
+    if(!preventaMetodo){setErrGuardar("Selecciona el método de pago.");return;}
+    setSaving(true);setErrGuardar("");
+    try{
+      let cliId=null;
+      if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
+      else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
+      const esAnticipo250=preventaOpt==="anticipo_250";
+      const montoInicial=esAnticipo250?250:Math.round(total/2);
+      const montoPendiente=esAnticipo250?(total-250):Math.round(total/2);
+      const tzVal=preventaTicket.trim().startsWith("#")?preventaTicket.trim():"#"+preventaTicket.trim();
+      const mpago=preventaMetodo+(preventaMsi>0?` ${preventaMsi}MSI`:"")+( ["Débito","Crédito"].includes(preventaMetodo)&&preventaTerminal?` · ${preventaTerminal}`:"");
+      const tNum=await nextTicketNum();
+      const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoInicial,metodo_pago:`Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzVal}]).select();
+      if(eT)throw new Error("Ticket: "+eT.message);
+      const tId=tD?.[0]?.id;
+      for(let idx=0;idx<carrito.length;idx++){
+        const item=carrito[idx];const esPrimero=idx===0;
+        let pId=null;
+        {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+          const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true,es_preventa:true,preventa_monto_inicial:montoInicial,preventa_pendiente:montoPendiente,preventa_fecha_limite:"2025-05-31"}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
+        const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
+        const camposAnticipo=esPrimero&&esAnticipo250?{anticipo_metodo:`Anticipo ${preventaMetodo}`,anticipo_monto:250,...(tzVal?{anticipo_ticket:tzVal}:{})}:{};
+        const notasPreventa=`Preventa Hot Sale · ${esAnticipo250?`Anticipo $250`:`50% pagado`} · Ticket #${tId||""}`;
+        const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:notasPreventa,...camposAnticipo}]);
+        if(eCi)throw new Error("Cita: "+eCi.message);
+      }
+      logActividad(session,"venta_preventa",carrito.map(i=>i.nombre).join(", "));
+      const fTk=fechaTicket;setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+    }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);
+  };
+
   const cargarT=async(sid,fecha)=>{setLoadingT(true);const f=fecha||hoy();const{data}=await supabase.from("tickets").select("*").eq("sucursal_id",sid).eq("fecha",f).order("created_at",{ascending:false});if(data)setTickets(data);setLoadingT(false);};
   const eliminarTicket=async(id)=>{await supabase.from("tickets").delete().eq("id",id);setConfirmDelTicket(null);cargarT(session.id,historialFecha);};
   const cambiarDiaHistorial=(delta)=>{const d=new Date(historialFecha+"T12:00:00");d.setDate(d.getDate()+delta);const nueva=d.toISOString().slice(0,10);setHistorialFecha(nueva);setConfirmDelTicket(null);cargarT(session.id,nueva);};
@@ -1802,10 +2032,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.45)":T.sub,fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
               onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -1834,6 +2064,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         </div>}
       </div>}
       {view==="agenda"&&<AgendaCalendar key="ag" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
+      {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin}/>}
 
       {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)} isAdmin={isAdmin}/>:
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
@@ -1957,7 +2188,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                 <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.12)":T.cardBg,border:`1px solid ${ec?"rgba(39,33,232,0.45)":T.cardBdr}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative",boxShadow:light&&!ec?"0 1px 3px rgba(0,0,0,0.05)":"none"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background=T.hoverBg;}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.12)":T.cardBg;}}>
                   <div style={{fontSize:"9px",color:T.sub,letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
                   <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
-                  <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(item.precio)}</div>
+                  <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(getPrecioActual(item))}{item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY&&<span style={{fontSize:"9px",fontWeight:600,color:"#ef4444",marginLeft:"6px",textDecoration:"line-through"}}>{fmt(item.precio)}</span>}</div>
                   {item.msi?.length>0&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
                   {ec&&<div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700,color:"#fff"}}>✓</div>}
                 </div>);})}
@@ -2027,14 +2258,38 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               </div>}
               {esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
             </div>}
-            {/* 4 Anticipo */}
-            {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:anticoOpt!=="no"?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:anticoOpt!=="no"?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:anticoOpt!=="no"?"#fff":T.faint,flexShrink:0}}>4</div>ANTICIPO</div>
+            {/* 4 Anticipo / Preventa */}
+            {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(preventaOpt!=="no"||anticoOpt!=="no")?"#fff":T.faint,flexShrink:0}}>4</div>PAGO INICIAL</div>
               <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
-                {[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"},{v:"otra",l:"Otra cantidad"}].map(o=>(
+                {/* Preventa Hot Sale options */}
+                <div style={{fontSize:"9px",letterSpacing:"1px",color:"#f97316",marginBottom:"3px",fontWeight:600}}>🔥 PREVENTA HOT SALE</div>
+                {[{v:"anticipo_250",l:"$250 anticipo · liquida en 2 quincenas",sub:`$250 hoy · ${fmt(Math.round(total/2)-250)} Q1 · ${fmt(Math.round(total/2))} Q2`},{v:"mitad",l:`${fmt(Math.round(total/2))} ahora · segunda mitad a fin de mayo`,sub:`${fmt(Math.round(total/2))} hoy · ${fmt(Math.round(total/2))} antes 31 mayo`}].map(o=>(
+                  <button key={o.v} onClick={()=>{setPreventaOpt(o.v===preventaOpt?"no":o.v);setAnticoOpt("no");setPreventaMetodo("");setPreventaTicket("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:preventaOpt===o.v?"rgba(249,115,22,0.12)":"transparent",borderColor:preventaOpt===o.v?"#f97316":T.div,color:preventaOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>🔥 {o.l}</span>{preventaOpt===o.v&&<span style={{fontSize:"12px",color:"#f97316"}}>✓</span>}</div>
+                    {total>0&&<div style={{fontSize:"9px",color:preventaOpt===o.v?"#f97316":T.faint,marginTop:"2px"}}>{o.sub}</div>}
+                  </button>))}
+                {preventaOpt!=="no"&&<div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px",padding:"10px",background:"rgba(249,115,22,0.04)",border:"1px solid rgba(249,115,22,0.15)",borderRadius:"8px"}}>
+                  <div style={{fontSize:"9px",color:"#f97316",marginBottom:"2px",letterSpacing:"1px",fontWeight:600}}>MÉTODO DE PAGO</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                    {(preventaOpt==="anticipo_250"?["Transferencia","Efectivo"]:["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"]).map(m=>(
+                      <button key={m} onClick={()=>{setPreventaMetodo(m);if(m!=="Crédito")setPreventaMsi(0);}} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:preventaMetodo===m?"#f97316":"transparent",borderColor:preventaMetodo===m?"#f97316":T.div,color:preventaMetodo===m?"#fff":T.sub}}>{m}</button>
+                    ))}
+                  </div>
+                  {preventaOpt==="mitad"&&preventaMetodo==="Crédito"&&<div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}><span style={{fontSize:"10px",color:T.sub,alignSelf:"center"}}>MSI:</span><button onClick={()=>setPreventaMsi(0)} style={{padding:"5px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:preventaMsi===0?"#f97316":"transparent",borderColor:preventaMsi===0?"#f97316":T.div,color:preventaMsi===0?"#fff":T.sub}}>Sin MSI</button>{[3,6,12].map(m=><button key={m} onClick={()=>setPreventaMsi(m)} style={{padding:"5px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:preventaMsi===m?"#f97316":"transparent",borderColor:preventaMsi===m?"#f97316":T.div,color:preventaMsi===m?"#fff":T.sub}}>{m} MSI</button>)}</div>}
+                  {preventaOpt==="mitad"&&["Débito","Crédito"].includes(preventaMetodo)&&terminalesPOS.length>0&&<div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>{terminalesPOS.map(t=><button key={t.nombre} onClick={()=>setPreventaTerminal(t.nombre)} style={{padding:"5px 8px",borderRadius:"6px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:preventaTerminal===t.nombre?"rgba(73,184,211,0.15)":"transparent",borderColor:preventaTerminal===t.nombre?"#49B8D3":T.div,color:preventaTerminal===t.nombre?"#49B8D3":T.sub}}>{t.nombre}</button>)}</div>}
+                  <div>
+                    <div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div>
+                    <input className="inp" value={preventaTicket} onChange={e=>setPreventaTicket(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px"}}/>
+                  </div>
+                </div>}
+                {/* Divider */}
+                {preventaOpt==="no"&&<div style={{height:"1px",background:T.div,margin:"4px 0"}}/>}
+                {/* Original anticipo options */}
+                {preventaOpt==="no"&&[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"},{v:"otra",l:"Otra cantidad"}].map(o=>(
                   <button key={o.v} onClick={()=>{setAnticoOpt(o.v);if(o.v==="no")setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?(light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"):"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?T.dim:"#10b981":T.div,color:anticoOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?T.faint:"#10b981"}}>✓</span>}
                   </button>))}
-                {anticoOpt==="otra"&&<div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                {preventaOpt==="no"&&anticoOpt==="otra"&&<div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
                   <div style={{display:"flex",gap:"6px"}}>
                     {[{v:"transferencia",l:"Transferencia / Tarjeta"},{v:"efectivo",l:"Efectivo"}].map(m=>(
                       <button key={m.v} onClick={()=>setMetodoAnticipoCust(m.v)} style={{flex:1,padding:"7px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",fontWeight:500,cursor:"pointer",background:metodoAnticipoCust===m.v?"rgba(16,185,129,0.15)":"transparent",borderColor:metodoAnticipoCust===m.v?"#10b981":T.div,color:metodoAnticipoCust===m.v?"#10b981":T.sub}}>{m.l}</button>
@@ -2042,7 +2297,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                   </div>
                   <input className="inp" type="number" value={montoAnticipoCustom} onChange={e=>setMontoAnticipoCustom(e.target.value)} placeholder="Monto $" min="1" style={{fontSize:"13px",padding:"8px 10px",fontWeight:600}}/>
                 </div>}
-                {anticoOpt!=="no"&&<div style={{marginTop:"4px"}}>
+                {preventaOpt==="no"&&anticoOpt!=="no"&&<div style={{marginTop:"4px"}}>
                   <div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div>
                   <input className="inp" value={ticketZettleAnticipo} onChange={e=>setTicketZettleAnticipo(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px",letterSpacing:"0.5px"}}/>
                 </div>}
@@ -2051,7 +2306,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           </div>
           {todo&&!esDom&&<div style={{padding:"12px 18px",borderTop:`1px solid ${T.div}`,flexShrink:0}}>
             {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"10px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
-            {anticoOpt!=="no"
+            {preventaOpt!=="no"
+              ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div>{(()=>{const dis=saving||!preventaMetodo||!preventaTicket.trim();return<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:dis?"rgba(249,115,22,0.35)":"#f97316",cursor:dis?"default":"pointer"}} onClick={cerrarPreventa}>{saving?"Guardando...":preventaOpt==="anticipo_250"?`🔥 Registrar preventa · $250 anticipo`:`🔥 Registrar preventa · ${fmt(Math.round(total/2))} ahora`}</button>;})()}</div>
+              :anticoOpt!=="no"
               ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":anticoOpt==="otra"&&montoAnticipoCustom?`✓ Registrar anticipo $${montoAnticipoCustom} + cita`:"✓ Registrar anticipo $250 + cita"}</button></div>
               :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>
@@ -4697,6 +4954,121 @@ function Analitica(){
 const inicioSemana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00"),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
+function PreventaDashboard({sucursalesFiltro}){
+  const{light,T}=useT();
+  const sucVisible=sucursalesFiltro||SUCURSALES_NAMES;
+  const[preventas,setPreventas]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[liquidando,setLiquidando]=useState(null);
+  const[liqMetodo,setLiqMetodo]=useState("");
+  const[liqTerminal,setLiqTerminal]=useState("");
+  const[liqMsi,setLiqMsi]=useState(0);
+  const[liqTicket,setLiqTicket]=useState("");
+  const[liqSaving,setLiqSaving]=useState(false);
+  const[terminalesMap,setTerminalesMap]=useState({});
+  const[sucFiltro,setSucFiltro]=useState("Todas");
+  const[statusFiltro,setStatusFiltro]=useState("activas");
+  const cargar=async()=>{
+    setLoading(true);
+    let q=supabase.from("paquetes").select("*").eq("es_preventa",true).order("fecha_compra",{ascending:false});
+    if(sucursalesFiltro&&sucursalesFiltro.length)q=q.in("sucursal_nombre",sucursalesFiltro);
+    const{data}=await q;
+    setPreventas(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{cargar();(async()=>{try{const{data}=await supabase.from("terminales").select("*").eq("activa",true).order("nombre");const m={};(data||[]).forEach(t=>{(m[t.sucursal_id]=m[t.sucursal_id]||[]).push(t);});setTerminalesMap(m);}catch(e){}})();},[]);
+  const estaVencida=(p)=>p.preventa_vencida===true;
+  const esCompletada=(p)=>p.preventa_liquidado===true&&!p.preventa_vencida;
+  const fechaLimitePasada=(p)=>p.preventa_fecha_limite&&hoy()>p.preventa_fecha_limite&&!p.preventa_vencida&&!p.preventa_liquidado;
+  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");};
+  const liquidar=async()=>{
+    if(!liquidando)return;
+    if(!liqTicket.trim()||!liqMetodo)return;
+    setLiqSaving(true);
+    try{
+      const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
+      const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
+      const tNum=await nextTicketNum();
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:liquidando.sucursal_id,sucursal_nombre:liquidando.sucursal_nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
+      setLiquidando(null);cargar();
+    }catch(e){console.error(e);alert("Error: "+e.message);}
+    setLiqSaving(false);
+  };
+  const vencer=async(p)=>{
+    if(!window.confirm(`¿Marcar preventa de ${p.clienta_nombre} como vencida? El paquete quedará bloqueado.`))return;
+    await supabase.from("paquetes").update({preventa_liquidado:true,preventa_vencida:true,activo:false,preventa_pendiente:0}).eq("id",p.id);
+    cargar();
+  };
+  const todasSuc=sucFiltro==="Todas";
+  const porSuc=todasSuc?preventas:preventas.filter(p=>p.sucursal_nombre===sucFiltro);
+  const activasList=porSuc.filter(p=>!estaVencida(p)&&!esCompletada(p));
+  const completadasList=porSuc.filter(p=>esCompletada(p));
+  const vencidasList=porSuc.filter(p=>estaVencida(p));
+  const preventasFilt=statusFiltro==="activas"?activasList:statusFiltro==="completadas"?completadasList:statusFiltro==="vencidas"?vencidasList:porSuc;
+  const totalPend=activasList.reduce((s,p)=>s+Number(p.preventa_pendiente),0);
+  const STATUS_TABS=[{k:"activas",label:"Activas",count:activasList.length},{k:"completadas",label:"Completadas",count:completadasList.length},{k:"vencidas",label:"Vencidas",count:vencidasList.length},{k:"todas",label:"Todas",count:porSuc.length}];
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>🔥 PREVENTA HOT SALE · MAYO 2025</div>
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginLeft:"auto"}}>
+          {["Todas",...sucVisible].map(s=><button key={s} onClick={()=>setSucFiltro(s)} style={{padding:"5px 12px",borderRadius:"7px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:sucFiltro===s?"#2721E8":"transparent",borderColor:sucFiltro===s?"#2721E8":T.div,color:sucFiltro===s?"#fff":T.sub,fontFamily:"inherit"}}>{s}</button>)}
+          <button className="btn-ghost" onClick={cargar} style={{fontSize:"11px"}}>↺</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+        {STATUS_TABS.map(t=><button key={t.k} onClick={()=>setStatusFiltro(t.k)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"11px",cursor:"pointer",background:statusFiltro===t.k?"#2721E8":"transparent",borderColor:statusFiltro===t.k?"#2721E8":T.div,color:statusFiltro===t.k?"#fff":T.sub,fontFamily:"inherit",fontWeight:statusFiltro===t.k?700:400}}>{t.label} <span style={{opacity:0.7}}>({t.count})</span></button>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+        <div className="kpi"><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>ACTIVAS</div><div style={{fontSize:"26px",fontWeight:700}}>{activasList.length}</div></div>
+        <div className="kpi" style={{borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>COMPLETADAS</div><div style={{fontSize:"26px",fontWeight:700,color:"#10b981"}}>{completadasList.length}</div></div>
+        <div className="kpi orange"><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>TOTAL PENDIENTE</div><div style={{fontSize:"26px",fontWeight:700,color:"#f97316"}}>{fmt(totalPend)}</div></div>
+        <div className="kpi"><div style={{fontSize:"10px",color:T.sub,letterSpacing:"1px",marginBottom:"6px"}}>FECHA LÍMITE</div><div style={{fontSize:"20px",fontWeight:700,color:"#ef4444"}}>31 mayo 2025</div></div>
+      </div>
+      {loading&&<div style={{textAlign:"center",padding:"40px",color:T.sub}}>Cargando...</div>}
+      {!loading&&preventasFilt.length===0&&<div style={{textAlign:"center",padding:"40px",color:T.sub,border:`1px dashed ${T.div}`,borderRadius:"12px"}}><div style={{fontSize:"24px",marginBottom:"8px"}}>🔥</div><div style={{fontSize:"14px",fontWeight:600}}>Sin preventas en esta categoría{sucFiltro!=="Todas"?` · ${sucFiltro}`:""}</div></div>}
+      {!loading&&preventasFilt.length>0&&<div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+        {preventasFilt.map(p=>{const vencida=estaVencida(p);const completada=esCompletada(p);const limitePasado=fechaLimitePasada(p);return(
+          <div key={p.id} className="glass" style={{padding:"16px 20px",borderColor:completada?"rgba(16,185,129,0.3)":vencida?"rgba(239,68,68,0.3)":limitePasado?"rgba(234,179,8,0.3)":"rgba(249,115,22,0.2)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
+                  <span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>
+                  <span style={{fontSize:"10px",color:T.sub,background:"rgba(255,255,255,0.06)",padding:"2px 8px",borderRadius:"5px"}}>{p.sucursal_nombre}</span>
+                  {completada?<span style={{fontSize:"9px",background:"rgba(16,185,129,0.15)",color:"#10b981",border:"1px solid rgba(16,185,129,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>✅ COMPLETADA</span>:vencida?<span style={{fontSize:"9px",background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>VENCIDA</span>:limitePasado?<span style={{fontSize:"9px",background:"rgba(234,179,8,0.12)",color:"#eab308",border:"1px solid rgba(234,179,8,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>⚠ LÍMITE PASADO</span>:<span style={{fontSize:"9px",background:"rgba(249,115,22,0.12)",color:"#f97316",border:"1px solid rgba(249,115,22,0.35)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>🔥 PREVENTA</span>}
+                </div>
+                <div style={{fontSize:"12px",color:T.muted,marginBottom:"4px"}}>{p.servicio}</div>
+                <div style={{fontSize:"11px",color:T.sub}}>Pagado: <span style={{color:"#10b981",fontWeight:600}}>{fmt((p.precio||0)-(p.preventa_pendiente||0))}</span>{" · "}Pendiente: <span style={{color:completada?"#10b981":vencida?"#ef4444":limitePasado?"#eab308":"#f97316",fontWeight:600}}>{fmt(p.preventa_pendiente)}</span></div>
+              </div>
+              <div style={{display:"flex",gap:"8px",flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+                {!vencida&&!completada&&<button onClick={()=>abrirLiquidar(p)} style={{fontSize:"12px",padding:"8px 16px",background:limitePasado?"#eab308":"#f97316",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Liquidar →</button>}
+                {!vencida&&!completada&&<button className="btn-ghost" onClick={()=>vencer(p)} style={{fontSize:"10px",color:"#ef4444",borderColor:"rgba(239,68,68,0.3)",padding:"5px 10px"}}>✕ Vencer</button>}
+              </div>
+            </div>
+          </div>
+        );})}
+      </div>}
+      {liquidando&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>LIQUIDAR PREVENTA · {liquidando.sucursal_nombre}</div>
+        <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"16px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,marginBottom:"4px"}}>{liquidando.clienta_nombre}</div>
+          <div style={{fontSize:"12px",color:T.muted,marginBottom:"8px"}}>{liquidando.servicio}</div>
+          <div style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>Cobrar: {fmt(liquidando.preventa_pendiente)}</div>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
+          {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
+            <button key={m} onClick={()=>{setLiqMetodo(m);if(m!=="Crédito")setLiqMsi(0);}} style={{padding:"8px 12px",borderRadius:"8px",border:"1px solid",fontSize:"12px",cursor:"pointer",background:liqMetodo===m?"#2721E8":"transparent",borderColor:liqMetodo===m?"#2721E8":T.div,color:liqMetodo===m?"#fff":T.muted,fontFamily:"inherit"}}>{m}</button>
+          ))}
+        </div>
+        {liqMetodo==="Crédito"&&<div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{[0,3,6,12].map(m=><button key={m} onClick={()=>setLiqMsi(m)} style={{padding:"5px 10px",borderRadius:"7px",border:"1px solid",fontSize:"10px",cursor:"pointer",background:liqMsi===m?"#2721E8":"transparent",borderColor:liqMsi===m?"#2721E8":T.div,color:liqMsi===m?"#fff":T.sub,fontFamily:"inherit"}}>{m===0?"Sin MSI":`${m} MSI`}</button>)}</div>}
+        <div style={{marginBottom:"16px"}}><div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div><input className="inp" value={liqTicket} onChange={e=>setLiqTicket(e.target.value)} placeholder="#123" style={{fontSize:"12px",padding:"8px 10px"}}/></div>
+        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setLiquidando(null)} style={{flex:1,padding:"12px"}}>Cancelar</button><button className="btn-blue" onClick={liquidar} disabled={liqSaving||!liqMetodo||!liqTicket.trim()} style={{flex:2,padding:"12px",fontSize:"14px"}}>{liqSaving?"Guardando...":"✓ Liquidar preventa"}</button></div>
+      </div></div>}
+    </div>
+  );
+}
+
 function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropias=null,tema="dark",toggleTema=()=>{}}){
   const{light,T,acc}=useT();
   useCSSInjection();
@@ -5061,7 +5433,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle"];
+  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa"];
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -5162,7 +5534,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -5757,6 +6129,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ FINANZAS ═══ */}
         {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
+
+        {/* ═══ PREVENTA ═══ */}
+        {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro}/>}
 
         {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
         {showWhatsNew&&<div style={{position:"fixed",bottom:"28px",right:"28px",zIndex:9999,width:"360px",background:light?"#fff":"#1a1a2e",border:"1px solid rgba(39,33,232,0.35)",borderRadius:"16px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
