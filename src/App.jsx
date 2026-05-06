@@ -11,6 +11,13 @@ const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
 const CLAUDE_KEY        = import.meta.env.VITE_CLAUDE_KEY;
 const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const BOT_SB_URL  = import.meta.env.VITE_BOT_SUPABASE_URL;
+const BOT_SB_KEY  = import.meta.env.VITE_BOT_SUPABASE_KEY;
+const BOT_API_URL = "https://whatsapp-lead-bot-ferayalaio-fere32oio.vercel.app";
+const botSB = BOT_SB_URL && BOT_SB_KEY
+  ? createClient(BOT_SB_URL, BOT_SB_KEY, { auth: { persistSession: false } })
+  : null;
+
 // ─── Analítica: registrar evento de uso ───────────────────────────────────────
 async function logActividad(session,evento,detalle=null,duracion=null){
   try{
@@ -140,7 +147,7 @@ function useT(){const{light,acc}=useContext(ThemeCtx);return{light,acc,T:mkT(lig
 
 const USUARIOS=[
   {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8",accesibilidad:true},
-  {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
+  {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3",sucursalesBot:["Valle","Polanco","Oriente","__sin_sucursal__"]},
   {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
@@ -2032,10 +2039,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.45)":T.sub,fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
               onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -2087,6 +2094,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
 
       {view==="ajustes"&&<AjustesTerminales session={session}/>}
       {view==="confirmar"&&<ConfirmacionesManana session={session}/>}
+      {view==="bot"&&<div style={{flex:1,padding:"16px 20px",display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}><BotWhatsApp session={session}/></div>}
 
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
@@ -3715,6 +3723,434 @@ function renderMarkdown(text,T,light){
     }
   });
   return elements;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BOT WHATSAPP — CRM de leads integrado
+// ══════════════════════════════════════════════════════════════════════════════
+const BOT_STAGES=[
+  {key:"nuevo",label:"Nuevo Lead",color:"#6b7280"},
+  {key:"en_conversacion",label:"En Conversación",color:"#2563eb"},
+  {key:"anticipo_tomado",label:"Anticipo Tomado",color:"#7c3aed"},
+  {key:"cita_agendada",label:"Cita Agendada",color:"#16a34a"},
+  {key:"no_interesado",label:"No Interesado",color:"#dc2626"},
+  {key:"escalado",label:"Escalado",color:"#ea580c"},
+];
+
+function BotWhatsApp({session}){
+  const{light,T}=useT();
+  // admin y duena_general ven todo; sucursal usa sucursalesBot si existe o su nombre; socia usa sucursales
+  const allowedBranches=(session.rol==="admin"||session.rol==="duena_general")
+    ?null
+    :session.rol==="sucursal"
+      ?(session.sucursalesBot||[session.nombre])
+      :(session.sucursales||null);
+  const[leads,setLeads]=useState([]);
+  const[branches,setBranches]=useState([]);
+  const[selected,setSelected]=useState(null);
+  const[messages,setMessages]=useState([]);
+  const[conversations,setConversations]=useState([]);
+  const[anticipos,setAnticipos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[loadingMsgs,setLoadingMsgs]=useState(false);
+  const[search,setSearch]=useState("");
+  const[filterStage,setFilterStage]=useState("all");
+  const[filterBranch,setFilterBranch]=useState("all");
+  const[innerTab,setInnerTab]=useState("conversaciones");
+  const[botPaused,setBotPaused]=useState(false);
+  const[humanMsg,setHumanMsg]=useState("");
+  const[sending,setSending]=useState(false);
+  const[takingOver,setTakingOver]=useState(false);
+  const[confirmingId,setConfirmingId]=useState(null);
+  const[quickReplies,setQuickReplies]=useState([]);
+  const[showQRPanel,setShowQRPanel]=useState(false);
+  const[qrFilter,setQrFilter]=useState("");
+  const[showAddQR,setShowAddQR]=useState(false);
+  const[newQR,setNewQR]=useState({shortcut:"",content:""});
+  const[savingQR,setSavingQR]=useState(false);
+  const msgEndRef=useRef(null);
+  const qrPanelRef=useRef(null);
+
+  useEffect(()=>{
+    loadLeads();loadBranches();loadAnticipos();
+    const t=setInterval(()=>{loadLeads();loadAnticipos();},30000);
+    return()=>clearInterval(t);
+  },[]);
+  useEffect(()=>{if(!selected)return;loadMessages(selected.id,true);},[selected?.id]);
+  useEffect(()=>{
+    if(!selected)return;
+    const t=setInterval(()=>loadMessages(selected.id,false),8000);
+    return()=>clearInterval(t);
+  },[selected?.id]);
+  useEffect(()=>{msgEndRef.current?.scrollIntoView({behavior:"smooth"});},[messages]);
+
+  useEffect(()=>{fetchQuickReplies();},[]);
+  useEffect(()=>{
+    if(!showQRPanel)return;
+    function handleClickOutside(e){
+      if(qrPanelRef.current&&!qrPanelRef.current.contains(e.target)){setShowQRPanel(false);setShowAddQR(false);setQrFilter("");}
+    }
+    document.addEventListener("mousedown",handleClickOutside);
+    return()=>document.removeEventListener("mousedown",handleClickOutside);
+  },[showQRPanel]);
+
+  async function fetchQuickReplies(){
+    try{const res=await fetch(`${BOT_API_URL}/api/dashboard/quick-replies`);const data=await res.json();setQuickReplies(Array.isArray(data)?data:[]);}catch{}
+  }
+  async function saveQuickReply(){
+    if(!newQR.shortcut.trim()||!newQR.content.trim())return;
+    setSavingQR(true);
+    try{
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/quick-replies`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newQR)});
+      const data=await res.json();
+      if(data.error){alert(data.error);return;}
+      setQuickReplies(prev=>[...prev,data].sort((a,b)=>a.shortcut.localeCompare(b.shortcut)));
+      setNewQR({shortcut:"",content:""});setShowAddQR(false);
+    }catch(e){alert("Error: "+e.message);}finally{setSavingQR(false);}
+  }
+  async function deleteQuickReply(id){
+    if(!confirm("¿Eliminar esta respuesta rápida?"))return;
+    try{await fetch(`${BOT_API_URL}/api/dashboard/quick-replies/${id}`,{method:"DELETE"});setQuickReplies(prev=>prev.filter(q=>q.id!==id));}catch(e){alert("Error: "+e.message);}
+  }
+
+  async function loadBranches(){
+    if(!botSB)return;
+    const{data}=await botSB.from("branches").select("id,name").eq("is_active",true).order("name");
+    setBranches(data||[]);
+  }
+
+  async function loadLeads(){
+    if(!botSB)return;
+    const{data}=await botSB.from("leads")
+      .select("id,name,phone,stage,source,created_at,branch_id,business_id,branches(name)")
+      .order("created_at",{ascending:false}).limit(300);
+    let all=data||[];
+    if(allowedBranches?.length) all=all.filter(l=>
+      allowedBranches.includes(l.branches?.name)||
+      (allowedBranches.includes("__sin_sucursal__")&&!l.branches?.name)
+    );
+    const ids=all.map(l=>l.id);
+    if(!ids.length){setLeads([]);setLoading(false);return;}
+    const{data:convs}=await botSB.from("conversations")
+      .select("id,lead_id,status,created_at,bot_paused").in("lead_id",ids).order("created_at",{ascending:false});
+    const lastConv={},countConv={};
+    (convs||[]).forEach(c=>{if(!lastConv[c.lead_id])lastConv[c.lead_id]=c;countConv[c.lead_id]=(countConv[c.lead_id]||0)+1;});
+    const cids=(convs||[]).map(c=>c.id);
+    let lastMsg={};
+    if(cids.length){
+      const{data:msgs}=await botSB.from("messages")
+        .select("conversation_id,content,role,created_at").in("conversation_id",cids).order("created_at",{ascending:false});
+      (msgs||[]).forEach(m=>{const cv=(convs||[]).find(c=>c.id===m.conversation_id);if(cv&&!lastMsg[cv.lead_id])lastMsg[cv.lead_id]=m;});
+    }
+    setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null})));
+    setLoading(false);
+  }
+
+  async function loadMessages(leadId,initial){
+    if(!botSB)return;
+    if(initial){setLoadingMsgs(true);setMessages([]);setConversations([]);}
+    const{data:convs}=await botSB.from("conversations").select("id,status,created_at,bot_paused").eq("lead_id",leadId).order("created_at",{ascending:true});
+    const cids=(convs||[]).map(c=>c.id);
+    if(!cids.length){if(initial)setLoadingMsgs(false);return{messages:[],conversations:[]};}
+    const{data:msgs}=await botSB.from("messages").select("id,conversation_id,role,content,created_at,is_human_agent").in("conversation_id",cids).order("created_at",{ascending:true});
+    setMessages(msgs||[]);setConversations(convs||[]);
+    if(initial){const active=(convs||[]).find(c=>c.status==="activa");setBotPaused(active?.bot_paused||false);setLoadingMsgs(false);}
+    return{messages:msgs||[],conversations:convs||[]};
+  }
+
+  async function loadAnticipos(){
+    if(!botSB)return;
+    const{data}=await botSB.from("pending_appointments")
+      .select("*,leads(name,phone,stage,branch_id,branches(name))").in("status",["pendiente","comprobante_recibido"]).order("created_at",{ascending:false});
+    let r=data||[];
+    if(allowedBranches?.length) r=r.filter(a=>
+      allowedBranches.includes(a.leads?.branches?.name)||
+      (allowedBranches.includes("__sin_sucursal__")&&!a.leads?.branches?.name)
+    );
+    setAnticipos(r);
+  }
+
+  async function handleTakeover(paused){
+    const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+    if(!conv||!botSB)return;
+    setBotPaused(paused);setTakingOver(true);
+    await botSB.from("conversations").update({bot_paused:paused}).eq("id",conv.id);
+    setTakingOver(false);
+  }
+
+  async function handleSendMessage(){
+    if(!humanMsg.trim()||!selected)return;
+    const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+    if(!conv){alert("No hay conversación activa para este lead.");return;}
+    setSending(true);
+    try{
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/send-message`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({leadId:selected.id,conversationId:conv.id,message:humanMsg.trim()}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||"Error al enviar");
+      setHumanMsg("");
+      await loadMessages(selected.id,false);
+    }catch(e){
+      alert("Error al enviar mensaje: "+e.message);
+    }finally{setSending(false);}
+  }
+
+  async function confirmarAnticipo(id){
+    if(!botSB)return;
+    setConfirmingId(id);
+    try{await botSB.from("pending_appointments").update({status:"confirmado"}).eq("id",id);await loadAnticipos();await loadLeads();}
+    finally{setConfirmingId(null);}
+  }
+
+  const activeConv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+  const hasSinSucursal=allowedBranches?.includes("__sin_sucursal__")||(!allowedBranches&&leads.some(l=>!l.branches?.name));
+  const visibleBranches=allowedBranches
+    ?branches.filter(b=>allowedBranches.includes(b.name))
+    :branches;
+  const filtered=leads.filter(l=>{
+    const ms=(l.name||"").toLowerCase().includes(search.toLowerCase())||(l.phone||"").includes(search);
+    const ss=filterStage==="all"||l.stage===filterStage;
+    const bs=filterBranch==="all"
+      ||(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch);
+    return ms&&ss&&bs;
+  });
+  const byStage=Object.fromEntries(BOT_STAGES.map(s=>[s.key,[]]));
+  leads.filter(l=>{
+    if(filterBranch==="all")return true;
+    if(filterBranch==="__sin_sucursal__")return!l.branches?.name;
+    return l.branches?.name===filterBranch;
+  }).forEach(l=>{const k=l.stage||"nuevo";if(byStage[k])byStage[k].push(l);else byStage["nuevo"].push(l);});
+
+  function fmtT(d){
+    if(!d)return"";const dt=new Date(d),now=new Date();
+    if(dt.toDateString()===now.toDateString())return dt.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
+    return dt.toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
+  }
+
+  function buildChatItems(){
+    if(!conversations.length||!messages.length)return messages.map(m=>({type:"message",data:m}));
+    const items=[];let lastCid=null;
+    messages.forEach(msg=>{
+      if(msg.conversation_id!==lastCid){const cv=conversations.find(c=>c.id===msg.conversation_id);items.push({type:"separator",data:cv});lastCid=msg.conversation_id;}
+      items.push({type:"message",data:msg});
+    });
+    return items;
+  }
+
+  const sep=light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)";
+
+  if(!botSB)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>Configura VITE_BOT_SUPABASE_URL y VITE_BOT_SUPABASE_KEY en .env</div>;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
+      {/* ── Header con sub-tabs ─────────────────────────────────────────── */}
+      <div style={{display:"flex",alignItems:"center",gap:"12px",paddingBottom:"16px",borderBottom:`1px solid ${sep}`,flexWrap:"wrap"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>BOT WHATSAPP</div>
+        {allowedBranches&&<div style={{fontSize:"11px",color:T.faint,background:light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.06)",padding:"3px 10px",borderRadius:"20px"}}>{allowedBranches.join(", ")}</div>}
+        <div style={{flex:1}}/>
+        {["conversaciones","kanban","anticipos"].map(t=>(
+          <button key={t} onClick={()=>setInnerTab(t)} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:innerTab===t?"#2721E8":"transparent",color:innerTab===t?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif",borderRadius:"8px"}}>
+            {t==="conversaciones"?"💬 Conversaciones":t==="kanban"?"📋 Kanban":`🔔 Anticipos${anticipos.length?` (${anticipos.length})`:""}`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── CONVERSACIONES ──────────────────────────────────────────────── */}
+      {innerTab==="conversaciones"&&(
+        <div style={{display:"flex",flex:1,gap:"16px",minHeight:0,paddingTop:"16px",overflow:"hidden"}}>
+          {/* Lista de leads */}
+          <div style={{width:"300px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
+            <input className="inp" placeholder="Buscar nombre o teléfono..." value={search} onChange={e=>setSearch(e.target.value)} style={{fontSize:"12px",padding:"8px 12px"}}/>
+            <div style={{display:"flex",gap:"6px"}}>
+              <select className="inp" value={filterStage} onChange={e=>setFilterStage(e.target.value)} style={{fontSize:"11px",padding:"5px 8px",flex:1}}>
+                <option value="all">Todas las etapas</option>
+                {BOT_STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+              {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
+                <select className="inp" value={filterBranch} onChange={e=>setFilterBranch(e.target.value)} style={{fontSize:"11px",padding:"5px 8px",flex:1}}>
+                  <option value="all">Todas</option>
+                  {visibleBranches.map(b=><option key={b.id} value={b.name}>{b.name}</option>)}
+                  {hasSinSucursal&&<option value="__sin_sucursal__">Sin Sucursal</option>}
+                </select>
+              )}
+            </div>
+            <div style={{fontSize:"10px",color:T.faint}}>{filtered.length} leads</div>
+            <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"4px"}}>
+              {loading&&<div style={{padding:"20px",textAlign:"center",color:T.sub,fontSize:"13px"}}>Cargando...</div>}
+              {filtered.map(l=>{
+                const stage=BOT_STAGES.find(s=>s.key===l.stage)||BOT_STAGES[0];
+                const isActive=selected?.id===l.id;
+                const isEsc=l.last_conversation?.status==="escalada";
+                return(
+                  <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
+                      <div style={{width:"6px",height:"6px",borderRadius:"50%",background:stage.color,flexShrink:0}}/>
+                      <div style={{fontSize:"13px",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
+                      <div style={{fontSize:"10px",color:T.faint,flexShrink:0}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
+                    </div>
+                    <div style={{fontSize:"11px",color:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>{l.last_message?.content||"—"}</div>
+                    {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"9px",color:T.faint,paddingLeft:"14px",marginTop:"2px"}}>{l.branches.name}</div>}
+                  </div>
+                );
+              })}
+              {!loading&&filtered.length===0&&<div style={{padding:"30px",textAlign:"center",color:T.faint,fontSize:"13px"}}>Sin leads</div>}
+            </div>
+          </div>
+
+          {/* Panel de conversación */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,background:light?"rgba(0,0,0,0.02)":"rgba(0,0,0,0.2)",borderRadius:"12px",overflow:"hidden"}}>
+            {!selected?(
+              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:T.faint,fontSize:"13px"}}>Selecciona un lead para ver su conversación</div>
+            ):(
+              <>
+                <div style={{padding:"14px 18px",borderBottom:`1px solid ${sep}`,display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+                  <div>
+                    <div style={{fontSize:"14px",fontWeight:700}}>{selected.name||selected.phone}</div>
+                    <div style={{fontSize:"11px",color:T.sub}}>{selected.phone}{selected.branches?.name?` · ${selected.branches.name}`:""}</div>
+                  </div>
+                  <div style={{flex:1}}/>
+                  {(()=>{const s=BOT_STAGES.find(x=>x.key===selected.stage)||BOT_STAGES[0];return<div style={{padding:"3px 10px",borderRadius:"20px",background:`${s.color}22`,border:`1px solid ${s.color}44`,fontSize:"10px",fontWeight:600,color:s.color}}>{s.label}</div>;})()}
+                  {activeConv&&(botPaused?(
+                    <button onClick={()=>handleTakeover(false)} disabled={takingOver} className="btn-ghost" style={{fontSize:"11px",color:"#10b981",borderColor:"rgba(16,185,129,0.4)"}}>{takingOver?"...":"🤖 Activar bot"}</button>
+                  ):(
+                    <button onClick={()=>handleTakeover(true)} disabled={takingOver} className="btn-ghost" style={{fontSize:"11px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)"}}>{takingOver?"...":"✋ Tomar control"}</button>
+                  ))}
+                </div>
+                <div style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                  {loadingMsgs&&<div style={{textAlign:"center",color:T.sub,fontSize:"13px"}}>Cargando mensajes...</div>}
+                  {buildChatItems().map((item,i)=>{
+                    if(item.type==="separator"){const cv=item.data;return(
+                      <div key={`sep-${i}`} style={{textAlign:"center",fontSize:"10px",color:T.faint,padding:"8px 0",display:"flex",alignItems:"center",gap:"8px"}}>
+                        <div style={{flex:1,height:"1px",background:sep}}/>
+                        <span>Conversación · {new Date(cv?.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})} {cv?.status==="activa"?"🟢":"⚫"}</span>
+                        <div style={{flex:1,height:"1px",background:sep}}/>
+                      </div>
+                    );}
+                    const msg=item.data;const isBot=msg.role!=="lead";
+                    return(
+                      <div key={msg.id} style={{display:"flex",justifyContent:isBot?"flex-end":"flex-start"}}>
+                        <div style={{maxWidth:"72%",padding:"8px 12px",borderRadius:isBot?"12px 12px 2px 12px":"12px 12px 12px 2px",background:isBot?(msg.is_human_agent?"rgba(245,158,11,0.18)":"#2721E8"):(light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.08)"),border:msg.is_human_agent?"1px solid rgba(245,158,11,0.4)":"none",fontSize:"13px",lineHeight:"1.4",color:isBot&&!msg.is_human_agent?"#fff":undefined}}>
+                          {msg.is_human_agent&&<div style={{fontSize:"9px",color:"#f59e0b",marginBottom:"3px",fontWeight:700}}>AGENTE</div>}
+                          <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{msg.content}</div>
+                          <div style={{fontSize:"9px",color:isBot&&!msg.is_human_agent?"rgba(255,255,255,0.5)":T.faint,marginTop:"3px",textAlign:"right"}}>{new Date(msg.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={msgEndRef}/>
+                </div>
+                {activeConv&&botPaused&&(
+                  <div style={{borderTop:`1px solid ${sep}`,position:"relative"}}>
+                    {showQRPanel&&(
+                      <div ref={qrPanelRef} style={{position:"absolute",bottom:"100%",left:0,right:0,background:T.card,border:`1px solid ${sep}`,borderBottom:"none",boxShadow:"0 -4px 12px rgba(0,0,0,0.12)",zIndex:10,maxHeight:"320px",display:"flex",flexDirection:"column"}}>
+                        <div style={{padding:"10px 12px",borderBottom:`1px solid ${sep}`,display:"flex",gap:"8px",alignItems:"center"}}>
+                          <span style={{fontSize:"13px",fontWeight:700,color:T.text,whiteSpace:"nowrap"}}>💬 Respuestas rápidas</span>
+                          <input autoFocus value={qrFilter} onChange={e=>setQrFilter(e.target.value)} placeholder="Buscar atajo..." style={{flex:1,padding:"5px 10px",borderRadius:"10px",border:`1px solid ${sep}`,fontSize:"13px",outline:"none",background:T.bg,color:T.text}}/>
+                          <button onClick={()=>{setShowAddQR(true);setQrFilter("");}} style={{padding:"5px 10px",borderRadius:"10px",border:"none",background:"#2721E8",color:"#fff",fontSize:"12px",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>+ Nueva</button>
+                          <button onClick={()=>{setShowQRPanel(false);setShowAddQR(false);setQrFilter("");}} style={{padding:"5px 8px",borderRadius:"8px",border:`1px solid ${sep}`,background:T.bg,fontSize:"13px",cursor:"pointer",color:T.muted}}>✕</button>
+                        </div>
+                        {showAddQR&&(
+                          <div style={{padding:"10px 12px",borderBottom:`1px solid ${sep}`,background:T.bg}}>
+                            <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
+                              <input value={newQR.shortcut} onChange={e=>setNewQR(p=>({...p,shortcut:e.target.value}))} placeholder="Atajo (ej: hola)" style={{flex:1,padding:"6px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"13px",outline:"none",background:T.card,color:T.text}}/>
+                              <button onClick={saveQuickReply} disabled={savingQR||!newQR.shortcut.trim()||!newQR.content.trim()} style={{padding:"6px 14px",borderRadius:"8px",border:"none",background:savingQR?"#9ca3af":"#2721E8",color:"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer"}}>{savingQR?"...":"Guardar"}</button>
+                              <button onClick={()=>{setShowAddQR(false);setNewQR({shortcut:"",content:""});}} style={{padding:"6px 10px",borderRadius:"8px",border:`1px solid ${sep}`,background:T.card,fontSize:"13px",cursor:"pointer",color:T.muted}}>Cancelar</button>
+                            </div>
+                            <textarea value={newQR.content} onChange={e=>setNewQR(p=>({...p,content:e.target.value}))} placeholder="Contenido del mensaje..." rows={3} style={{width:"100%",padding:"6px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"13px",resize:"vertical",outline:"none",boxSizing:"border-box",background:T.card,color:T.text}}/>
+                          </div>
+                        )}
+                        <div style={{overflowY:"auto",flex:1}}>
+                          {quickReplies.filter(qr=>!qrFilter||qr.shortcut.includes(qrFilter.toLowerCase().replace("/",""))||qr.content.toLowerCase().includes(qrFilter.toLowerCase())).map(qr=>(
+                            <div key={qr.id} style={{padding:"10px 12px",borderBottom:`1px solid ${sep}`,cursor:"pointer",display:"flex",alignItems:"flex-start",gap:"8px"}}
+                              onMouseEnter={e=>e.currentTarget.style.background=T.bg}
+                              onMouseLeave={e=>e.currentTarget.style.background=""}
+                              onClick={()=>{setHumanMsg(qr.content);setShowQRPanel(false);setQrFilter("");}}>
+                              <span style={{fontSize:"11px",fontWeight:700,color:"#2721E8",background:"rgba(39,33,232,0.08)",padding:"2px 8px",borderRadius:"10px",whiteSpace:"nowrap",border:"1px solid rgba(39,33,232,0.2)",flexShrink:0}}>/{qr.shortcut}</span>
+                              <span style={{fontSize:"12px",color:T.muted,lineHeight:"1.4",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{qr.content}</span>
+                              <button onClick={e=>{e.stopPropagation();deleteQuickReply(qr.id);}} style={{marginLeft:"auto",padding:"2px 6px",borderRadius:"6px",border:"1px solid #fecaca",background:"transparent",color:"#dc2626",fontSize:"11px",cursor:"pointer",flexShrink:0}}>🗑</button>
+                            </div>
+                          ))}
+                          {quickReplies.filter(qr=>!qrFilter||qr.shortcut.includes(qrFilter.toLowerCase().replace("/",""))||qr.content.toLowerCase().includes(qrFilter.toLowerCase())).length===0&&(
+                            <div style={{padding:"20px",textAlign:"center",color:T.muted,fontSize:"13px"}}>No hay respuestas que coincidan</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{padding:"12px 18px",display:"flex",gap:"8px",alignItems:"center"}}>
+                      <button onClick={()=>{setShowQRPanel(v=>!v);setShowAddQR(false);setQrFilter("");}} style={{padding:"8px 12px",borderRadius:"10px",border:"1px solid rgba(39,33,232,0.25)",background:showQRPanel?"rgba(39,33,232,0.08)":"transparent",color:"#2721E8",fontSize:"13px",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}} title="Respuestas rápidas (o escribe /)">💬 Atajos</button>
+                      <input className="inp" placeholder="Escribe un mensaje o / para atajos..." value={humanMsg} onChange={e=>{const v=e.target.value;setHumanMsg(v);if(v.endsWith("/")||v==="/"){setShowQRPanel(true);setQrFilter("");}}} onKeyDown={e=>{if(e.key==="Escape"){setShowQRPanel(false);setQrFilter("");}if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSendMessage();}}} style={{flex:1,fontSize:"13px",padding:"9px 14px"}}/>
+                      <button onClick={handleSendMessage} disabled={sending||!humanMsg.trim()} style={{padding:"9px 18px",background:"#2721E8",border:"none",borderRadius:"10px",color:"#fff",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",opacity:sending||!humanMsg.trim()?0.5:1}}>{sending?"...":"Enviar"}</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── KANBAN ──────────────────────────────────────────────────────── */}
+      {innerTab==="kanban"&&(
+        <div style={{paddingTop:"16px",display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:"12px"}}>
+          {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              {[{v:"all",l:"Todas"},...visibleBranches.map(b=>({v:b.name,l:b.name})),...(hasSinSucursal?[{v:"__sin_sucursal__",l:"Sin Sucursal"}]:[])].map(({v,l})=>(
+                <button key={v} onClick={()=>setFilterBranch(v)} style={{padding:"5px 12px",fontSize:"11px",fontWeight:600,borderRadius:"20px",border:"1px solid",background:filterBranch===v?"#2721E8":"transparent",borderColor:filterBranch===v?"#2721E8":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterBranch===v?"#fff":T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:"12px",overflowX:"auto",flex:1,minHeight:0}}>
+            {BOT_STAGES.map(stage=>(
+              <div key={stage.key} style={{minWidth:"200px",width:"200px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:`${stage.color}18`,borderRadius:"10px",border:`1px solid ${stage.color}33`}}>
+                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:stage.color}}/>
+                  <div style={{fontSize:"11px",fontWeight:700,color:stage.color,flex:1}}>{stage.label}</div>
+                  <div style={{fontSize:"12px",fontWeight:700,color:stage.color}}>{(byStage[stage.key]||[]).length}</div>
+                </div>
+                <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px"}}>
+                  {(byStage[stage.key]||[]).map(l=>(
+                    <div key={l.id} className="glass" style={{padding:"10px 12px",cursor:"pointer"}} onClick={()=>{setSelected(l);setInnerTab("conversaciones");}}>
+                      <div style={{fontSize:"13px",fontWeight:600,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
+                      <div style={{fontSize:"11px",color:T.sub}}>{l.phone}</div>
+                      {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>{l.branches.name}</div>}
+                      <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>{fmtT(l.created_at)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ANTICIPOS ───────────────────────────────────────────────────── */}
+      {innerTab==="anticipos"&&(
+        <div style={{paddingTop:"16px",display:"flex",flexDirection:"column",gap:"12px",overflowY:"auto"}}>
+          {anticipos.length===0&&<div style={{padding:"40px",textAlign:"center",color:T.faint,fontSize:"13px"}}>Sin anticipos pendientes</div>}
+          {anticipos.map(a=>(
+            <div key={a.id} className="glass" style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:"16px",borderColor:a.status==="comprobante_recibido"?"rgba(16,185,129,0.4)":undefined}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"4px"}}>
+                  <div style={{fontSize:"14px",fontWeight:700}}>{a.leads?.name||"—"}</div>
+                  {a.status==="comprobante_recibido"&&<div style={{fontSize:"10px",fontWeight:700,color:"#10b981",background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.3)",padding:"2px 8px",borderRadius:"20px"}}>Comprobante recibido</div>}
+                </div>
+                <div style={{fontSize:"11px",color:T.sub}}>{a.leads?.phone}</div>
+                {a.leads?.branches?.name&&<div style={{fontSize:"10px",color:T.faint}}>{a.leads.branches.name}</div>}
+                {a.monto&&<div style={{fontSize:"13px",fontWeight:600,color:"#10b981",marginTop:"4px"}}>${a.monto}</div>}
+                {a.servicio&&<div style={{fontSize:"11px",color:T.sub,marginTop:"2px"}}>{a.servicio}</div>}
+              </div>
+              <button onClick={()=>confirmarAnticipo(a.id)} disabled={confirmingId===a.id} style={{padding:"8px 18px",background:"#10b981",border:"none",borderRadius:"10px",color:"#fff",fontWeight:700,fontSize:"12px",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",opacity:confirmingId===a.id?0.6:1}}>
+                {confirmingId===a.id?"...":"✓ Confirmar"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=false}){
@@ -5433,7 +5869,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa"];
+  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"];
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -5534,7 +5970,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -6213,6 +6649,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ ANALÍTICA ═══ */}
         {tab==="analitica"&&<Analitica/>}
+
+        {/* ═══ BOT WHATSAPP ═══ */}
+        {tab==="bot"&&<div style={{height:"calc(100vh - 165px)",display:"flex",flexDirection:"column",overflow:"hidden"}}><BotWhatsApp session={session}/></div>}
       </div>
     </div>
   );
