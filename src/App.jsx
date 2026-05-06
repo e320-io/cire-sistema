@@ -79,6 +79,8 @@ const CSS = `
   .inp::placeholder{color:var(--inp-ph);}
   select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(128,128,160,0.6)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
   select.inp option{background:var(--inp-sel-bg);color:var(--inp-color);}
+  input[type="date"].inp::-webkit-calendar-picker-indicator,input[type="time"].inp::-webkit-calendar-picker-indicator{cursor:pointer;opacity:1;filter:brightness(0);transition:opacity 0.18s;}
+  input[type="date"].inp::-webkit-calendar-picker-indicator:hover,input[type="time"].inp::-webkit-calendar-picker-indicator:hover{opacity:0.6;}
   .btn-blue{background:#2721E8;color:#fff;border:none;border-radius:10px;padding:11px 22px;font-family:'Albert Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;}
   .btn-blue:hover{background:#3d38f0;}
   .btn-blue:disabled{background:rgba(39,33,232,0.3);cursor:default;}
@@ -2258,10 +2260,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             </div>}
             {/* 3 Agendar */}
             {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:aOk?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:aOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:aOk?"#fff":T.faint,flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
-              <input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark",marginBottom:"6px"}}/>
+              <input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",marginBottom:"6px",cursor:"pointer"}}/>
               {fechaCita&&!esDom&&<div>
                 <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginBottom:"6px",borderColor:showAgenda?"#2721E8":"rgba(255,255,255,0.1)",color:showAgenda?(light?"#2721E8":"#fff"):T.faint}} onClick={()=>setShowAgenda(!showAgenda)}>{showAgenda?"📅 Viendo agenda":"📅 Ver agenda del día"}</button>
-                {!showAgenda&&<input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"12px",padding:"8px 12px",colorScheme:"dark"}}/>}
+                {!showAgenda&&<input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",cursor:"pointer"}}/>}
                 {aOk&&<div style={{padding:"8px 10px",background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#10b981"}}>✓ {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,duracionCita)} · {tipoSvc.label}</div>}
               </div>}
               {esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
