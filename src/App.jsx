@@ -1765,7 +1765,7 @@ function ConfirmacionesManana({session}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-function PreventaView({session,isAdmin}){
+function PreventaView({session,isAdmin,onVerFicha}){
   const{light,T}=useT();
   const[preventas,setPreventas]=useState([]);
   const[loading,setLoading]=useState(true);
@@ -1830,7 +1830,7 @@ function PreventaView({session,isAdmin}){
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
-                  <span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>
+                  {p.clienta_id&&onVerFicha?<button onClick={()=>onVerFicha(p.clienta_id)} style={{fontSize:"14px",fontWeight:700,background:"none",border:"none",padding:0,cursor:"pointer",color:"inherit",fontFamily:"inherit",textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:"3px"}}>{p.clienta_nombre}</button>:<span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>}
                   {completada?<span style={{fontSize:"9px",background:"rgba(16,185,129,0.15)",color:"#10b981",border:"1px solid rgba(16,185,129,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>✅ COMPLETADA</span>:vencida?<span style={{fontSize:"9px",background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>VENCIDA</span>:limitePasado?<span style={{fontSize:"9px",background:"rgba(234,179,8,0.12)",color:"#eab308",border:"1px solid rgba(234,179,8,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>⚠ LÍMITE PASADO</span>:<span style={{fontSize:"9px",background:"rgba(249,115,22,0.12)",color:"#f97316",border:"1px solid rgba(249,115,22,0.35)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>🔥 PREVENTA</span>}
                 </div>
                 <div style={{fontSize:"12px",color:T.muted,marginBottom:"4px"}}>{p.servicio}</div>
@@ -2073,7 +2073,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         </div>}
       </div>}
       {view==="agenda"&&<AgendaCalendar key="ag" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
-      {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin}/>}
+      {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
 
       {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)} isAdmin={isAdmin}/>:
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
