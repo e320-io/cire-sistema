@@ -3784,7 +3784,6 @@ function BotWhatsApp({session}){
     const t=setInterval(()=>loadMessages(selected.id,false),8000);
     return()=>clearInterval(t);
   },[selected?.id]);
-  useEffect(()=>{msgEndRef.current?.scrollIntoView({behavior:"smooth"});},[messages]);
 
   useEffect(()=>{fetchQuickReplies();},[]);
   useEffect(()=>{
@@ -6857,9 +6856,6 @@ function AsistenteVirtual({ session }) {
   const chatRef  = useRef(null);
   const fileRef  = useRef(null);
 
-  useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [mensajes, cargando]);
 
   function resetear() {
     setModo(null); setMensajes([]); setInput(""); setImagen(null);
