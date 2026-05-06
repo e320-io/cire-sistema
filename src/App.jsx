@@ -13,7 +13,7 @@ const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const BOT_SB_URL  = import.meta.env.VITE_BOT_SUPABASE_URL;
 const BOT_SB_KEY  = import.meta.env.VITE_BOT_SUPABASE_KEY;
-const BOT_API_URL = "https://whatsapp-lead-bot-ferayalaio-fere32oio.vercel.app";
+const BOT_API_URL = "https://whatsapp-lead-bot-three.vercel.app";
 const botSB = BOT_SB_URL && BOT_SB_KEY
   ? createClient(BOT_SB_URL, BOT_SB_KEY, { auth: { persistSession: false } })
   : null;
