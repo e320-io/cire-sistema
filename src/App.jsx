@@ -4100,7 +4100,7 @@ function BotWhatsApp({session}){
                       <div key={msg.id} style={{display:"flex",justifyContent:isBot?"flex-end":"flex-start"}}>
                         <div style={{maxWidth:"72%",padding:"8px 12px",borderRadius:isBot?"12px 12px 2px 12px":"12px 12px 12px 2px",background:isBot?(msg.is_human_agent?"rgba(245,158,11,0.18)":"#2721E8"):(light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.08)"),border:msg.is_human_agent?"1px solid rgba(245,158,11,0.4)":"none",fontSize:"13px",lineHeight:"1.4",color:isBot&&!msg.is_human_agent?"#fff":undefined}}>
                           {msg.is_human_agent&&<div style={{fontSize:"9px",color:"#f59e0b",marginBottom:"3px",fontWeight:700}}>AGENTE</div>}
-                          <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{msg.content}</div>
+                          <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{/\.(jpeg|jpg|png|gif|webp)(\?.*)?$/i.test(msg.content)?<img src={msg.content} alt="imagen" style={{maxWidth:"100%",borderRadius:"8px",display:"block"}}/>:msg.content}</div>
                           <div style={{fontSize:"9px",color:isBot&&!msg.is_human_agent?"rgba(255,255,255,0.5)":T.faint,marginTop:"3px",textAlign:"right"}}>{new Date(msg.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
                         </div>
                       </div>
