@@ -3760,6 +3760,22 @@ const BOT_LABELS=[
   {key:"nuevo_pedido",       label:"nuevo pedido",        emoji:"",   color:"#8B5CF6"},
 ];
 
+// Resuelve la etiqueta: usa la guardada en DB o la calcula desde stage/branch
+function resolveLabel(lead){
+  const key=lead.label||(()=>{
+    const s=lead.stage||"nuevo";
+    const b=(lead.branches?.name||"").toLowerCase();
+    if(s==="cita_agendada"||s==="anticipo_tomado")return"pedido_completado";
+    if(s==="anticipo_pendiente")return"viene_a_pagar";
+    if(s==="escalado")return"seguimiento";
+    if(s==="no_interesado")return"sin_interes";
+    if(b==="polanco")return"polanco";
+    if(b)return"otra_sucursal";
+    return"nuevo_pedido";
+  })();
+  return BOT_LABELS.find(x=>x.key===key)||null;
+}
+
 function BotWhatsApp({session}){
   const{light,T}=useT();
   // admin y duena_general ven todo; sucursal usa sucursalesBot si existe o su nombre; socia usa sucursales
@@ -4071,7 +4087,7 @@ function BotWhatsApp({session}){
                 const stage=BOT_STAGES.find(s=>s.key===l.stage)||BOT_STAGES[0];
                 const isActive=selected?.id===l.id;
                 const isEsc=l.last_conversation?.status==="escalada";
-                const lbl=l.label?BOT_LABELS.find(x=>x.key===l.label):null;
+                const lbl=resolveLabel(l);
                 return(
                   <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
@@ -4226,14 +4242,17 @@ function BotWhatsApp({session}){
                   <div style={{fontSize:"12px",fontWeight:700,color:stage.color}}>{(byStage[stage.key]||[]).length}</div>
                 </div>
                 <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px"}}>
-                  {(byStage[stage.key]||[]).map(l=>(
+                  {(byStage[stage.key]||[]).map(l=>{
+                    const klbl=resolveLabel(l);
+                    return(
                     <div key={l.id} className="glass" style={{padding:"10px 12px",cursor:"pointer"}} onClick={()=>{setSelected(l);setInnerTab("conversaciones");}}>
                       <div style={{fontSize:"13px",fontWeight:600,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
                       <div style={{fontSize:"11px",color:T.sub}}>{l.phone}</div>
                       {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>{l.branches.name}</div>}
                       <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>{fmtT(l.created_at)}</div>
+                      {klbl&&<div style={{marginTop:"6px",display:"inline-flex",alignItems:"center",gap:"3px",fontSize:"9px",fontWeight:600,padding:"2px 7px",borderRadius:"10px",background:`${klbl.color}22`,border:`1px solid ${klbl.color}55`,color:klbl.color}}>{klbl.emoji?`${klbl.emoji} `:""}{klbl.label}</div>}
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             ))}
