@@ -3739,6 +3739,27 @@ const BOT_STAGES=[
   {key:"escalado",label:"Escalado",color:"#ea580c"},
 ];
 
+const BOT_LABELS=[
+  {key:"pedido_completado",  label:"Pedido completado",  emoji:"",   color:"#5B21B6"},
+  {key:"viene_a_pagar",      label:"viene a pagar",       emoji:"",   color:"#16A34A"},
+  {key:"seguimiento",        label:"seguimiento",         emoji:"🔥", color:"#2563EB"},
+  {key:"sin_interes",        label:"sin interes",         emoji:"🙂", color:"#6B7280"},
+  {key:"importante",         label:"importante",          emoji:"❗", color:"#65A30D"},
+  {key:"polanco",            label:"Polanco",             emoji:"",   color:"#111827"},
+  {key:"hifu_corporal",      label:"Hifu corporal",       emoji:"🍑", color:"#D97706"},
+  {key:"hifu_lifting",       label:"HIFU/lifting",        emoji:"🧖", color:"#92400E"},
+  {key:"cuerpo_completo",    label:"cuerpo completo",     emoji:"🧖", color:"#374151"},
+  {key:"corporales",         label:"corporales",          emoji:"🍑", color:"#7C3AED"},
+  {key:"combos",             label:"combos",              emoji:"👙🧖",color:"#EC4899"},
+  {key:"bikinis",            label:"bikinis",             emoji:"👙", color:"#9F1239"},
+  {key:"axilas_y_otros",     label:"axilas y otros",      emoji:"👩", color:"#10B981"},
+  {key:"faciales",           label:"faciales",            emoji:"🧖", color:"#DB2777"},
+  {key:"cera",               label:"cera",                emoji:"🕯️", color:"#6D28D9"},
+  {key:"cliente_dv",         label:"cliente DV",          emoji:"⭐", color:"#0891B2"},
+  {key:"otra_sucursal",      label:"otra sucursal",       emoji:"",   color:"#4C1D95"},
+  {key:"nuevo_pedido",       label:"nuevo pedido",        emoji:"",   color:"#8B5CF6"},
+];
+
 function BotWhatsApp({session}){
   const{light,T}=useT();
   // admin y duena_general ven todo; sucursal usa sucursalesBot si existe o su nombre; socia usa sucursales
@@ -4050,6 +4071,7 @@ function BotWhatsApp({session}){
                 const stage=BOT_STAGES.find(s=>s.key===l.stage)||BOT_STAGES[0];
                 const isActive=selected?.id===l.id;
                 const isEsc=l.last_conversation?.status==="escalada";
+                const lbl=l.label?BOT_LABELS.find(x=>x.key===l.label):null;
                 return(
                   <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
@@ -4058,7 +4080,10 @@ function BotWhatsApp({session}){
                       <div style={{fontSize:"10px",color:T.faint,flexShrink:0}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
                     </div>
                     <div style={{fontSize:"11px",color:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>{l.last_message?.content||"—"}</div>
-                    {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"9px",color:T.faint,paddingLeft:"14px",marginTop:"2px"}}>{l.branches.name}</div>}
+                    <div style={{display:"flex",alignItems:"center",gap:"6px",paddingLeft:"14px",marginTop:"4px"}}>
+                      {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"9px",color:T.faint}}>{l.branches.name}</div>}
+                      {lbl&&<div style={{fontSize:"9px",fontWeight:600,padding:"1px 6px",borderRadius:"10px",background:`${lbl.color}22`,border:`1px solid ${lbl.color}55`,color:lbl.color,whiteSpace:"nowrap"}}>{lbl.emoji?`${lbl.emoji} `:""}{lbl.label}</div>}
+                    </div>
                   </div>
                 );
               })}
