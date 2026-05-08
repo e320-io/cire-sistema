@@ -3770,8 +3770,10 @@ function BotWhatsApp({session}){
   const[showAddQR,setShowAddQR]=useState(false);
   const[newQR,setNewQR]=useState({shortcut:"",content:""});
   const[savingQR,setSavingQR]=useState(false);
+  const[uploadingAttachment,setUploadingAttachment]=useState(false);
   const msgEndRef=useRef(null);
   const qrPanelRef=useRef(null);
+  const fileInputRef=useRef(null);
 
   useEffect(()=>{
     loadLeads();loadBranches();loadAnticipos();
@@ -3897,6 +3899,32 @@ function BotWhatsApp({session}){
     }catch(e){
       alert("Error al enviar mensaje: "+e.message);
     }finally{setSending(false);}
+  }
+
+  async function handleAttachImage(e){
+    const file=e.target.files?.[0];
+    if(!file||!selected)return;
+    e.target.value="";
+    const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+    if(!conv){alert("No hay conversación activa para este lead.");return;}
+    setUploadingAttachment(true);
+    try{
+      const form=new FormData();
+      form.append("file",file);
+      const uploadRes=await fetch(`${BOT_API_URL}/api/dashboard/upload-image`,{method:"POST",body:form});
+      const uploadData=await uploadRes.json();
+      if(!uploadData.success)throw new Error(uploadData.error||"Error al subir imagen");
+      const sendRes=await fetch(`${BOT_API_URL}/api/dashboard/send-message`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({leadId:selected.id,conversationId:conv.id,imageUrl:uploadData.url}),
+      });
+      const sendData=await sendRes.json();
+      if(!sendRes.ok)throw new Error(sendData.error||"Error al enviar imagen");
+      await loadMessages(selected.id,false);
+    }catch(err){
+      alert("Error: "+err.message);
+    }finally{setUploadingAttachment(false);}
   }
 
   async function confirmarAnticipo(id){
@@ -4087,6 +4115,8 @@ function BotWhatsApp({session}){
                 {activeConv&&botPaused&&(
                   <div style={{padding:"10px 14px",borderTop:`1px solid ${sep}`,display:"flex",gap:"8px",alignItems:"center",flexShrink:0}}>
                     <button onClick={()=>{setShowQRPanel(v=>!v);setShowAddQR(false);setQrFilter("");}} style={{padding:"7px 12px",borderRadius:"10px",border:`1px solid ${showQRPanel?"#2721E8":"rgba(39,33,232,0.25)"}`,background:showQRPanel?"rgba(39,33,232,0.1)":"transparent",color:"#2721E8",fontSize:"12px",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}} title="Respuestas rápidas (o escribe /)">💬 Atajos</button>
+                    <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleAttachImage}/>
+                    <button onClick={()=>fileInputRef.current?.click()} disabled={uploadingAttachment} title="Adjuntar imagen" style={{width:"34px",height:"34px",borderRadius:"50%",border:"1px solid rgba(39,33,232,0.3)",background:"transparent",color:"#2721E8",fontSize:"20px",lineHeight:1,cursor:uploadingAttachment?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:uploadingAttachment?0.5:1}}>{uploadingAttachment?"⏳":"+"}</button>
                     <input className="inp" placeholder="Escribe un mensaje o / para atajos..." value={humanMsg} onChange={e=>{const v=e.target.value;setHumanMsg(v);if(v.endsWith("/")||v==="/"){setShowQRPanel(true);setQrFilter("");}}} onKeyDown={e=>{if(e.key==="Escape"){setShowQRPanel(false);setQrFilter("");}if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSendMessage();}}} style={{flex:1,fontSize:"13px",padding:"9px 14px"}}/>
                     <button onClick={handleSendMessage} disabled={sending||!humanMsg.trim()} style={{padding:"9px 18px",background:"#2721E8",border:"none",borderRadius:"10px",color:"#fff",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",opacity:sending||!humanMsg.trim()?0.5:1,flexShrink:0}}>{sending?"...":"Enviar"}</button>
                   </div>
