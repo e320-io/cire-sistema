@@ -3768,12 +3768,14 @@ function BotWhatsApp({session}){
   const[showQRPanel,setShowQRPanel]=useState(false);
   const[qrFilter,setQrFilter]=useState("");
   const[showAddQR,setShowAddQR]=useState(false);
-  const[newQR,setNewQR]=useState({shortcut:"",content:""});
+  const[newQR,setNewQR]=useState({shortcut:"",content:"",image_url:"",type:"text"});
   const[savingQR,setSavingQR]=useState(false);
   const[uploadingAttachment,setUploadingAttachment]=useState(false);
+  const[uploadingQRImage,setUploadingQRImage]=useState(false);
   const msgEndRef=useRef(null);
   const qrPanelRef=useRef(null);
   const fileInputRef=useRef(null);
+  const qrImageInputRef=useRef(null);
 
   useEffect(()=>{
     loadLeads();loadBranches();loadAnticipos();
@@ -3801,15 +3803,50 @@ function BotWhatsApp({session}){
     try{const res=await fetch(`${BOT_API_URL}/api/dashboard/quick-replies`);const data=await res.json();setQuickReplies(Array.isArray(data)?data:[]);}catch{}
   }
   async function saveQuickReply(){
-    if(!newQR.shortcut.trim()||!newQR.content.trim())return;
+    const isImage=newQR.type==="image";
+    if(!newQR.shortcut.trim()||(isImage?!newQR.image_url:!newQR.content.trim()))return;
     setSavingQR(true);
     try{
-      const res=await fetch(`${BOT_API_URL}/api/dashboard/quick-replies`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newQR)});
+      const body={shortcut:newQR.shortcut,content:isImage?null:newQR.content,image_url:isImage?newQR.image_url:null};
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/quick-replies`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const data=await res.json();
       if(data.error){alert(data.error);return;}
       setQuickReplies(prev=>[...prev,data].sort((a,b)=>a.shortcut.localeCompare(b.shortcut)));
-      setNewQR({shortcut:"",content:""});setShowAddQR(false);
+      setNewQR({shortcut:"",content:"",image_url:"",type:"text"});setShowAddQR(false);
     }catch(e){alert("Error: "+e.message);}finally{setSavingQR(false);}
+  }
+  async function handleQRImageUpload(e){
+    const file=e.target.files?.[0];
+    if(!file)return;
+    e.target.value="";
+    setUploadingQRImage(true);
+    try{
+      const form=new FormData();
+      form.append("file",file);
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/upload-image`,{method:"POST",body:form});
+      const data=await res.json();
+      if(!data.success)throw new Error(data.error||"Error al subir imagen");
+      setNewQR(p=>({...p,image_url:data.url}));
+    }catch(err){alert("Error: "+err.message);}
+    finally{setUploadingQRImage(false);}
+  }
+  async function handleSendQuickReply(qr){
+    if(qr.image_url){
+      if(!selected)return;
+      const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+      if(!conv){alert("No hay conversación activa.");return;}
+      setUploadingAttachment(true);
+      try{
+        const res=await fetch(`${BOT_API_URL}/api/dashboard/send-message`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadId:selected.id,conversationId:conv.id,imageUrl:qr.image_url})});
+        const data=await res.json();
+        if(!res.ok)throw new Error(data.error||"Error al enviar");
+        await loadMessages(selected.id,false);
+      }catch(err){alert("Error: "+err.message);}
+      finally{setUploadingAttachment(false);}
+      setShowQRPanel(false);setQrFilter("");
+    }else{
+      setHumanMsg(qr.content);setShowQRPanel(false);setQrFilter("");
+    }
   }
   async function deleteQuickReply(id){
     if(!confirm("¿Eliminar esta respuesta rápida?"))return;
@@ -4083,12 +4120,23 @@ function BotWhatsApp({session}){
                     </div>
                     {showAddQR&&(
                       <div style={{padding:"8px 12px",borderBottom:`1px solid ${sep}`,background:T.bg,flexShrink:0}}>
-                        <div style={{display:"flex",gap:"8px",marginBottom:"6px"}}>
-                          <input value={newQR.shortcut} onChange={e=>setNewQR(p=>({...p,shortcut:e.target.value}))} placeholder="Nombre del atajo (ej: hola)" style={{flex:1,padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"12px",outline:"none",background:T.card,color:T.text}}/>
-                          <button onClick={saveQuickReply} disabled={savingQR||!newQR.shortcut.trim()||!newQR.content.trim()} style={{padding:"5px 12px",borderRadius:"8px",border:"none",background:savingQR?"#9ca3af":"#2721E8",color:"#fff",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>{savingQR?"...":"Guardar"}</button>
-                          <button onClick={()=>{setShowAddQR(false);setNewQR({shortcut:"",content:""});}} style={{padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,background:"transparent",fontSize:"12px",cursor:"pointer",color:T.muted}}>✕</button>
+                        <div style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
+                          <input value={newQR.shortcut} onChange={e=>setNewQR(p=>({...p,shortcut:e.target.value}))} placeholder="Nombre (ej: bikini)" style={{flex:1,padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"12px",outline:"none",background:T.card,color:T.text}}/>
+                          <button onClick={()=>setNewQR(p=>({...p,type:"text",image_url:""}))} style={{padding:"4px 10px",borderRadius:"8px",border:`1px solid ${newQR.type==="text"?"#2721E8":sep}`,background:newQR.type==="text"?"rgba(39,33,232,0.12)":"transparent",color:newQR.type==="text"?"#2721E8":T.muted,fontSize:"11px",fontWeight:700,cursor:"pointer"}}>Texto</button>
+                          <button onClick={()=>setNewQR(p=>({...p,type:"image",content:""}))} style={{padding:"4px 10px",borderRadius:"8px",border:`1px solid ${newQR.type==="image"?"#2721E8":sep}`,background:newQR.type==="image"?"rgba(39,33,232,0.12)":"transparent",color:newQR.type==="image"?"#2721E8":T.muted,fontSize:"11px",fontWeight:700,cursor:"pointer"}}>🖼 Imagen</button>
+                          <button onClick={saveQuickReply} disabled={savingQR||!newQR.shortcut.trim()||(newQR.type==="text"?!newQR.content.trim():!newQR.image_url)} style={{padding:"5px 12px",borderRadius:"8px",border:"none",background:savingQR?"#9ca3af":"#2721E8",color:"#fff",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>{savingQR?"...":"Guardar"}</button>
+                          <button onClick={()=>{setShowAddQR(false);setNewQR({shortcut:"",content:"",image_url:"",type:"text"});}} style={{padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,background:"transparent",fontSize:"12px",cursor:"pointer",color:T.muted}}>✕</button>
                         </div>
-                        <textarea value={newQR.content} onChange={e=>setNewQR(p=>({...p,content:e.target.value}))} placeholder="Contenido del mensaje..." rows={2} style={{width:"100%",padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"12px",resize:"none",outline:"none",boxSizing:"border-box",background:T.card,color:T.text}}/>
+                        {newQR.type==="text"?(
+                          <textarea value={newQR.content} onChange={e=>setNewQR(p=>({...p,content:e.target.value}))} placeholder="Contenido del mensaje..." rows={2} style={{width:"100%",padding:"5px 10px",borderRadius:"8px",border:`1px solid ${sep}`,fontSize:"12px",resize:"none",outline:"none",boxSizing:"border-box",background:T.card,color:T.text}}/>
+                        ):(
+                          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                            <input ref={qrImageInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleQRImageUpload}/>
+                            <button onClick={()=>qrImageInputRef.current?.click()} disabled={uploadingQRImage} style={{padding:"6px 14px",borderRadius:"8px",border:`1px solid ${sep}`,background:T.card,color:T.text,fontSize:"12px",cursor:uploadingQRImage?"not-allowed":"pointer",opacity:uploadingQRImage?0.5:1}}>{uploadingQRImage?"Subiendo...":"📎 Elegir imagen"}</button>
+                            {newQR.image_url&&<img src={newQR.image_url} alt="preview" style={{height:"48px",width:"48px",objectFit:"cover",borderRadius:"6px",border:`1px solid ${sep}`}}/>}
+                            {newQR.image_url&&<span style={{fontSize:"11px",color:"#10b981"}}>✓ Imagen lista</span>}
+                          </div>
+                        )}
                       </div>
                     )}
                     <div style={{overflowY:"auto",flex:1}}>
@@ -4099,9 +4147,16 @@ function BotWhatsApp({session}){
                             style={{padding:"8px 12px",borderBottom:`1px solid ${sep}`,cursor:"pointer",display:"flex",alignItems:"center",gap:"10px",transition:"background 0.1s"}}
                             onMouseEnter={e=>e.currentTarget.style.background=light?"rgba(39,33,232,0.04)":"rgba(255,255,255,0.04)"}
                             onMouseLeave={e=>e.currentTarget.style.background=""}
-                            onClick={()=>{setHumanMsg(qr.content);setShowQRPanel(false);setQrFilter("");}}>
+                            onClick={()=>handleSendQuickReply(qr)}>
                             <span style={{fontSize:"11px",fontWeight:700,color:"#2721E8",background:"rgba(39,33,232,0.1)",padding:"2px 8px",borderRadius:"8px",whiteSpace:"nowrap",border:"1px solid rgba(39,33,232,0.2)",flexShrink:0,minWidth:"70px",textAlign:"center"}}>/{qr.shortcut}</span>
-                            <span style={{fontSize:"12px",color:T.sub,lineHeight:"1.4",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{qr.content.split("\n")[0]}</span>
+                            {qr.image_url?(
+                              <div style={{display:"flex",alignItems:"center",gap:"8px",flex:1,overflow:"hidden"}}>
+                                <img src={qr.image_url} alt={qr.shortcut} style={{width:"36px",height:"36px",objectFit:"cover",borderRadius:"6px",flexShrink:0,border:`1px solid ${sep}`}}/>
+                                <span style={{fontSize:"11px",color:"#2721E8",fontWeight:600}}>🖼 Imagen</span>
+                              </div>
+                            ):(
+                              <span style={{fontSize:"12px",color:T.sub,lineHeight:"1.4",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{qr.content?.split("\n")[0]}</span>
+                            )}
                             <button onClick={e=>{e.stopPropagation();deleteQuickReply(qr.id);}} style={{padding:"2px 6px",borderRadius:"6px",border:"1px solid rgba(239,68,68,0.3)",background:"transparent",color:"#ef4444",fontSize:"11px",cursor:"pointer",flexShrink:0,opacity:0.6}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.6"}>🗑</button>
                           </div>
                         ))}
