@@ -3759,26 +3759,36 @@ const BOT_LABELS=[
   {key:"nuevo_pedido",       label:"nuevo pedido",        emoji:"",   color:"#8B5CF6"},
 ];
 
-// Resuelve la etiqueta: usa la guardada en DB o la detecta desde stage + último mensaje
+function _detectServiceFromText(raw){
+  const t=(raw||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  if(!t)return null;
+  if(/viene a pagar|ir a pagar|paso a pagar|voy a pagar/.test(t))return"viene_a_pagar";
+  if(/hifu corporal|hifu cuerpo|lifting corporal|ultraformer corporal/.test(t))return"hifu_corporal";
+  if(/hifu|lifting facial|ultraformer|ultherapy|tensor facial/.test(t))return"hifu_lifting";
+  if(/cuerpo completo|full body/.test(t))return"cuerpo_completo";
+  if(/combo/.test(t))return"combos";
+  if(/bikini/.test(t))return"bikinis";
+  if(/axila/.test(t))return"axilas_y_otros";
+  if(/facial|limpieza facial|tratamiento facial/.test(t))return"faciales";
+  if(/\bcera\b/.test(t))return"cera";
+  if(/corporal|brazos|piernas|espalda|pecho|abdomen/.test(t))return"corporales";
+  if(/dv\b|diamond|frecuente|vip/.test(t))return"cliente_dv";
+  return null;
+}
+
+// Resuelve la etiqueta: DB label > detección por texto > stage fallback
 function resolveLabel(lead){
   const key=lead.label||(()=>{
     const s=lead.stage||"nuevo";
-    const txt=(lead.last_message?.content||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
     if(s==="cita_agendada"||s==="anticipo_tomado")return"pedido_completado";
     if(s==="anticipo_pendiente")return"viene_a_pagar";
     if(s==="escalado")return"seguimiento";
     if(s==="no_interesado")return"sin_interes";
-    if(/viene a pagar|ir a pagar|paso a pagar|voy a pagar/.test(txt))return"viene_a_pagar";
-    if(/hifu corporal|hifu cuerpo|lifting corporal|ultraformer corporal/.test(txt))return"hifu_corporal";
-    if(/hifu|lifting facial|ultraformer|ultherapy|tensor facial/.test(txt))return"hifu_lifting";
-    if(/cuerpo completo|full body/.test(txt))return"cuerpo_completo";
-    if(/combo/.test(txt))return"combos";
-    if(/bikini/.test(txt))return"bikinis";
-    if(/axila/.test(txt))return"axilas_y_otros";
-    if(/facial|limpieza facial|tratamiento facial/.test(txt))return"faciales";
-    if(/\bcera\b/.test(txt))return"cera";
-    if(/corporal|brazos|piernas|espalda|pecho|abdomen/.test(txt))return"corporales";
-    if(/dv\b|diamond|frecuente|vip/.test(txt))return"cliente_dv";
+    // Escanear primer mensaje (donde el lead dice qué quiere) y último mensaje
+    const fromFirst=_detectServiceFromText(lead.first_message?.content);
+    if(fromFirst)return fromFirst;
+    const fromLast=_detectServiceFromText(lead.last_message?.content);
+    if(fromLast)return fromLast;
     return"nuevo_pedido";
   })();
   return BOT_LABELS.find(x=>x.key===key)||null;
@@ -3803,6 +3813,8 @@ function BotWhatsApp({session}){
   const[search,setSearch]=useState("");
   const[filterStage,setFilterStage]=useState("all");
   const[filterBranch,setFilterBranch]=useState("all");
+  const[filterLabel,setFilterLabel]=useState("all");
+  const[changingLabel,setChangingLabel]=useState(false);
   const[innerTab,setInnerTab]=useState("conversaciones");
   const[botPaused,setBotPaused]=useState(false);
   const[humanMsg,setHumanMsg]=useState("");
@@ -4009,6 +4021,16 @@ function BotWhatsApp({session}){
     }finally{setUploadingAttachment(false);}
   }
 
+  async function handleLabelChange(leadId,newLabelKey){
+    setChangingLabel(true);
+    try{
+      await fetch(`${BOT_API_URL}/api/dashboard/leads/${leadId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({label:newLabelKey||null})});
+      setLeads(prev=>prev.map(l=>l.id===leadId?{...l,label:newLabelKey||null}:l));
+      if(selected?.id===leadId)setSelected(prev=>({...prev,label:newLabelKey||null}));
+    }catch(e){alert("Error al cambiar etiqueta");}
+    finally{setChangingLabel(false);}
+  }
+
   async function confirmarAnticipo(id){
     if(!botSB)return;
     setConfirmingId(id);
@@ -4026,13 +4048,14 @@ function BotWhatsApp({session}){
     const ss=filterStage==="all"||l.stage===filterStage;
     const bs=filterBranch==="all"
       ||(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch);
-    return ms&&ss&&bs;
+    const ls=filterLabel==="all"||(resolveLabel(l)?.key===filterLabel);
+    return ms&&ss&&bs&&ls;
   });
   const byStage=Object.fromEntries(BOT_STAGES.map(s=>[s.key,[]]));
   leads.filter(l=>{
-    if(filterBranch==="all")return true;
-    if(filterBranch==="__sin_sucursal__")return!l.branches?.name;
-    return l.branches?.name===filterBranch;
+    if(filterBranch!=="all"&&!(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch))return false;
+    if(filterLabel!=="all"&&resolveLabel(l)?.key!==filterLabel)return false;
+    return true;
   }).forEach(l=>{const k=l.stage||"nuevo";if(byStage[k])byStage[k].push(l);else byStage["nuevo"].push(l);});
 
   function fmtT(d){
@@ -4088,6 +4111,10 @@ function BotWhatsApp({session}){
                 </select>
               )}
             </div>
+            <select className="inp" value={filterLabel} onChange={e=>setFilterLabel(e.target.value)} style={{fontSize:"11px",padding:"5px 8px"}}>
+              <option value="all">🏷️ Todas las etiquetas</option>
+              {BOT_LABELS.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+            </select>
             <div style={{fontSize:"10px",color:T.faint}}>{filtered.length} leads</div>
             <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"4px"}}>
               {loading&&<div style={{padding:"20px",textAlign:"center",color:T.sub,fontSize:"13px"}}>Cargando...</div>}
@@ -4128,6 +4155,16 @@ function BotWhatsApp({session}){
                   </div>
                   <div style={{flex:1}}/>
                   {(()=>{const s=BOT_STAGES.find(x=>x.key===selected.stage)||BOT_STAGES[0];return<div style={{padding:"3px 10px",borderRadius:"20px",background:`${s.color}22`,border:`1px solid ${s.color}44`,fontSize:"10px",fontWeight:600,color:s.color}}>{s.label}</div>;})()}
+                  {(()=>{
+                    const lbl=resolveLabel(selected);
+                    return(
+                      <select value={selected.label||""} disabled={changingLabel} onChange={e=>handleLabelChange(selected.id,e.target.value||null)}
+                        style={{fontSize:"10px",fontWeight:600,padding:"3px 8px",borderRadius:"20px",border:`1px solid ${lbl?lbl.color+"66":"rgba(128,128,128,0.3)"}`,background:lbl?`${lbl.color}18`:(light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.06)"),color:lbl?lbl.color:T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",appearance:"none",WebkitAppearance:"none"}}>
+                        <option value="">🏷️ Etiqueta…</option>
+                        {BOT_LABELS.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+                      </select>
+                    );
+                  })()}
                   {activeConv&&(botPaused?(
                     <button onClick={()=>handleTakeover(false)} disabled={takingOver} className="btn-ghost" style={{fontSize:"11px",color:"#10b981",borderColor:"rgba(16,185,129,0.4)"}}>{takingOver?"...":"🤖 Activar bot"}</button>
                   ):(
@@ -4234,13 +4271,19 @@ function BotWhatsApp({session}){
       {/* ── KANBAN ──────────────────────────────────────────────────────── */}
       {innerTab==="kanban"&&(
         <div style={{paddingTop:"16px",display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:"12px"}}>
-          {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
-            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-              {[{v:"all",l:"Todas"},...visibleBranches.map(b=>({v:b.name,l:b.name})),...(hasSinSucursal?[{v:"__sin_sucursal__",l:"Sin Sucursal"}]:[])].map(({v,l})=>(
-                <button key={v} onClick={()=>setFilterBranch(v)} style={{padding:"5px 12px",fontSize:"11px",fontWeight:600,borderRadius:"20px",border:"1px solid",background:filterBranch===v?"#2721E8":"transparent",borderColor:filterBranch===v?"#2721E8":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterBranch===v?"#fff":T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>
-              ))}
-            </div>
-          )}
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
+            {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
+              <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                {[{v:"all",l:"Todas"},...visibleBranches.map(b=>({v:b.name,l:b.name})),...(hasSinSucursal?[{v:"__sin_sucursal__",l:"Sin Sucursal"}]:[])].map(({v,l})=>(
+                  <button key={v} onClick={()=>setFilterBranch(v)} style={{padding:"5px 12px",fontSize:"11px",fontWeight:600,borderRadius:"20px",border:"1px solid",background:filterBranch===v?"#2721E8":"transparent",borderColor:filterBranch===v?"#2721E8":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterBranch===v?"#fff":T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>
+                ))}
+              </div>
+            )}
+            <select className="inp" value={filterLabel} onChange={e=>setFilterLabel(e.target.value)} style={{fontSize:"11px",padding:"5px 8px"}}>
+              <option value="all">🏷️ Todas las etiquetas</option>
+              {BOT_LABELS.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+            </select>
+          </div>
           <div style={{display:"flex",gap:"12px",overflowX:"auto",flex:1,minHeight:0}}>
             {BOT_STAGES.map(stage=>(
               <div key={stage.key} style={{minWidth:"200px",width:"200px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
