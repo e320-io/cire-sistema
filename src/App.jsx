@@ -1779,6 +1779,7 @@ function PreventaView({session,isAdmin,onVerFicha}){
   const[statusFiltro,setStatusFiltro]=useState("activas");
   const cargar=async()=>{setLoading(true);const{data}=await supabase.from("paquetes").select("*").eq("sucursal_id",session.id).eq("es_preventa",true).order("fecha_compra",{ascending:false});setPreventas(data||[]);setLoading(false);};
   useEffect(()=>{cargar();(async()=>{try{const{data}=await supabase.from("terminales").select("*").eq("sucursal_id",session.id).eq("activa",true).order("nombre");setTerminalesLiq(data||[]);}catch(e){}})();},[]);
+  const verFichaClienta=async(p)=>{if(!onVerFicha)return;if(p.clienta_id){onVerFicha(p.clienta_id);return;}if(p.clienta_nombre){const{data}=await supabase.from("clientas").select("id").ilike("nombre",p.clienta_nombre).limit(1);if(data?.[0]?.id){onVerFicha(data[0].id);}}};
   const estaVencida=(p)=>p.preventa_vencida===true;
   const esCompletada=(p)=>p.preventa_liquidado===true&&!p.preventa_vencida;
   const fechaLimitePasada=(p)=>p.preventa_fecha_limite&&hoy()>p.preventa_fecha_limite&&!p.preventa_vencida&&!p.preventa_liquidado;
@@ -1830,7 +1831,7 @@ function PreventaView({session,isAdmin,onVerFicha}){
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
-                  {p.clienta_id&&onVerFicha?<button onClick={()=>onVerFicha(p.clienta_id)} style={{fontSize:"14px",fontWeight:700,background:"none",border:"none",padding:0,cursor:"pointer",color:"inherit",fontFamily:"inherit",textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:"3px"}}>{p.clienta_nombre}</button>:<span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>}
+                  {onVerFicha?<button onClick={()=>verFichaClienta(p)} style={{fontSize:"14px",fontWeight:700,background:"none",border:"none",padding:0,cursor:"pointer",color:"#f97316",fontFamily:"inherit",textDecoration:"underline",textUnderlineOffset:"3px"}}>{p.clienta_nombre}</button>:<span style={{fontSize:"14px",fontWeight:700}}>{p.clienta_nombre}</span>}
                   {completada?<span style={{fontSize:"9px",background:"rgba(16,185,129,0.15)",color:"#10b981",border:"1px solid rgba(16,185,129,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>✅ COMPLETADA</span>:vencida?<span style={{fontSize:"9px",background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>VENCIDA</span>:limitePasado?<span style={{fontSize:"9px",background:"rgba(234,179,8,0.12)",color:"#eab308",border:"1px solid rgba(234,179,8,0.4)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>⚠ LÍMITE PASADO</span>:<span style={{fontSize:"9px",background:"rgba(249,115,22,0.12)",color:"#f97316",border:"1px solid rgba(249,115,22,0.35)",borderRadius:"5px",padding:"2px 7px",fontWeight:700,letterSpacing:"1px"}}>🔥 PREVENTA</span>}
                 </div>
                 <div style={{fontSize:"12px",color:T.muted,marginBottom:"4px"}}>{p.servicio}</div>
