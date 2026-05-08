@@ -3759,15 +3759,26 @@ const BOT_LABELS=[
   {key:"nuevo_pedido",       label:"nuevo pedido",        emoji:"",   color:"#8B5CF6"},
 ];
 
-// Resuelve la etiqueta: usa la guardada en DB (tiene keywords de servicio)
-// o calcula desde stage como fallback para leads sin mensajes procesados
+// Resuelve la etiqueta: usa la guardada en DB o la detecta desde stage + último mensaje
 function resolveLabel(lead){
   const key=lead.label||(()=>{
     const s=lead.stage||"nuevo";
+    const txt=(lead.last_message?.content||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
     if(s==="cita_agendada"||s==="anticipo_tomado")return"pedido_completado";
     if(s==="anticipo_pendiente")return"viene_a_pagar";
     if(s==="escalado")return"seguimiento";
     if(s==="no_interesado")return"sin_interes";
+    if(/viene a pagar|ir a pagar|paso a pagar|voy a pagar/.test(txt))return"viene_a_pagar";
+    if(/hifu corporal|hifu cuerpo|lifting corporal|ultraformer corporal/.test(txt))return"hifu_corporal";
+    if(/hifu|lifting facial|ultraformer|ultherapy|tensor facial/.test(txt))return"hifu_lifting";
+    if(/cuerpo completo|full body/.test(txt))return"cuerpo_completo";
+    if(/combo/.test(txt))return"combos";
+    if(/bikini/.test(txt))return"bikinis";
+    if(/axila/.test(txt))return"axilas_y_otros";
+    if(/facial|limpieza facial|tratamiento facial/.test(txt))return"faciales";
+    if(/\bcera\b/.test(txt))return"cera";
+    if(/corporal|brazos|piernas|espalda|pecho|abdomen/.test(txt))return"corporales";
+    if(/dv\b|diamond|frecuente|vip/.test(txt))return"cliente_dv";
     return"nuevo_pedido";
   })();
   return BOT_LABELS.find(x=>x.key===key)||null;
