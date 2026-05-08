@@ -3756,21 +3756,18 @@ const BOT_LABELS=[
   {key:"faciales",           label:"faciales",            emoji:"🧖", color:"#DB2777"},
   {key:"cera",               label:"cera",                emoji:"🕯️", color:"#6D28D9"},
   {key:"cliente_dv",         label:"cliente DV",          emoji:"⭐", color:"#0891B2"},
-  {key:"otra_sucursal",      label:"otra sucursal",       emoji:"",   color:"#4C1D95"},
   {key:"nuevo_pedido",       label:"nuevo pedido",        emoji:"",   color:"#8B5CF6"},
 ];
 
-// Resuelve la etiqueta: usa la guardada en DB o la calcula desde stage/branch
+// Resuelve la etiqueta: usa la guardada en DB (tiene keywords de servicio)
+// o calcula desde stage como fallback para leads sin mensajes procesados
 function resolveLabel(lead){
   const key=lead.label||(()=>{
     const s=lead.stage||"nuevo";
-    const b=(lead.branches?.name||"").toLowerCase();
     if(s==="cita_agendada"||s==="anticipo_tomado")return"pedido_completado";
     if(s==="anticipo_pendiente")return"viene_a_pagar";
     if(s==="escalado")return"seguimiento";
     if(s==="no_interesado")return"sin_interes";
-    if(b==="polanco")return"polanco";
-    if(b)return"otra_sucursal";
     return"nuevo_pedido";
   })();
   return BOT_LABELS.find(x=>x.key===key)||null;
