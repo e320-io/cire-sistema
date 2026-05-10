@@ -4131,7 +4131,7 @@ function BotWhatsApp({session}){
                       <div style={{fontSize:"13px",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
                       <div style={{fontSize:"10px",color:T.faint,flexShrink:0}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
                     </div>
-                    <div style={{fontSize:"11px",color:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>{l.last_message?.content||"—"}</div>
+                    <div style={{fontSize:"11px",color:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>{/^https?:\/\/.+\.(jpeg|jpg|png|gif|webp|pdf)(\?.*)?$/i.test(l.last_message?.content)?"📎 Comprobante":(l.last_message?.content||"—")}</div>
                     <div style={{display:"flex",alignItems:"center",gap:"6px",paddingLeft:"14px",marginTop:"4px"}}>
                       {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"9px",color:T.faint}}>{l.branches.name}</div>}
                       {lbl&&<div style={{fontSize:"9px",fontWeight:600,padding:"1px 6px",borderRadius:"10px",background:`${lbl.color}22`,border:`1px solid ${lbl.color}55`,color:lbl.color,whiteSpace:"nowrap"}}>{lbl.emoji?`${lbl.emoji} `:""}{lbl.label}</div>}
@@ -4187,7 +4187,7 @@ function BotWhatsApp({session}){
                       <div key={msg.id} style={{display:"flex",justifyContent:isBot?"flex-end":"flex-start"}}>
                         <div style={{maxWidth:"72%",padding:"8px 12px",borderRadius:isBot?"12px 12px 2px 12px":"12px 12px 12px 2px",background:isBot?(msg.is_human_agent?"rgba(245,158,11,0.18)":"#2721E8"):(light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.08)"),border:msg.is_human_agent?"1px solid rgba(245,158,11,0.4)":"none",fontSize:"13px",lineHeight:"1.4",color:isBot&&!msg.is_human_agent?"#fff":undefined}}>
                           {msg.is_human_agent&&<div style={{fontSize:"9px",color:"#f59e0b",marginBottom:"3px",fontWeight:700}}>AGENTE</div>}
-                          <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{/\.(jpeg|jpg|png|gif|webp)(\?.*)?$/i.test(msg.content)?<img src={msg.content} alt="imagen" style={{maxWidth:"100%",borderRadius:"8px",display:"block"}}/>:msg.content}</div>
+                          <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{/\.(jpeg|jpg|png|gif|webp)(\?.*)?$/i.test(msg.content)?<img src={msg.content} alt="Comprobante" style={{maxWidth:"100%",borderRadius:"8px",display:"block",cursor:"pointer"}} onClick={()=>window.open(msg.content,"_blank")}/>:/\.pdf(\?.*)?$/i.test(msg.content)?<a href={msg.content} target="_blank" rel="noopener noreferrer" style={{color:"inherit",display:"flex",alignItems:"center",gap:"6px"}}>📄 Ver comprobante PDF</a>:msg.content}</div>
                           <div style={{fontSize:"9px",color:isBot&&!msg.is_human_agent?"rgba(255,255,255,0.5)":T.faint,marginTop:"3px",textAlign:"right"}}>{new Date(msg.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
                         </div>
                       </div>
