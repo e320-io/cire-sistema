@@ -4034,20 +4034,24 @@ function BotWhatsApp({session}){
   }
 
   async function handleLabelChange(leadId,newLabelKey){
+    if(!botSB)return;
     setChangingLabel(true);
     try{
-      await fetch(`${BOT_API_URL}/api/dashboard/leads/${leadId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({label:newLabelKey||null})});
+      const{error}=await botSB.from("leads").update({label:newLabelKey||null,updated_at:new Date().toISOString()}).eq("id",leadId);
+      if(error)throw error;
       setLeads(prev=>prev.map(l=>l.id===leadId?{...l,label:newLabelKey||null}:l));
       if(selected?.id===leadId)setSelected(prev=>({...prev,label:newLabelKey||null}));
-    }catch(e){alert("Error al cambiar etiqueta");}
+    }catch(e){alert("Error al cambiar etiqueta: "+e.message);}
     finally{setChangingLabel(false);}
   }
 
   async function handleStageChange(leadId,newStage){
+    if(!botSB)return;
     setLeads(prev=>prev.map(l=>l.id===leadId?{...l,stage:newStage}:l));
     if(selected?.id===leadId)setSelected(prev=>({...prev,stage:newStage}));
     try{
-      await fetch(`${BOT_API_URL}/api/dashboard/leads/${leadId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({stage:newStage})});
+      const{error}=await botSB.from("leads").update({stage:newStage,updated_at:new Date().toISOString()}).eq("id",leadId);
+      if(error)throw error;
     }catch(e){alert("Error al cambiar etapa: "+e.message);loadLeads();}
   }
 
