@@ -3778,7 +3778,7 @@ function _detectServiceFromText(raw){
 }
 
 // Resuelve la etiqueta: DB label > detección por texto > stage fallback
-function resolveLabel(lead){
+function resolveLabel(lead,labels=BOT_LABELS){
   const key=lead.label||(()=>{
     const s=lead.stage||"nuevo";
     if(s==="cita_agendada"||s==="anticipo_tomado")return"pedido_completado";
@@ -3792,7 +3792,7 @@ function resolveLabel(lead){
     if(fromLast)return fromLast;
     return"nuevo_pedido";
   })();
-  return BOT_LABELS.find(x=>x.key===key)||null;
+  return labels.find(x=>x.key===key)||null;
 }
 
 function BotWhatsApp({session}){
@@ -3830,13 +3830,16 @@ function BotWhatsApp({session}){
   const[savingQR,setSavingQR]=useState(false);
   const[uploadingAttachment,setUploadingAttachment]=useState(false);
   const[uploadingQRImage,setUploadingQRImage]=useState(false);
+  const[dragOverStage,setDragOverStage]=useState(null);
+  const[botLabels,setBotLabels]=useState(BOT_LABELS);
   const msgEndRef=useRef(null);
   const qrPanelRef=useRef(null);
   const fileInputRef=useRef(null);
   const qrImageInputRef=useRef(null);
+  const draggedLeadRef=useRef(null);
 
   useEffect(()=>{
-    loadLeads();loadBranches();loadAnticipos();
+    loadLeads();loadBranches();loadAnticipos();loadBotLabels();
     const t=setInterval(()=>{loadLeads();loadAnticipos();},30000);
     return()=>clearInterval(t);
   },[]);
@@ -3920,7 +3923,7 @@ function BotWhatsApp({session}){
   async function loadLeads(){
     if(!botSB)return;
     const{data}=await botSB.from("leads")
-      .select("id,name,phone,stage,source,created_at,branch_id,business_id,branches(name)")
+      .select("id,name,phone,stage,label,source,created_at,branch_id,business_id,branches(name)")
       .order("created_at",{ascending:false}).limit(300);
     let all=data||[];
     if(allowedBranches?.length) all=all.filter(l=>
@@ -4022,6 +4025,14 @@ function BotWhatsApp({session}){
     }finally{setUploadingAttachment(false);}
   }
 
+  async function loadBotLabels(){
+    try{
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/labels`);
+      const data=await res.json();
+      if(Array.isArray(data)&&data.length)setBotLabels(data);
+    }catch(_){}
+  }
+
   async function handleLabelChange(leadId,newLabelKey){
     setChangingLabel(true);
     try{
@@ -4030,6 +4041,14 @@ function BotWhatsApp({session}){
       if(selected?.id===leadId)setSelected(prev=>({...prev,label:newLabelKey||null}));
     }catch(e){alert("Error al cambiar etiqueta");}
     finally{setChangingLabel(false);}
+  }
+
+  async function handleStageChange(leadId,newStage){
+    setLeads(prev=>prev.map(l=>l.id===leadId?{...l,stage:newStage}:l));
+    if(selected?.id===leadId)setSelected(prev=>({...prev,stage:newStage}));
+    try{
+      await fetch(`${BOT_API_URL}/api/dashboard/leads/${leadId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({stage:newStage})});
+    }catch(e){alert("Error al cambiar etapa: "+e.message);loadLeads();}
   }
 
   async function confirmarAnticipo(id){
@@ -4049,7 +4068,7 @@ function BotWhatsApp({session}){
     const ss=filterStage==="all"||l.stage===filterStage;
     const bs=filterBranch==="all"
       ||(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch);
-    const ls=filterLabel==="all"||(resolveLabel(l)?.key===filterLabel);
+    const ls=filterLabel==="all"||(resolveLabel(l,botLabels)?.key===filterLabel);
     return ms&&ss&&bs&&ls;
   });
   const byStage=Object.fromEntries(BOT_STAGES.map(s=>[s.key,[]]));
@@ -4123,7 +4142,7 @@ function BotWhatsApp({session}){
                 const stage=BOT_STAGES.find(s=>s.key===l.stage)||BOT_STAGES[0];
                 const isActive=selected?.id===l.id;
                 const isEsc=l.last_conversation?.status==="escalada";
-                const lbl=resolveLabel(l);
+                const lbl=resolveLabel(l,botLabels);
                 return(
                   <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
@@ -4157,12 +4176,12 @@ function BotWhatsApp({session}){
                   <div style={{flex:1}}/>
                   {(()=>{const s=BOT_STAGES.find(x=>x.key===selected.stage)||BOT_STAGES[0];return<div style={{padding:"3px 10px",borderRadius:"20px",background:`${s.color}22`,border:`1px solid ${s.color}44`,fontSize:"10px",fontWeight:600,color:s.color}}>{s.label}</div>;})()}
                   {(()=>{
-                    const lbl=resolveLabel(selected);
+                    const lbl=resolveLabel(selected,botLabels);
                     return(
                       <select value={selected.label||""} disabled={changingLabel} onChange={e=>handleLabelChange(selected.id,e.target.value||null)}
                         style={{fontSize:"10px",fontWeight:600,padding:"3px 8px",borderRadius:"20px",border:`1px solid ${lbl?lbl.color+"66":"rgba(128,128,128,0.3)"}`,background:lbl?`${lbl.color}18`:(light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.06)"),color:lbl?lbl.color:T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",appearance:"none",WebkitAppearance:"none"}}>
                         <option value="">🏷️ Etiqueta…</option>
-                        {BOT_LABELS.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+                        {botLabels.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
                       </select>
                     );
                   })()}
@@ -4282,7 +4301,7 @@ function BotWhatsApp({session}){
             )}
             <select className="inp" value={filterLabel} onChange={e=>setFilterLabel(e.target.value)} style={{fontSize:"11px",padding:"5px 8px"}}>
               <option value="all">🏷️ Todas las etiquetas</option>
-              {BOT_LABELS.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+              {botLabels.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
             </select>
           </div>
           <div style={{display:"flex",gap:"12px",overflowX:"auto",flex:1,minHeight:0}}>
@@ -4293,11 +4312,20 @@ function BotWhatsApp({session}){
                   <div style={{fontSize:"11px",fontWeight:700,color:stage.color,flex:1}}>{stage.label}</div>
                   <div style={{fontSize:"12px",fontWeight:700,color:stage.color}}>{(byStage[stage.key]||[]).length}</div>
                 </div>
-                <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px"}}>
+                <div
+                  style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px",padding:"4px",borderRadius:"10px",border:dragOverStage===stage.key?`2px dashed ${stage.color}`:"2px solid transparent",background:dragOverStage===stage.key?`${stage.color}12`:"transparent",transition:"background 0.15s,border 0.15s"}}
+                  onDragOver={e=>{e.preventDefault();setDragOverStage(stage.key);}}
+                  onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOverStage(null);}}
+                  onDrop={e=>{e.preventDefault();const dragged=draggedLeadRef.current;if(dragged&&dragged.stage!==stage.key)handleStageChange(dragged.id,stage.key);draggedLeadRef.current=null;setDragOverStage(null);}}
+                >
                   {(byStage[stage.key]||[]).map(l=>{
-                    const klbl=resolveLabel(l);
+                    const klbl=resolveLabel(l,botLabels);
                     return(
-                    <div key={l.id} className="glass" style={{padding:"10px 12px",cursor:"pointer"}} onClick={()=>{setSelected(l);setInnerTab("conversaciones");}}>
+                    <div key={l.id} className="glass" draggable
+                      onDragStart={e=>{draggedLeadRef.current=l;e.dataTransfer.effectAllowed="move";}}
+                      onDragEnd={()=>{draggedLeadRef.current=null;setDragOverStage(null);}}
+                      style={{padding:"10px 12px",cursor:"grab"}}
+                      onClick={()=>{setSelected(l);setInnerTab("conversaciones");}}>
                       <div style={{fontSize:"13px",fontWeight:600,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
                       <div style={{fontSize:"11px",color:T.sub}}>{l.phone}</div>
                       {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>{l.branches.name}</div>}
