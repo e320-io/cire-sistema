@@ -149,7 +149,7 @@ function useT(){const{light,acc}=useContext(ThemeCtx);return{light,acc,T:mkT(lig
 
 const USUARIOS=[
   {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8",accesibilidad:true},
-  {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3",sucursalesBot:["Valle","Polanco","Oriente","__sin_sucursal__"]},
+  {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3",sucursalesBot:["Coapa","Valle","Oriente","Polanco","Metepec","__sin_sucursal__"],sucursalesRecepcion:["Coapa","Valle","Oriente","Polanco","Metepec"]},
   {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8"},
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
@@ -1871,6 +1871,10 @@ function PreventaView({session,isAdmin,onVerFicha}){
 function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const{light,T}=useT();
   useCSSInjection();
+  const[sucursalRecepNombre,setSucursalRecepNombre]=useState(session.nombre);
+  const sessionRec=session.sucursalesRecepcion
+    ?{...session,...(USUARIOS.find(u=>u.nombre===sucursalRecepNombre&&u.rol==="sucursal")||{id:session.id,nombre:session.nombre,color:session.color})}
+    :session;
   const[view,setView]=useState("pos");const[carrito,setCarrito]=useState([]);const[filtro,setFiltro]=useState("Todos");const[busq,setBusq]=useState("");
   const[tipoTicket,setTipoTicket]=useState("nueva"); // "nueva" | "recompra"
   const[clientaSel,setClientaSel]=useState(null);const[busqCli,setBusqCli]=useState("");const[cliResults,setCliResults]=useState([]);
@@ -2073,7 +2077,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           </div>)}
         </div>}
       </div>}
-      {view==="agenda"&&<AgendaCalendar key="ag" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
+      {session.sucursalesRecepcion&&(view==="agenda"||view==="confirmar")&&<div style={{display:"flex",gap:"6px",padding:"8px 20px",borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`,background:light?"rgba(255,255,255,0.95)":"rgba(0,0,0,0.3)",flexShrink:0,flexWrap:"wrap"}}>
+        {session.sucursalesRecepcion.map(s=>{const c=COLORES[s]||"#49B8D3";return<button key={s} onClick={()=>setSucursalRecepNombre(s)} style={{padding:"4px 14px",borderRadius:"20px",border:`1px solid ${sucursalRecepNombre===s?c:"rgba(255,255,255,0.1)"}`,background:sucursalRecepNombre===s?`${c}22`:"transparent",color:sucursalRecepNombre===s?c:T.faint,fontSize:"11px",fontWeight:600,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{s}</button>;})}
+      </div>}
+      {view==="agenda"&&<AgendaCalendar key={`ag-${sessionRec.id}`} session={sessionRec} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
       {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
 
       {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)} isAdmin={isAdmin}/>:
@@ -2096,7 +2103,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         </div>)}
 
       {view==="ajustes"&&<AjustesTerminales session={session}/>}
-      {view==="confirmar"&&<ConfirmacionesManana session={session}/>}
+      {view==="confirmar"&&<ConfirmacionesManana session={sessionRec}/>}
       {view==="bot"&&<div style={{flex:1,padding:"16px 20px",display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}><BotWhatsApp session={session}/></div>}
 
       {view==="historial"&&<div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
