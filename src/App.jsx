@@ -3960,14 +3960,15 @@ function BotWhatsApp({session}){
       });
     }
     const unreadByLead={};
-    Object.keys(msgsByLead).forEach(leadId=>{
+    Object.keys(lastConv).forEach(leadId=>{
       const conv=lastConv[leadId];
       if(!conv?.bot_paused)return;
-      const msgs=msgsByLead[leadId]; // newest first (desc)
-      const lastBotIdx=msgs.findIndex(m=>m.role==="bot");
+      // Scope to last conversation only — avoids bot msgs from older closed convs
+      const convMsgs=(msgsByLead[leadId]||[]).filter(m=>m.conversation_id===conv.id);
+      const lastBotIdx=convMsgs.findIndex(m=>m.role==="bot");
       unreadByLead[leadId]=lastBotIdx===-1
-        ?msgs.filter(m=>m.role==="lead").length
-        :msgs.slice(0,lastBotIdx).filter(m=>m.role==="lead").length;
+        ?convMsgs.filter(m=>m.role==="lead").length
+        :convMsgs.slice(0,lastBotIdx).filter(m=>m.role==="lead").length;
     });
     setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null,unread_count:unreadByLead[l.id]||0})));
     setLoading(false);
@@ -4173,17 +4174,19 @@ function BotWhatsApp({session}){
                 const isActive=selected?.id===l.id;
                 const isEsc=l.last_conversation?.status==="escalada";
                 const lbl=resolveLabel(l,botLabels);
+                const hasUnread=l.last_conversation?.bot_paused&&(l.unread_count>0||l.last_message?.role==="lead");
+                const badgeCount=l.unread_count||(l.last_message?.role==="lead"?1:0);
                 return(
-                  <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",position:"relative",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
-                    {l.last_conversation?.bot_paused&&l.unread_count>0&&(
-                      <span className="unread-badge" style={{position:"absolute",top:"8px",right:"8px",background:"#25d366",color:"#fff",borderRadius:"50%",minWidth:"18px",height:"18px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,padding:"0 3px"}}>{l.unread_count}</span>
+                  <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",position:"relative",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":hasUnread?"rgba(37,211,102,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
+                    {hasUnread&&(
+                      <span className="unread-badge" style={{position:"absolute",top:"8px",right:"8px",background:"#25d366",color:"#fff",borderRadius:"50%",minWidth:"18px",height:"18px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,padding:"0 3px"}}>{badgeCount}</span>
                     )}
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
                       <div style={{width:"6px",height:"6px",borderRadius:"50%",background:stage.color,flexShrink:0}}/>
-                      <div style={{fontSize:"13px",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
-                      <div style={{fontSize:"10px",color:T.faint,flexShrink:0,paddingRight:l.last_conversation?.bot_paused&&l.unread_count>0?"22px":"0"}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
+                      <div style={{fontSize:"13px",fontWeight:hasUnread?700:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
+                      <div style={{fontSize:"10px",color:hasUnread?"#25d366":T.faint,fontWeight:hasUnread?600:400,flexShrink:0,paddingRight:hasUnread?"22px":"0"}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
                     </div>
-                    <div style={{fontSize:"11px",color:l.last_message?.role==="bot"?T.faint:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>
+                    <div style={{fontSize:"11px",color:l.last_message?.role==="bot"?T.faint:T.sub,fontWeight:hasUnread?500:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>
                       {/^https?:\/\/.+\.(jpeg|jpg|png|gif|webp|pdf)(\?.*)?$/i.test(l.last_message?.content)
                         ?"📎 Comprobante"
                         :l.last_message
