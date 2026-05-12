@@ -152,14 +152,14 @@ function useT(){const{light,acc}=useContext(ThemeCtx);return{light,acc,T:mkT(lig
 const USUARIOS=[
   {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8",accesibilidad:true},
   {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3",sucursalesBot:["Coapa","Valle","Oriente","Polanco","Metepec","__sin_sucursal__"],sucursalesRecepcion:["Coapa","Valle","Oriente","Polanco","Metepec"]},
-  {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8"},
+  {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
-  {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8"},
+  {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
   {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle"]},
-  {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"]},
-  {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"]},
+  {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
+  {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
 ];
 const SUCURSALES_NAMES=["Coapa","Valle","Oriente","Polanco","Metepec"];
@@ -2048,7 +2048,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.45)":T.sub,fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot"].map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot"].filter(v=>!(v==="bot"&&session.noBot)).map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
               onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
               {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":"Historial"}</div>)}
@@ -6139,7 +6139,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const tabsBase=esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"];
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
