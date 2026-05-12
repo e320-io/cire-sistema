@@ -95,6 +95,8 @@ const CSS = `
   @keyframes meta-spin{to{transform:rotate(360deg)}}
   @keyframes loading-bar{0%{background-position:100% 0}100%{background-position:-100% 0}}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse-badge{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+  .unread-badge{animation:pulse-badge 1.6s ease-in-out infinite;}
   .meta-spinner{width:28px;height:28px;border:2.5px solid var(--spinner-border);border-top-color:#a855f7;border-radius:50%;animation:meta-spin 0.8s linear infinite;}
   .meta-loading-overlay{position:absolute;inset:-4px;z-index:10;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:var(--meta-loading-bg);border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.3s;}
   .rank-row{display:grid;grid-template-columns:32px 110px 1fr 110px 110px 100px;gap:0;padding:15px 20px;border-bottom:1px solid var(--rank-border);align-items:center;font-size:14px;}
@@ -3945,12 +3947,29 @@ function BotWhatsApp({session}){
     (convs||[]).forEach(c=>{if(!lastConv[c.lead_id])lastConv[c.lead_id]=c;countConv[c.lead_id]=(countConv[c.lead_id]||0)+1;});
     const cids=(convs||[]).map(c=>c.id);
     let lastMsg={};
+    const msgsByLead={};
     if(cids.length){
       const{data:msgs}=await botSB.from("messages")
-        .select("conversation_id,content,role,created_at").in("conversation_id",cids).order("created_at",{ascending:false});
-      (msgs||[]).forEach(m=>{const cv=(convs||[]).find(c=>c.id===m.conversation_id);if(cv&&!lastMsg[cv.lead_id])lastMsg[cv.lead_id]=m;});
+        .select("conversation_id,content,role,created_at,is_human_agent").in("conversation_id",cids).order("created_at",{ascending:false});
+      (msgs||[]).forEach(m=>{
+        const cv=(convs||[]).find(c=>c.id===m.conversation_id);
+        if(!cv)return;
+        if(!lastMsg[cv.lead_id])lastMsg[cv.lead_id]=m;
+        if(!msgsByLead[cv.lead_id])msgsByLead[cv.lead_id]=[];
+        msgsByLead[cv.lead_id].push(m);
+      });
     }
-    setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null})));
+    const unreadByLead={};
+    Object.keys(msgsByLead).forEach(leadId=>{
+      const conv=lastConv[leadId];
+      if(!conv?.bot_paused)return;
+      const msgs=msgsByLead[leadId]; // newest first (desc)
+      const lastBotIdx=msgs.findIndex(m=>m.role==="bot");
+      unreadByLead[leadId]=lastBotIdx===-1
+        ?msgs.filter(m=>m.role==="lead").length
+        :msgs.slice(0,lastBotIdx).filter(m=>m.role==="lead").length;
+    });
+    setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null,unread_count:unreadByLead[l.id]||0})));
     setLoading(false);
   }
 
@@ -4155,13 +4174,22 @@ function BotWhatsApp({session}){
                 const isEsc=l.last_conversation?.status==="escalada";
                 const lbl=resolveLabel(l,botLabels);
                 return(
-                  <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
+                  <div key={l.id} onClick={()=>setSelected(l)} className="glass" style={{padding:"10px 14px",cursor:"pointer",position:"relative",borderColor:isActive?"#2721E8":isEsc?"rgba(234,88,12,0.4)":undefined,background:isActive?(light?"rgba(39,33,232,0.06)":"rgba(39,33,232,0.12)"):undefined}}>
+                    {l.last_conversation?.bot_paused&&l.unread_count>0&&(
+                      <span className="unread-badge" style={{position:"absolute",top:"8px",right:"8px",background:"#25d366",color:"#fff",borderRadius:"50%",minWidth:"18px",height:"18px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,padding:"0 3px"}}>{l.unread_count}</span>
+                    )}
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
                       <div style={{width:"6px",height:"6px",borderRadius:"50%",background:stage.color,flexShrink:0}}/>
                       <div style={{fontSize:"13px",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
-                      <div style={{fontSize:"10px",color:T.faint,flexShrink:0}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
+                      <div style={{fontSize:"10px",color:T.faint,flexShrink:0,paddingRight:l.last_conversation?.bot_paused&&l.unread_count>0?"22px":"0"}}>{fmtT(l.last_message?.created_at||l.created_at)}</div>
                     </div>
-                    <div style={{fontSize:"11px",color:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>{/^https?:\/\/.+\.(jpeg|jpg|png|gif|webp|pdf)(\?.*)?$/i.test(l.last_message?.content)?"📎 Comprobante":(l.last_message?.content||"—")}</div>
+                    <div style={{fontSize:"11px",color:l.last_message?.role==="bot"?T.faint:T.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:"14px"}}>
+                      {/^https?:\/\/.+\.(jpeg|jpg|png|gif|webp|pdf)(\?.*)?$/i.test(l.last_message?.content)
+                        ?"📎 Comprobante"
+                        :l.last_message
+                          ?(l.last_message.role==="bot"?"✓✓ ":"")+l.last_message.content
+                          :"—"}
+                    </div>
                     <div style={{display:"flex",alignItems:"center",gap:"6px",paddingLeft:"14px",marginTop:"4px"}}>
                       {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"9px",color:T.faint}}>{l.branches.name}</div>}
                       {lbl&&<div style={{fontSize:"9px",fontWeight:600,padding:"1px 6px",borderRadius:"10px",background:`${lbl.color}22`,border:`1px solid ${lbl.color}55`,color:lbl.color,whiteSpace:"nowrap"}}>{lbl.emoji?`${lbl.emoji} `:""}{lbl.label}</div>}
