@@ -3824,6 +3824,7 @@ function BotWhatsApp({session}){
   const[filterStage,setFilterStage]=useState("all");
   const[filterBranch,setFilterBranch]=useState("all");
   const[filterLabel,setFilterLabel]=useState("all");
+  const[filterUnread,setFilterUnread]=useState(false);
   const[changingLabel,setChangingLabel]=useState(false);
   const[innerTab,setInnerTab]=useState("conversaciones");
   const[botPaused,setBotPaused]=useState(false);
@@ -4100,7 +4101,17 @@ function BotWhatsApp({session}){
     const bs=filterBranch==="all"
       ||(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch);
     const ls=filterLabel==="all"||(resolveLabel(l,botLabels)?.key===filterLabel);
-    return ms&&ss&&bs&&ls;
+    const lHasUnread=l.last_conversation?.bot_paused&&(l.unread_count>0||l.last_message?.role==="lead");
+    const us=!filterUnread||lHasUnread;
+    return ms&&ss&&bs&&ls&&us;
+  }).sort((a,b)=>{
+    const aU=a.last_conversation?.bot_paused&&(a.unread_count>0||a.last_message?.role==="lead");
+    const bU=b.last_conversation?.bot_paused&&(b.unread_count>0||b.last_message?.role==="lead");
+    if(aU&&!bU)return -1;
+    if(!aU&&bU)return 1;
+    const aT=new Date(a.last_message?.created_at||a.created_at).getTime();
+    const bT=new Date(b.last_message?.created_at||b.created_at).getTime();
+    return bT-aT;
   });
   const byStage=Object.fromEntries(BOT_STAGES.map(s=>[s.key,[]]));
   leads.filter(l=>{
@@ -4149,6 +4160,9 @@ function BotWhatsApp({session}){
           {/* Lista de leads */}
           <div style={{width:"300px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
             <input className="inp" placeholder="Buscar nombre o teléfono..." value={search} onChange={e=>setSearch(e.target.value)} style={{fontSize:"12px",padding:"8px 12px"}}/>
+            <div style={{display:"flex",gap:"6px",marginBottom:"2px"}}>
+              <button onClick={()=>setFilterUnread(v=>!v)} style={{padding:"5px 14px",borderRadius:"20px",border:"1px solid",fontSize:"11px",fontWeight:600,cursor:"pointer",background:filterUnread?"#25d366":"transparent",borderColor:filterUnread?"#25d366":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterUnread?"#fff":T.sub,transition:"all 0.15s",fontFamily:"'Albert Sans',sans-serif"}}>No leídos</button>
+            </div>
             <div style={{display:"flex",gap:"6px"}}>
               <select className="inp" value={filterStage} onChange={e=>setFilterStage(e.target.value)} style={{fontSize:"11px",padding:"5px 8px",flex:1}}>
                 <option value="all">Todas las etapas</option>
