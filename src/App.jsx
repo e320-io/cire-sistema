@@ -4133,7 +4133,14 @@ function BotWhatsApp({session}){
     if(filterBranch!=="all"&&!(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch))return false;
     if(filterLabel!=="all"&&resolveLabel(l)?.key!==filterLabel)return false;
     return true;
-  }).forEach(l=>{const raw=l.stage||"sin_respuesta";const k=BOT_LEGACY_STAGE[raw]||raw;if(byStage[k])byStage[k].push(l);else byStage["sin_respuesta"].push(l);});
+  }).forEach(l=>{
+    const raw=l.stage||"sin_respuesta";
+    const mapped=BOT_LEGACY_STAGE[raw]||raw;
+    // "Esperando Respuesta": bot apagado + último mensaje del lead, ó stage notificacion_sucursal/esperando_respuesta
+    const isEsperando=mapped==="esperando_respuesta"||(l.bot_paused&&l.last_message?.role==="lead");
+    const k=isEsperando?"esperando_respuesta":mapped;
+    if(byStage[k])byStage[k].push(l);else byStage["sin_respuesta"].push(l);
+  });
 
   function fmtT(d){
     if(!d)return"";const dt=new Date(d),now=new Date();
