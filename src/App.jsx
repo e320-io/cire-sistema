@@ -3741,13 +3741,19 @@ function renderMarkdown(text,T,light){
 // BOT WHATSAPP — CRM de leads integrado
 // ══════════════════════════════════════════════════════════════════════════════
 const BOT_STAGES=[
-  {key:"nuevo",label:"Nuevo Lead",color:"#6b7280"},
-  {key:"en_conversacion",label:"En Conversación",color:"#2563eb"},
-  {key:"anticipo_tomado",label:"Anticipo Tomado",color:"#7c3aed"},
-  {key:"cita_agendada",label:"Cita Agendada",color:"#16a34a"},
-  {key:"no_interesado",label:"No Interesado",color:"#dc2626"},
-  {key:"escalado",label:"Escalado",color:"#ea580c"},
+  {key:"sin_respuesta",label:"Sin Respuesta",sublabel:"de ellos",color:"#6b7280"},
+  {key:"esperando_respuesta",label:"Esperando Respuesta",sublabel:"alerta enviada, listo para agendar",color:"#16a34a"},
+  {key:"cita_agendada",label:"Cita Agendada",color:"#059669"},
+  {key:"seguimiento",label:"Seguimiento / Importante",color:"#ea580c"},
+  {key:"no_interesado",label:"No Interesado / Error",color:"#dc2626"},
 ];
+const BOT_LEGACY_STAGE={
+  nuevo:"sin_respuesta",
+  en_conversacion:"sin_respuesta",
+  notificacion_sucursal:"esperando_respuesta",
+  anticipo_tomado:"cita_agendada",
+  escalado:"seguimiento",
+};
 
 const BOT_LABELS=[
   {key:"pedido_completado",  label:"Pedido completado",  emoji:"",   color:"#5B21B6"},
@@ -3842,6 +3848,9 @@ function BotWhatsApp({session}){
   const[uploadingQRImage,setUploadingQRImage]=useState(false);
   const[dragOverStage,setDragOverStage]=useState(null);
   const[botLabels,setBotLabels]=useState(BOT_LABELS);
+  const[dailyStats,setDailyStats]=useState(null);
+  const[loadingStats,setLoadingStats]=useState(false);
+  const[showOldSinResp,setShowOldSinResp]=useState(false);
   const msgEndRef=useRef(null);
   const qrPanelRef=useRef(null);
   const fileInputRef=useRef(null);
@@ -3849,8 +3858,8 @@ function BotWhatsApp({session}){
   const draggedLeadRef=useRef(null);
 
   useEffect(()=>{
-    loadLeads();loadBranches();loadAnticipos();loadBotLabels();
-    const t=setInterval(()=>{loadLeads();loadAnticipos();},30000);
+    loadLeads();loadBranches();loadAnticipos();loadBotLabels();loadDailyStats();
+    const t=setInterval(()=>{loadLeads();loadAnticipos();loadDailyStats();},30000);
     return()=>clearInterval(t);
   },[]);
   useEffect(()=>{if(!selected)return;loadMessages(selected.id,true);},[selected?.id]);
@@ -3922,6 +3931,12 @@ function BotWhatsApp({session}){
   async function deleteQuickReply(id){
     if(!confirm("¿Eliminar esta respuesta rápida?"))return;
     try{await fetch(`${BOT_API_URL}/api/dashboard/quick-replies/${id}`,{method:"DELETE"});setQuickReplies(prev=>prev.filter(q=>q.id!==id));}catch(e){alert("Error: "+e.message);}
+  }
+
+  async function loadDailyStats(){
+    setLoadingStats(true);
+    try{const res=await fetch(`${BOT_API_URL}/api/dashboard/daily-stats`);const d=await res.json();setDailyStats(d);}catch(_){}
+    setLoadingStats(false);
   }
 
   async function loadBranches(){
@@ -4118,7 +4133,7 @@ function BotWhatsApp({session}){
     if(filterBranch!=="all"&&!(filterBranch==="__sin_sucursal__"?!l.branches?.name:l.branches?.name===filterBranch))return false;
     if(filterLabel!=="all"&&resolveLabel(l)?.key!==filterLabel)return false;
     return true;
-  }).forEach(l=>{const k=l.stage||"nuevo";if(byStage[k])byStage[k].push(l);else byStage["nuevo"].push(l);});
+  }).forEach(l=>{const raw=l.stage||"sin_respuesta";const k=BOT_LEGACY_STAGE[raw]||raw;if(byStage[k])byStage[k].push(l);else byStage["sin_respuesta"].push(l);});
 
   function fmtT(d){
     if(!d)return"";const dt=new Date(d),now=new Date();
@@ -4147,12 +4162,94 @@ function BotWhatsApp({session}){
         <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>BOT WHATSAPP</div>
         {allowedBranches&&<div style={{fontSize:"11px",color:T.faint,background:light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.06)",padding:"3px 10px",borderRadius:"20px"}}>{allowedBranches.join(", ")}</div>}
         <div style={{flex:1}}/>
-        {["conversaciones","kanban","anticipos"].map(t=>(
+        {["resumen","conversaciones","kanban","anticipos"].map(t=>(
           <button key={t} onClick={()=>setInnerTab(t)} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:innerTab===t?"#2721E8":"transparent",color:innerTab===t?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif",borderRadius:"8px"}}>
-            {t==="conversaciones"?"💬 Conversaciones":t==="kanban"?"📋 Kanban":`🔔 Anticipos${anticipos.length?` (${anticipos.length})`:""}`}
+            {t==="resumen"?"📈 Resumen del Día":t==="conversaciones"?"💬 Conversaciones":t==="kanban"?"📋 Kanban":`🔔 Anticipos${anticipos.length?` (${anticipos.length})`:""}`}
           </button>
         ))}
       </div>
+
+      {/* ── RESUMEN DEL DÍA ─────────────────────────────────────────────── */}
+      {innerTab==="resumen"&&(
+        <div style={{flex:1,overflowY:"auto",paddingTop:"20px"}}>
+          <div style={{maxWidth:"820px",margin:"0 auto",display:"flex",flexDirection:"column",gap:"20px"}}>
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:"16px",fontWeight:700,color:T.text}}>Resumen del Día</div>
+                <div style={{fontSize:"12px",color:T.sub,marginTop:"2px"}}>{new Date().toLocaleDateString("es-MX",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</div>
+              </div>
+              <button onClick={loadDailyStats} disabled={loadingStats} style={{padding:"7px 14px",borderRadius:"8px",border:`1px solid ${light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)"}`,background:"transparent",fontSize:"11px",fontWeight:600,cursor:loadingStats?"not-allowed":"pointer",color:T.sub,fontFamily:"'Albert Sans',sans-serif"}}>
+                {loadingStats?"Actualizando...":"Actualizar"}
+              </button>
+            </div>
+
+            {/* KPIs */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"14px"}}>
+              {[
+                {label:"Conversaciones atendidas hoy",value:dailyStats?.conversacionesHoy??"—",sub:"iniciadas por el bot",icon:"💬",c:"#2721E8"},
+                {label:"Leads esperando ser contactados",value:dailyStats?.esperandoContacto??"—",sub:"alerta enviada a sucursal",icon:"⏳",c:"#16a34a"},
+                {label:"Alertas enviadas a sucursales",value:dailyStats?.alertasSucursalHoy??"—",sub:"leads listos para agendar hoy",icon:"🔔",c:"#059669"},
+              ].map(card=>(
+                <div key={card.label} style={{background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.06)",borderRadius:"14px",padding:"18px",border:`1px solid ${card.c}25`}}>
+                  <div style={{fontSize:"22px",marginBottom:"6px"}}>{card.icon}</div>
+                  <div style={{fontSize:"32px",fontWeight:800,color:card.c,lineHeight:1}}>{card.value}</div>
+                  <div style={{fontSize:"12px",fontWeight:700,color:T.text,marginTop:"6px"}}>{card.label}</div>
+                  <div style={{fontSize:"11px",color:T.sub,marginTop:"2px"}}>{card.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Por sucursal hoy */}
+            <div style={{background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.06)",borderRadius:"14px",padding:"20px",border:`1px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)"}`}}>
+              <div style={{fontSize:"13px",fontWeight:700,color:T.text,marginBottom:"14px"}}>Leads asignados por sucursal hoy</div>
+              {loadingStats?<div style={{fontSize:"12px",color:T.sub}}>Cargando...</div>
+              :dailyStats?.leadsByBranchHoy&&Object.keys(dailyStats.leadsByBranchHoy).length>0?(
+                <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+                  {Object.entries(dailyStats.leadsByBranchHoy).sort(([,a],[,b])=>b-a).map(([branch,count])=>{
+                    const max=Math.max(...Object.values(dailyStats.leadsByBranchHoy));
+                    return(
+                      <div key={branch}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                          <span style={{fontSize:"12px",fontWeight:600,color:T.text}}>{branch}</span>
+                          <span style={{fontSize:"12px",fontWeight:700,color:"#2721E8"}}>{count} leads</span>
+                        </div>
+                        <div style={{height:"7px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)",borderRadius:"999px",overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${(count/max)*100}%`,background:"#2721E8",borderRadius:"999px",transition:"width 0.4s"}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ):<div style={{fontSize:"12px",color:T.sub}}>Sin datos por sucursal para hoy.</div>}
+            </div>
+
+            {/* Lista de leads esperando */}
+            <div style={{background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.06)",borderRadius:"14px",padding:"20px",border:`1px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)"}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}>
+                <div style={{fontSize:"13px",fontWeight:700,color:T.text}}>Leads esperando que el equipo los contacte</div>
+                {(dailyStats?.esperandoContacto||0)>0&&<span style={{background:"#16a34a",color:"#fff",borderRadius:"12px",padding:"2px 10px",fontSize:"11px",fontWeight:700}}>{dailyStats.esperandoContacto}</span>}
+              </div>
+              {(byStage["esperando_respuesta"]||[]).length>0?(
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  {(byStage["esperando_respuesta"]||[]).slice(0,15).map(lead=>(
+                    <div key={lead.id} onClick={()=>{setSelected(lead);setInnerTab("conversaciones");}} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"10px",cursor:"pointer",background:"rgba(22,163,74,0.08)",border:"1px solid rgba(22,163,74,0.2)"}}>
+                      <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:"13px",flexShrink:0}}>
+                        {(lead.name||lead.phone||"?")[0].toUpperCase()}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:600,fontSize:"12px",color:T.text}}>{lead.name||"Sin nombre"}</div>
+                        <div style={{fontSize:"11px",color:T.sub}}>{lead.phone} · {lead.branches?.name||"Sin sucursal"}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {(byStage["esperando_respuesta"]||[]).length>15&&<div style={{fontSize:"11px",color:T.sub,textAlign:"center"}}>y {(byStage["esperando_respuesta"]||[]).length-15} más — ve al Kanban</div>}
+                </div>
+              ):<div style={{fontSize:"12px",color:T.sub}}>No hay leads esperando respuesta del equipo.</div>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CONVERSACIONES ──────────────────────────────────────────────── */}
       {innerTab==="conversaciones"&&(
