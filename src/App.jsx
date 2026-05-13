@@ -5838,7 +5838,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const mesSelLabel=new Date(mesY,mesM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
   const customLabel=`${new Date(customDesde+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${new Date(customHasta+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;
   const periodoLabel=periodo==="personalizado"?customLabel:mesSelLabel;
-  const mesesOpciones=Array.from({length:13},(_,i)=>{const d=new Date(new Date().getFullYear(),new Date().getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});
+  const mesesOpciones=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});})();
 
   const cargarDatos=async()=>{
     setLoadingDB(true);
