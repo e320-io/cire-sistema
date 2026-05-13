@@ -3986,7 +3986,7 @@ function BotWhatsApp({session}){
         ?convMsgs.filter(m=>m.role==="lead").length
         :convMsgs.slice(0,lastBotIdx).filter(m=>m.role==="lead").length;
     });
-    setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null,unread_count:unreadByLead[l.id]||0})));
+    setLeads(all.map(l=>({...l,last_conversation:lastConv[l.id]||null,conversation_count:countConv[l.id]||0,last_message:lastMsg[l.id]||null,bot_paused:lastConv[l.id]?.bot_paused||false,unread_count:unreadByLead[l.id]||0})));
     setLoading(false);
   }
 
@@ -4136,8 +4136,9 @@ function BotWhatsApp({session}){
   }).forEach(l=>{
     const raw=l.stage||"sin_respuesta";
     const mapped=BOT_LEGACY_STAGE[raw]||raw;
-    // "Esperando Respuesta": bot apagado + último mensaje del lead, ó stage notificacion_sucursal/esperando_respuesta
-    const isEsperando=mapped==="esperando_respuesta"||(l.bot_paused&&l.last_message?.role==="lead");
+    // "Esperando Respuesta": stage notificacion_sucursal/esperando_respuesta
+    // ó bot apagado y el último mensaje NO fue del agente humano
+    const isEsperando=mapped==="esperando_respuesta"||(l.bot_paused&&l.last_message?.role!=="human_agent");
     const k=isEsperando?"esperando_respuesta":mapped;
     if(byStage[k])byStage[k].push(l);else byStage["sin_respuesta"].push(l);
   });
