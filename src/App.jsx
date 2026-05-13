@@ -4433,7 +4433,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const rango=(ym)=>{const[y,m]=ym.split("-").map(Number);return{desde:`${ym}-01`,hasta:new Date(y,m,0).toISOString().slice(0,10)};};
   const etiq=(ym)=>new Date(`${ym}-15`).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
   const hoyYM=()=>cdmx().slice(0,7);
-  const listaMeses=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
+  const listaMeses=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});})();
 
   const[periodo,setPeriodo]=useState(hoyYM());
   const[vista,setVista]=useState("individual");
