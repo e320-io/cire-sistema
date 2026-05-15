@@ -2390,7 +2390,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
 // IMPORTAR CALENDARIO — Archivo .ics exportado de Google Calendar
 // ══════════════════════════════════════════════════════════════════════════════
 // Helpers para parseo robusto de ICS
-const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario/i;
+const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario|festivo|simulacro|inventario|limpieza|mantenimiento|dia de asueto|cierre/i;
 const ICS_EMOJI_RE=/[\p{Emoji_Presentation}\p{Extended_Pictographic}✅🔁🤖🧾\u200d\ufe0f]/gu;
 // Mapas de iniciales → nombre completo por sucursal
 const PERSONAL_MAPS={
@@ -2401,7 +2401,54 @@ const PERSONAL_MAPS={
 const ICS_SES_MAP=[[/\b1[ae]?ra?\b|primera\b|1er\b/,1],[/\b2d[ao]?\b|segunda\b/,2],[/\b3[ae]?ra?\b|tercera?\b/,3],[/\b4t[ao]?\b|cuarta?\b/,4],[/\b5t[ao]?\b|quinta?\b/,5],[/\b6t[ao]?\b|sexta?\b/,6],[/\b7m[ao]?\b|s[eé]ptima?\b/,7],[/\b8v[ao]?\b|octava?\b/,8],[/\b9n[ao]?\b|novena?\b/,9],[/\b10[ao]?\b|d[eé]cima?\b/,10]];
 function icsSesDesc(d){if(!d)return 1;const l=d.toLowerCase();for(const[re,n]of ICS_SES_MAP)if(re.test(l))return n;const m=d.match(/sesi[oó]n\s*#?\s*(\d+)/i);if(m)return parseInt(m[1]);const m2=d.match(/\b(\d{1,2})\s*[°º]/);if(m2)return parseInt(m2[1]);const m3=l.match(/\b(\d{1,2})a(?:\b|[a-záéíóú])/);return m3?parseInt(m3[1]):1;}
 function icsSesSum(s){if(!s)return null;const m=s.match(/\b(\d{1,2})\s*[°º]/);if(m)return parseInt(m[1]);const m2=s.match(/\b(\d{1,2})\s*(?:era?|ra?|da?|ta?|va?|ma?|a)(?:\b|[a-záéíóú])/i);return m2?parseInt(m2[1]):null;}
-function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Bikini y Axilas";if(/combo\s*sexy|sexy\s*bikini/.test(src))return"Combo Sexy";if(/combo\s*playa|playa/.test(src))return"Combo Playa";if(/combo\s*bikini/.test(src))return"Combo Bikini";if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|french/.test(src))return"French Bikini";if(/bk\s*brazil|brazilia|bikini\s*brazil|\bbb\b/.test(src))return"Brazilian";if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";if(/interglut/.test(src))return"Interglútea";if(/menton/.test(src))return"Mentón";if(/brazos\s*y\s*piernas|brazos/.test(src))return"Brazos y Piernas";if(/piernas\s*y\s*pompas?|\bpp\b/.test(src))return"Piernas y Pompas";if(/piernas/.test(src))return"Piernas";if(/\bpies\b|apies/.test(src))return"Pies";if(/axilas/.test(src))return"Axilas";if(/medio\s*rostro/.test(src))return"Medio Rostro";if(/rostro\s*completo|\brc\b/.test(src))return"Rostro Completo";if(/rostro/.test(src))return"Rostro Completo";if(/hidrafacial/.test(src))return"Hidrafacial";if(/baby\s*clean|baby/.test(src))return"Baby Clean";if(/facial/.test(src))return"Facial";if(/hifu/.test(src))return"HIFU Facial";if(/lifting|radio/.test(src))return"Lifting/Radio";if(/moldeo|corporal|anticel/.test(src))return"Corporal";if(/post\s*op/.test(src))return"Post Op";if(/cera/.test(src))return"Cera";if(/\bbigote\b/.test(src))return"Bigote";if(/\bespalda\b/.test(src))return"Espalda";return"Servicio";}
+function icsServicio(desc,summary){const src=(desc||summary||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  if(/combo\s*se[xk]i|combo\s*sexy/.test(src))return"Combo Sexy";
+  if(/combo\s*playa/.test(src))return"Combo Playa";
+  if(/combo\s*bikini/.test(src))return"Combo Bikini";
+  if(/combo\s*axilas?/.test(src))return"Combo Axilas";
+  if(/combo\s*piernas?/.test(src))return"Combo Piernas";
+  if(/combo\s*rostro/.test(src))return"Combo Rostro";
+  if(/bikini\s+y\s+axilas?|axilas?\s+y\s+bikini/.test(src))return"Combo Axilas";
+  if(/cuerpo\s*completo|\bcc\b/.test(src))return"Cuerpo Completo";
+  if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|\bfrench\b/.test(src))return"French Bikini";
+  if(/bk\s*brazil|brazilia|bikini\s*braz|\bbb\b|\bbrazilian\b|\bbrzilian\b|\bbrailian\b|\bbrezilian\b/.test(src))return"Brazilian";
+  if(/sexy\s*bikini|\bse[xk]y\b|\bse[xk]i\b/.test(src))return"Sexy Bikini";
+  if(/bikini\s*basico/.test(src))return"Bikini Básico";
+  if(/interglut|\bcrack\b/.test(src))return"Interglútea";
+  if(/linea.*abdomen|linea.*abdom/.test(src))return"Línea Abdomen";
+  if(/\babdomen\b/.test(src))return"Abdomen";
+  if(/glute/.test(src))return"Glúteos";
+  if(/brazos?\s*y\s*piernas?/.test(src))return"Brazos y Piernas";
+  if(/\bbrazos?\b/.test(src))return"Brazos";
+  if(/medias?\s*piernas?/.test(src))return"Medias Piernas";
+  if(/piernas?\s*y\s*pompas?|\bpp\b/.test(src))return"Piernas y Pompas";
+  if(/\bpiernas?\b/.test(src))return"Piernas";
+  if(/\bpies\b|apies/.test(src))return"Pies";
+  if(/\baxilas?\b/.test(src))return"Axilas";
+  if(/espalda\s*completa/.test(src))return"Espalda Completa";
+  if(/media\s*espalda/.test(src))return"Media Espalda";
+  if(/\bespalda\b/.test(src))return"Espalda";
+  if(/\bnuca\b/.test(src))return"Nuca";
+  if(/\bpecho\b/.test(src))return"Pecho";
+  if(/medio\s*rostro/.test(src))return"Medio Rostro";
+  if(/rostro\s*completo|\brc\b/.test(src))return"Rostro Completo";
+  if(/\brostro\b/.test(src))return"Rostro Completo";
+  if(/patillas?/.test(src))return"Patillas";
+  if(/\bmenton\b/.test(src))return"Mentón";
+  if(/\bbigote\b/.test(src))return"Bigote";
+  if(/hidrafacial/.test(src))return"Hidrafacial";
+  if(/skin\s*renew|baby\s*clean|baby/.test(src))return"Skin Renew";
+  if(/skin\s*repair/.test(src))return"Skin Repair";
+  if(/skin\s*reset/.test(src))return"Skin Reset";
+  if(/\bfacial\b/.test(src))return"Facial";
+  if(/cire\s*lift|hifu/.test(src))return"HIFU Facial";
+  if(/moldeo|cire.?body|cire.?sculpt|anticel/.test(src))return"Corporal";
+  if(/post\s*op/.test(src))return"Post Op";
+  if(/aparatol/.test(src))return"Aparatología";
+  if(/cera/.test(src))return"Cera";
+  if(/valor/.test(src))return"Valoración";
+  return"Servicio";
+}
 // Extrae de la descripción: servicio principal, sesión, servicios extra y ticket(s) Zettle
 // Descripción con formato "N° SERVICIO ... N° SERVICIO2 ..." → un solo resultado con extras
 // Ej: "6° AXILAS Y BIKINI 1° MENTON #6431 1° RC 6° INTERGLUTEA" →
@@ -2437,23 +2484,33 @@ function parseDescripcionPares(desc){
 function parseServiciosList(text){
   const src=(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   const found=[];
-  if(/bikini\s*y\s*axilas|axilas\s*y\s*bikini/.test(src))found.push("Bikini y Axilas");
-  else if(/\baxilas\b/.test(src))found.push("Axilas");
-  if(/piernas\s*y\s*pompas|\bpp\b/.test(src))found.push("Piernas y Pompas");
-  else if(/\bpiernas\b/.test(src))found.push("Piernas");
-  if(/brazos\s*y\s*piernas/.test(src))found.push("Brazos y Piernas");
-  else if(/\bbrazos\b/.test(src))found.push("Brazos");
-  if(/bk\s*brazil|brazilia|bikini\s*braz|\bbb\b|\bbrazilian\b|\bbrzilian\b/.test(src))found.push("Brazilian");
+  if(/bikini\s*y\s*axilas|axilas\s*y\s*bikini/.test(src))found.push("Combo Axilas");
+  else if(/\baxilas?\b/.test(src))found.push("Axilas");
+  if(/medias?\s*piernas?/.test(src))found.push("Medias Piernas");
+  else if(/piernas?\s*y\s*pompas?|\bpp\b/.test(src))found.push("Piernas y Pompas");
+  else if(/\bpiernas?\b/.test(src))found.push("Piernas");
+  if(/brazos?\s*y\s*piernas?/.test(src))found.push("Brazos y Piernas");
+  else if(/\bbrazos?\b/.test(src))found.push("Brazos");
+  if(/bk\s*brazil|brazilia|bikini\s*braz|\bbb\b|\bbrazilian\b|\bbrzilian\b|\bbrailian\b|\bbrezilian\b/.test(src))found.push("Brazilian");
   if(/bk\s*french|french\s*bk|french\s*bikini|\bfb\b|\bfrench\b/.test(src))found.push("French Bikini");
+  if(/sexy\s*bikini|\bse[xk]y\b|\bse[xk]i\b/.test(src))found.push("Sexy Bikini");
+  if(/bikini\s*basico/.test(src))found.push("Bikini Básico");
   if(/cuerpo\s*completo|\bcc\b/.test(src))found.push("Cuerpo Completo");
-  if(/interglut/.test(src))found.push("Interglútea");
+  if(/interglut|\bcrack\b/.test(src))found.push("Interglútea");
+  if(/linea.*abdomen/.test(src))found.push("Línea Abdomen");
+  else if(/\babdomen\b/.test(src))found.push("Abdomen");
+  if(/glute/.test(src))found.push("Glúteos");
+  if(/\bespalda\b/.test(src))found.push("Espalda");
+  if(/\bnuca\b/.test(src))found.push("Nuca");
+  if(/\bpecho\b/.test(src))found.push("Pecho");
   if(/rostro\s*completo|\brc\b/.test(src))found.push("Rostro Completo");
   else if(/medio\s*rostro/.test(src))found.push("Medio Rostro");
   else if(/\brostro\b/.test(src))found.push("Rostro Completo");
-  if(/\bmenton\b/.test(src))found.push("Mentón");
-  if(/\bbigote\b/.test(src))found.push("Bigote");
+  if(/patillas?/.test(src))found.push("Patillas");
+  else if(/\bmenton\b/.test(src))found.push("Mentón");
+  else if(/\bbigote\b/.test(src))found.push("Bigote");
   if(/\bpies\b/.test(src))found.push("Pies");
-  if(/\bespalda\b/.test(src))found.push("Espalda");
+  if(/cera/.test(src))found.push("Cera");
   return found;
 }
 // Parsea formato Metepec — dos variantes:
@@ -2507,6 +2564,10 @@ function parseMetepecDesc(desc){
 function icsParseDT(dt,useDST){if(!dt)return{date:null,time:null};if(/^\d{8}$/.test(dt))return{date:`${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`,time:null};const m=dt.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}(Z?)$/);if(!m)return{date:null,time:null};const[,Y,Mo,D,H,Mi,isZ]=m;if(isZ==="Z"){const utc=new Date(Date.UTC(+Y,+Mo-1,+D,+H,+Mi));// México abolió DST en 2023 — desde 2023 siempre UTC-6. Antes: CDT(UTC-5) abr-oct.
 const off=(useDST&&+Y<2023&&+Mo>=4&&+Mo<=10)?5:6;const local=new Date(utc.getTime()-off*3600000);return{date:`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,"0")}-${String(local.getUTCDate()).padStart(2,"0")}`,time:`${String(local.getUTCHours()).padStart(2,"0")}:${String(local.getUTCMinutes()).padStart(2,"0")}`};}return{date:`${Y}-${Mo}-${D}`,time:`${H}:${Mi}`};}
 
+
+// Mapeo de nombres genéricos ICS → nombres exactos del catálogo del sistema
+const ICS_CATALOG_MAP={"Cuerpo Completo":"Full Body (8 ses)","Combo Sexy":"Combo Sexy (8 ses)","Sexy Bikini":"Sexy Bikini (8 ses)","Combo Playa":"Combo Playa (8 ses)","Combo Bikini":"Combo Bikini (8 ses)","Combo Axilas":"Combo Axilas (8 ses)","Combo Piernas":"Combo Piernas (8 ses)","Combo Rostro":"Combo Rostro (8 ses)","Piernas":"Piernas Completas (8 ses)","Piernas y Pompas":"Piernas Completas (8 ses)","Medias Piernas":"Medias Piernas (8 ses)","Brazos":"Brazos (8 ses)","Brazos y Piernas":"Brazos (8 ses)","Espalda":"Espalda Completa (8 ses)","Espalda Completa":"Espalda Completa (8 ses)","Media Espalda":"Media Espalda (8 ses)","Interglútea":"Zona Interglútea (8 ses)","Abdomen":"Abdomen (8 ses)","Línea Abdomen":"Línea Abdomen (8 ses)","Glúteos":"Glúteos (8 ses)","Pecho":"Pecho (8 ses)","Axilas":"Axilas (8 ses)","Rostro Completo":"Rostro Completo (8 ses)","Medio Rostro":"Medio Rostro (8 ses)","Mentón":"Bigote/Mentón/Patillas (8s)","Bigote":"Bigote/Mentón/Patillas (8s)","Patillas":"Bigote/Mentón/Patillas (8s)","Brazilian":"Bikini Brazilian (8 ses)","French Bikini":"French Bikini (8 ses)","Bikini Básico":"Bikini Básico (8 ses)","HIFU Facial":"Cire Lift 1 persona","Bikini y Axilas":"Combo Axilas (8 ses)"};
+const mapICSCatalog=s=>{if(ICS_CATALOG_MAP[s])return ICS_CATALOG_MAP[s];if(s.endsWith(" Mantenimiento")){const b=s.replace(" Mantenimiento","");return(ICS_CATALOG_MAP[b]||b)+" Mantenimiento";}return s;};
 function parseICS(text,opts={}){
   // 1. Unfold continuation lines (RFC 5545 §3.1) — causa principal de datos incompletos
   const unfolded=text.replace(/\r\n[ \t]/g,"").replace(/\n[ \t]/g,"");
@@ -2536,7 +2597,8 @@ function parseICS(text,opts={}){
     // Extraer teléfono del final si existe
     const phoneM=clean.match(/(\d[\d\s\-]{6,}\d)\s*$/);
     let nombre=clean;let telefono=null;
-    if(phoneM){const nm=clean.slice(0,clean.lastIndexOf(phoneM[0])).trim();if(nm){nombre=nm;telefono=phoneM[1].replace(/[\s\-]/g,"");}}
+    if(phoneM){const nm=clean.slice(0,clean.lastIndexOf(phoneM[0])).replace(/[\-\+\s]+$/,"").trim();if(nm){nombre=nm;let tel=phoneM[1].replace(/[\s\-]/g,"");if(tel.startsWith("52")&&tel.length===12)tel=tel.slice(2);if(tel.startsWith("1")&&tel.length===11)tel=tel.slice(1);telefono=tel.length===10?tel:null;}}
+    nombre=nombre.normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim();
     // Fechas con zona horaria correcta
     const dtS=ev["DTSTART"]||"";const dtE=ev["DTEND"]||"";
     const{date,time:horaIni}=icsParseDT(dtS,useDST);
@@ -2568,12 +2630,14 @@ function parseICS(text,opts={}){
     const agendadoPor=inicialesM&&personalMap[inicialesM[1]]?personalMap[inicialesM[1]]:null;
     const horaFiCalc=horaFinRaw||horaFin(horaIni||"10:00",tipo.duracion);
     const baseAppt={nombre,telefono,fecha:date,horaIni:horaIni||"10:00",horaFi:horaFiCalc,estado,incluir:estado!=="cancelada",reagendada,ticketZettle,agendadoPor,serviciosSesion:null};
-    appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio,tipo:tipo.id,duracion:tipo.duracion,sesNum});
+    const servicioNorm=mapICSCatalog(servicio);
+    appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio:servicioNorm,tipo:tipo.id,duracion:tipo.duracion,sesNum});
     // Cada servicio extra del mismo evento se convierte en una cita separada (propio paquete)
     if(serviciosSesion){
       for(const extra of serviciosSesion){
-        const eTipo=detectTipo(extra.servicio);
-        appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio:extra.servicio,tipo:eTipo.id,duracion:eTipo.duracion,sesNum:extra.sesNum});
+        const extraNorm=mapICSCatalog(extra.servicio);
+        const eTipo=detectTipo(extraNorm);
+        appointments.push({id:`ics-${appointments.length}`,...baseAppt,servicio:extraNorm,tipo:eTipo.id,duracion:eTipo.duracion,sesNum:extra.sesNum});
       }
     }
   }
@@ -2787,6 +2851,10 @@ function GCalImport({session,useDST=true}){
             <button className="btn-ghost" style={{fontSize:"10px",padding:"5px 10px"}} onClick={()=>toggleAll(false)}>✕ Ninguno</button>
           </div>
         </div>
+        {canceladas>0&&canceladas>completadas&&<div style={{padding:"10px 14px",background:"rgba(16,185,129,0.07)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:"10px",marginBottom:"10px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+          <div style={{fontSize:"12px",color:"#10b981"}}><b>Tip:</b> {canceladas} eventos sin ✅ están desmarcados. Si son citas históricas reales, usa <b>Historial completo</b> para incluirlos todos como completadas.</div>
+          <button className="btn-ghost" style={{fontSize:"11px",padding:"6px 14px",borderColor:"rgba(16,185,129,0.4)",color:"#10b981",whiteSpace:"nowrap"}} onClick={()=>setParsed(prev=>prev.map(p=>p.estado==="cancelada"?{...p,estado:"completada",incluir:true}:p))}>✓ Historial completo</button>
+        </div>}
 
         {/* Omitidos */}
         {showSkipped&&skipped.length>0&&<div style={{marginBottom:"10px",border:"1px solid rgba(249,115,22,0.2)",borderRadius:"10px",overflow:"hidden"}}>
@@ -3851,6 +3919,7 @@ function BotWhatsApp({session}){
   const[dailyStats,setDailyStats]=useState(null);
   const[loadingStats,setLoadingStats]=useState(false);
   const[showOldSinResp,setShowOldSinResp]=useState(false);
+  const[kanbanSelected,setKanbanSelected]=useState(null);
   const msgEndRef=useRef(null);
   const qrPanelRef=useRef(null);
   const fileInputRef=useRef(null);
@@ -4015,6 +4084,33 @@ function BotWhatsApp({session}){
   }
 
   async function handleTakeover(paused){
+    const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+    if(!conv||!botSB)return;
+    setBotPaused(paused);setTakingOver(true);
+    await botSB.from("conversations").update({bot_paused:paused}).eq("id",conv.id);
+    setTakingOver(false);
+  }
+
+  async function handleKanbanSendMessage(){
+    if(!humanMsg.trim()||!kanbanSelected)return;
+    const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
+    if(!conv){alert("No hay conversación activa para este lead.");return;}
+    setSending(true);
+    try{
+      const res=await fetch(`${BOT_API_URL}/api/dashboard/send-message`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({leadId:kanbanSelected.id,conversationId:conv.id,message:humanMsg.trim()}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||"Error al enviar");
+      setHumanMsg("");
+      await loadMessages(kanbanSelected.id,false);
+    }catch(e){alert("Error al enviar mensaje: "+e.message);}
+    finally{setSending(false);}
+  }
+
+  async function handleKanbanTakeover(paused){
     const conv=conversations.find(c=>c.status==="activa"||c.status==="escalada");
     if(!conv||!botSB)return;
     setBotPaused(paused);setTakingOver(true);
@@ -4451,53 +4547,108 @@ function BotWhatsApp({session}){
 
       {/* ── KANBAN ──────────────────────────────────────────────────────── */}
       {innerTab==="kanban"&&(
-        <div style={{paddingTop:"16px",display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:"12px"}}>
-          <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
-            {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
-              <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                {[{v:"all",l:"Todas"},...visibleBranches.map(b=>({v:b.name,l:b.name})),...(hasSinSucursal?[{v:"__sin_sucursal__",l:"Sin Sucursal"}]:[])].map(({v,l})=>(
-                  <button key={v} onClick={()=>setFilterBranch(v)} style={{padding:"5px 12px",fontSize:"11px",fontWeight:600,borderRadius:"20px",border:"1px solid",background:filterBranch===v?"#2721E8":"transparent",borderColor:filterBranch===v?"#2721E8":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterBranch===v?"#fff":T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>
+        <div style={{paddingTop:"16px",display:"flex",flexDirection:"row",flex:1,minHeight:0,gap:"0"}}>
+          {/* Left: filters + columns */}
+          <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:"12px",minWidth:0}}>
+            <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
+              {((!allowedBranches&&visibleBranches.length>1)||allowedBranches?.length>1)&&(
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                  {[{v:"all",l:"Todas"},...visibleBranches.map(b=>({v:b.name,l:b.name})),...(hasSinSucursal?[{v:"__sin_sucursal__",l:"Sin Sucursal"}]:[])].map(({v,l})=>(
+                    <button key={v} onClick={()=>setFilterBranch(v)} style={{padding:"5px 12px",fontSize:"11px",fontWeight:600,borderRadius:"20px",border:"1px solid",background:filterBranch===v?"#2721E8":"transparent",borderColor:filterBranch===v?"#2721E8":light?"rgba(0,0,0,0.15)":"rgba(255,255,255,0.15)",color:filterBranch===v?"#fff":T.sub,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>
+                  ))}
+                </div>
+              )}
+              <select className="inp" value={filterLabel} onChange={e=>setFilterLabel(e.target.value)} style={{fontSize:"11px",padding:"5px 8px"}}>
+                <option value="all">🏷️ Todas las etiquetas</option>
+                {botLabels.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",gap:"12px",overflowX:"auto",flex:1,minHeight:0}}>
+              {BOT_STAGES.map(stage=>(
+                <div key={stage.key} style={{minWidth:"200px",width:"200px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:`${stage.color}18`,borderRadius:"10px",border:`1px solid ${stage.color}33`}}>
+                    <div style={{width:"8px",height:"8px",borderRadius:"50%",background:stage.color}}/>
+                    <div style={{fontSize:"11px",fontWeight:700,color:stage.color,flex:1}}>{stage.label}</div>
+                    <div style={{fontSize:"12px",fontWeight:700,color:stage.color}}>{(byStage[stage.key]||[]).length}</div>
+                  </div>
+                  <div
+                    style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px",padding:"4px",borderRadius:"10px",border:dragOverStage===stage.key?`2px dashed ${stage.color}`:"2px solid transparent",background:dragOverStage===stage.key?`${stage.color}12`:"transparent",transition:"background 0.15s,border 0.15s"}}
+                    onDragOver={e=>{e.preventDefault();setDragOverStage(stage.key);}}
+                    onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOverStage(null);}}
+                    onDrop={e=>{e.preventDefault();const dragged=draggedLeadRef.current;if(dragged&&dragged.stage!==stage.key)handleStageChange(dragged.id,stage.key);draggedLeadRef.current=null;setDragOverStage(null);}}
+                  >
+                    {(byStage[stage.key]||[]).map(l=>{
+                      const klbl=resolveLabel(l,botLabels);
+                      return(
+                      <div key={l.id} className="glass" draggable
+                        onDragStart={e=>{draggedLeadRef.current=l;e.dataTransfer.effectAllowed="move";}}
+                        onDragEnd={()=>{draggedLeadRef.current=null;setDragOverStage(null);}}
+                        style={{padding:"10px 12px",cursor:"grab",borderColor:kanbanSelected?.id===l.id?stage.color:undefined,background:kanbanSelected?.id===l.id?`${stage.color}18`:undefined}}
+                        onClick={()=>{setKanbanSelected(kanbanSelected?.id===l.id?null:l);if(kanbanSelected?.id!==l.id)loadMessages(l.id,true);}}>
+                        <div style={{fontSize:"13px",fontWeight:600,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:kanbanSelected?.id===l.id?stage.color:undefined}}>{l.name||l.phone}</div>
+                        <div style={{fontSize:"11px",color:T.sub}}>{l.phone}</div>
+                        {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>{l.branches.name}</div>}
+                        <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>{fmtT(l.created_at)}</div>
+                        {klbl&&<div style={{marginTop:"6px",display:"inline-flex",alignItems:"center",gap:"3px",fontSize:"9px",fontWeight:600,padding:"2px 7px",borderRadius:"10px",background:`${klbl.color}22`,border:`1px solid ${klbl.color}55`,color:klbl.color}}>{klbl.emoji?`${klbl.emoji} `:""}{klbl.label}</div>}
+                      </div>
+                    );})}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: conversation panel */}
+          {kanbanSelected&&(
+            <div style={{width:"400px",flexShrink:0,borderLeft:`1px solid ${sep}`,display:"flex",flexDirection:"column",overflow:"hidden",background:light?"rgba(0,0,0,0.02)":"rgba(0,0,0,0.25)"}}>
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${sep}`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+                <button onClick={()=>setKanbanSelected(null)} style={{width:"28px",height:"28px",borderRadius:"50%",border:`1px solid ${sep}`,background:"transparent",color:T.sub,fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Albert Sans',sans-serif"}}>×</button>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:"13px",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kanbanSelected.name||kanbanSelected.phone}</div>
+                  <div style={{fontSize:"11px",color:T.sub}}>{kanbanSelected.phone}{kanbanSelected.branches?.name?` · ${kanbanSelected.branches.name}`:""}</div>
+                </div>
+                {(()=>{const s=BOT_STAGES.find(x=>x.key===kanbanSelected.stage)||BOT_STAGES[0];return<div style={{padding:"2px 8px",borderRadius:"20px",background:`${s.color}22`,border:`1px solid ${s.color}44`,fontSize:"9px",fontWeight:600,color:s.color,flexShrink:0}}>{s.label}</div>;})()}
+                {activeConv&&(botPaused?(
+                  <button onClick={()=>handleKanbanTakeover(false)} disabled={takingOver} className="btn-ghost" style={{fontSize:"10px",color:"#10b981",borderColor:"rgba(16,185,129,0.4)",flexShrink:0}}>{takingOver?"...":"🤖 Bot"}</button>
+                ):(
+                  <button onClick={()=>handleKanbanTakeover(true)} disabled={takingOver} className="btn-ghost" style={{fontSize:"10px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",flexShrink:0}}>{takingOver?"...":"✋ Tomar"}</button>
                 ))}
               </div>
-            )}
-            <select className="inp" value={filterLabel} onChange={e=>setFilterLabel(e.target.value)} style={{fontSize:"11px",padding:"5px 8px"}}>
-              <option value="all">🏷️ Todas las etiquetas</option>
-              {botLabels.map(lb=><option key={lb.key} value={lb.key}>{lb.emoji?`${lb.emoji} `:""}{lb.label}</option>)}
-            </select>
-          </div>
-          <div style={{display:"flex",gap:"12px",overflowX:"auto",flex:1,minHeight:0}}>
-            {BOT_STAGES.map(stage=>(
-              <div key={stage.key} style={{minWidth:"200px",width:"200px",display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:`${stage.color}18`,borderRadius:"10px",border:`1px solid ${stage.color}33`}}>
-                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:stage.color}}/>
-                  <div style={{fontSize:"11px",fontWeight:700,color:stage.color,flex:1}}>{stage.label}</div>
-                  <div style={{fontSize:"12px",fontWeight:700,color:stage.color}}>{(byStage[stage.key]||[]).length}</div>
-                </div>
-                <div
-                  style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:"6px",padding:"4px",borderRadius:"10px",border:dragOverStage===stage.key?`2px dashed ${stage.color}`:"2px solid transparent",background:dragOverStage===stage.key?`${stage.color}12`:"transparent",transition:"background 0.15s,border 0.15s"}}
-                  onDragOver={e=>{e.preventDefault();setDragOverStage(stage.key);}}
-                  onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOverStage(null);}}
-                  onDrop={e=>{e.preventDefault();const dragged=draggedLeadRef.current;if(dragged&&dragged.stage!==stage.key)handleStageChange(dragged.id,stage.key);draggedLeadRef.current=null;setDragOverStage(null);}}
-                >
-                  {(byStage[stage.key]||[]).map(l=>{
-                    const klbl=resolveLabel(l,botLabels);
-                    return(
-                    <div key={l.id} className="glass" draggable
-                      onDragStart={e=>{draggedLeadRef.current=l;e.dataTransfer.effectAllowed="move";}}
-                      onDragEnd={()=>{draggedLeadRef.current=null;setDragOverStage(null);}}
-                      style={{padding:"10px 12px",cursor:"grab"}}
-                      onClick={()=>{setSelected(l);setInnerTab("conversaciones");}}>
-                      <div style={{fontSize:"13px",fontWeight:600,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name||l.phone}</div>
-                      <div style={{fontSize:"11px",color:T.sub}}>{l.phone}</div>
-                      {!allowedBranches&&l.branches?.name&&<div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>{l.branches.name}</div>}
-                      <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>{fmtT(l.created_at)}</div>
-                      {klbl&&<div style={{marginTop:"6px",display:"inline-flex",alignItems:"center",gap:"3px",fontSize:"9px",fontWeight:600,padding:"2px 7px",borderRadius:"10px",background:`${klbl.color}22`,border:`1px solid ${klbl.color}55`,color:klbl.color}}>{klbl.emoji?`${klbl.emoji} `:""}{klbl.label}</div>}
+              <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                {loadingMsgs&&<div style={{textAlign:"center",color:T.sub,fontSize:"13px",padding:"20px 0"}}>Cargando mensajes...</div>}
+                {buildChatItems().map((item,i)=>{
+                  if(item.type==="separator"){const cv=item.data;return(
+                    <div key={`sep-${i}`} style={{textAlign:"center",fontSize:"10px",color:T.faint,padding:"6px 0",display:"flex",alignItems:"center",gap:"8px"}}>
+                      <div style={{flex:1,height:"1px",background:sep}}/>
+                      <span>{new Date(cv?.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})} {cv?.status==="activa"?"🟢":"⚫"}</span>
+                      <div style={{flex:1,height:"1px",background:sep}}/>
                     </div>
-                  );})}
-                </div>
+                  );}
+                  const msg=item.data;const isBot=msg.role!=="lead";
+                  return(
+                    <div key={msg.id} style={{display:"flex",justifyContent:isBot?"flex-end":"flex-start"}}>
+                      <div style={{maxWidth:"80%",padding:"7px 11px",borderRadius:isBot?"12px 12px 2px 12px":"12px 12px 12px 2px",background:isBot?(msg.is_human_agent?"rgba(245,158,11,0.18)":"#2721E8"):(light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.08)"),border:msg.is_human_agent?"1px solid rgba(245,158,11,0.4)":"none",fontSize:"12px",lineHeight:"1.4",color:isBot&&!msg.is_human_agent?"#fff":undefined}}>
+                        {msg.is_human_agent&&<div style={{fontSize:"9px",color:"#f59e0b",marginBottom:"3px",fontWeight:700}}>AGENTE</div>}
+                        <div style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{/\.(jpeg|jpg|png|gif|webp)(\?.*)?$/i.test(msg.content)?<img src={msg.content} alt="" style={{maxWidth:"100%",borderRadius:"8px",display:"block",cursor:"pointer"}} onClick={()=>window.open(msg.content,"_blank")}/>:/\.pdf(\?.*)?$/i.test(msg.content)?<a href={msg.content} target="_blank" rel="noopener noreferrer" style={{color:"inherit",display:"flex",alignItems:"center",gap:"6px"}}>📄 PDF</a>:msg.content}</div>
+                        <div style={{fontSize:"9px",color:isBot&&!msg.is_human_agent?"rgba(255,255,255,0.5)":T.faint,marginTop:"2px",textAlign:"right"}}>{new Date(msg.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={msgEndRef}/>
               </div>
-            ))}
-          </div>
+              {botPaused?(
+                <div style={{padding:"10px 12px",borderTop:`1px solid ${sep}`,display:"flex",gap:"8px",alignItems:"center"}}>
+                  <input className="inp" placeholder="Escribe un mensaje..." value={humanMsg} onChange={e=>setHumanMsg(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleKanbanSendMessage();}}} style={{flex:1,fontSize:"12px",padding:"8px 12px"}}/>
+                  <button onClick={handleKanbanSendMessage} disabled={sending||!humanMsg.trim()} style={{padding:"8px 14px",background:"#2721E8",border:"none",borderRadius:"10px",color:"#fff",fontWeight:700,fontSize:"12px",cursor:"pointer",fontFamily:"'Albert Sans',sans-serif",opacity:sending||!humanMsg.trim()?0.5:1,flexShrink:0}}>{sending?"...":"Enviar"}</button>
+                </div>
+              ):activeConv?(
+                <div style={{padding:"10px 12px",borderTop:`1px solid ${sep}`,textAlign:"center"}}>
+                  <button onClick={()=>handleKanbanTakeover(true)} disabled={takingOver} className="btn-ghost" style={{fontSize:"11px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)"}}>{takingOver?"...":"✋ Tomar conversación"}</button>
+                </div>
+              ):null}
+            </div>
+          )}
         </div>
       )}
 
