@@ -157,7 +157,7 @@ const USUARIOS=[
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
-  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle"]},
+  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle","reparar"]},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
   {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
@@ -2051,10 +2051,10 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.45)":T.sub,fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot"].filter(v=>!(v==="bot"&&session.noBot)).map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot",...(session.id===1?["reparar"]:[])].filter(v=>!(v==="bot"&&session.noBot)).map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
               onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":"Historial"}</div>)}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":v==="reparar"?"🔧 Reparar":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -2087,6 +2087,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       </div>}
       {view==="agenda"&&<AgendaCalendar key={`ag-${sessionRec.id}`} session={sessionRec} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
       {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
+      {view==="reparar"&&<div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}><div className="glass" style={{padding:"0",overflow:"hidden"}}><RepararImport sucursalId={session.id} sucursalNombre={session.nombre}/></div></div>}
 
       {view==="clientas"&&(fichaId?<FichaClienta clientaId={fichaId} session={session} onClose={()=>setFichaId(null)} isAdmin={isAdmin}/>:
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
@@ -6242,6 +6243,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[confirmDeleteTicket,setConfirmDeleteTicket]=useState(null);// ticket POS pendiente de borrar
   const[importType,setImportType]=useState("combinado"); // "combinado" | "ics" | "csv"
   const[importSuc,setImportSuc]=useState(USUARIOS.find(u=>u.rol==="sucursal")||null);
+  const[repararSuc,setRepararSuc]=useState(()=>sucursalesFiltro?USUARIOS.find(u=>u.rol==="sucursal"&&sucursalesFiltro.includes(u.nombre))||null:USUARIOS.find(u=>u.nombre==="Coapa")||null);
   const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
   const[soloMias,setSoloMias]=useState(false);
   const[mesSel,setMesSel]=useState(()=>defaultMes());
@@ -6558,7 +6560,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
-  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","reparar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -6659,7 +6661,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -7337,6 +7339,17 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           {importSuc&&<div className="glass" style={{padding:"0",overflow:"hidden"}}>
             <RepararImport key={importSuc.id} sucursalId={importSuc.id} sucursalNombre={importSuc.nombre}/>
           </div>}
+        </div>}
+
+        {/* ═══ REPARAR ═══ */}
+        {tab==="reparar"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+          {esAdmin&&<div className="glass" style={{padding:"16px 24px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"1px",color:T.sub,marginBottom:"8px"}}>SUCURSAL</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              {USUARIOS.filter(u=>u.rol==="sucursal").map(s=><button key={s.id} onClick={()=>setRepararSuc(s)} style={{padding:"7px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:repararSuc?.id===s.id?`${s.color}22`:"transparent",borderColor:repararSuc?.id===s.id?s.color:T.dim,color:repararSuc?.id===s.id?s.color:T.muted}}>{s.nombre}</button>)}
+            </div>
+          </div>}
+          {repararSuc?<div className="glass" style={{padding:"0",overflow:"hidden"}}><RepararImport key={repararSuc.id} sucursalId={repararSuc.id} sucursalNombre={repararSuc.nombre}/></div>:<div style={{textAlign:"center",padding:"60px",color:T.faint,fontSize:"13px"}}>Selecciona una sucursal</div>}
         </div>}
 
         {/* ═══ ANALÍTICA ═══ */}
