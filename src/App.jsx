@@ -4683,32 +4683,61 @@ function RepararImport({sucursalId,sucursalNombre}){
   const{light,T}=useT();
   const[citas,setCitas]=useState([]);
   const[loading,setLoading]=useState(false);
-  const[edits,setEdits]=useState({});   // {id: servicio}
+  // edits[id] = { servicio, sesUsadas, manual }
+  // manual=true → el usuario escribe el nombre libremente en lugar de usar el dropdown
+  const[edits,setEdits]=useState({});
   const[saving,setSaving]=useState({});
-  const[saved,setSaved]=useState({});
 
   useEffect(()=>{
     if(!sucursalId)return;
     setLoading(true);
-    supabase.from("citas").select("id,clienta_nombre,fecha,hora_inicio,servicio,sesion_numero,estado,paquete_id")
+    supabase.from("citas").select("id,clienta_id,clienta_nombre,fecha,hora_inicio,servicio,sesion_numero,estado,paquete_id")
       .eq("sucursal_id",sucursalId).eq("servicio","Servicio")
       .order("clienta_nombre").order("fecha")
       .then(({data})=>{setCitas(data||[]);setLoading(false);});
   },[sucursalId]);
 
+  const setEdit=(id,field,val)=>setEdits(p=>({...p,[id]:{...(p[id]||{}), [field]:val}}));
+
   const guardar=async(cita)=>{
-    const nuevoServicio=(edits[cita.id]||"").trim();
-    if(!nuevoServicio||nuevoServicio===cita.servicio)return;
+    const e=edits[cita.id]||{};
+    const nuevoServicio=(e.servicio||"").trim();
+    if(!nuevoServicio||nuevoServicio==="Servicio")return;
     setSaving(p=>({...p,[cita.id]:true}));
+
     const tipo=detectTipo(nuevoServicio);
-    const updates={servicio:nuevoServicio,tipo_servicio:tipo.id};
-    await supabase.from("citas").update(updates).eq("id",cita.id);
+    // Actualizar cita
+    await supabase.from("citas").update({servicio:nuevoServicio,tipo_servicio:tipo.id}).eq("id",cita.id);
+
+    // Actualizar o crear paquete
     if(cita.paquete_id){
-      await supabase.from("paquetes").update({servicio:nuevoServicio}).eq("id",cita.paquete_id);
+      const updates={servicio:nuevoServicio};
+      if(e.sesUsadas!==undefined&&e.sesUsadas!==""){
+        const n=parseInt(e.sesUsadas);
+        if(!isNaN(n)){
+          const{data:paq}=await supabase.from("paquetes").select("total_sesiones").eq("id",cita.paquete_id).single();
+          const tot=paq?.total_sesiones||8;
+          updates.sesiones_usadas=Math.min(n,tot);
+          updates.activo=n<tot;
+        }
+      }
+      await supabase.from("paquetes").update(updates).eq("id",cita.paquete_id);
+    } else if(cita.clienta_id){
+      // Sin paquete asociado → crear uno nuevo
+      const sesUsadas=parseInt(e.sesUsadas)||0;
+      const ms=nuevoServicio.match(/(\d+)\s*ses/i);
+      const totalSes=ms?parseInt(ms[1]):8;
+      await supabase.from("paquetes").insert([{
+        clienta_id:cita.clienta_id,clienta_nombre:cita.clienta_nombre,
+        sucursal_id:sucursalId,sucursal_nombre:sucursalNombre,
+        servicio:nuevoServicio,total_sesiones:totalSes,
+        sesiones_usadas:Math.min(sesUsadas,totalSes),precio:0,
+        fecha_compra:cita.fecha,activo:sesUsadas<totalSes
+      }]);
     }
+
     setCitas(prev=>prev.filter(c=>c.id!==cita.id));
     setSaving(p=>({...p,[cita.id]:false}));
-    setSaved(p=>({...p,[cita.id]:true}));
   };
 
   const borrar=async(id)=>{
@@ -4716,8 +4745,6 @@ function RepararImport({sucursalId,sucursalNombre}){
     await supabase.from("citas").delete().eq("id",id);
     setCitas(prev=>prev.filter(c=>c.id!==id));
   };
-
-  const serviciosFlat=CATALOGO.flatMap(c=>c.items.map(i=>i.nombre));
 
   if(loading)return<div style={{padding:"24px",color:T.faint,fontSize:"13px"}}>Cargando...</div>;
   if(!citas.length)return(
@@ -4733,35 +4760,68 @@ function RepararImport({sucursalId,sucursalNombre}){
         <div style={{fontSize:"20px"}}>🔧</div>
         <div>
           <div style={{fontSize:"15px",fontWeight:700}}>Citas sin servicio — {sucursalNombre}</div>
-          <div style={{fontSize:"12px",color:T.sub}}>{citas.length} cita{citas.length!==1?"s":""} importadas sin servicio detectado · Asigna el servicio correcto y guarda</div>
+          <div style={{fontSize:"12px",color:T.sub}}>{citas.length} cita{citas.length!==1?"s":""} sin servicio detectado · Asigna el paquete correcto y las sesiones ya recibidas</div>
         </div>
       </div>
       <div style={{border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px",overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 80px 54px 1fr 80px",padding:"8px 14px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-          {["Clienta","Fecha","Ses","Servicio correcto",""].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:T.faint,fontWeight:600}}>{h}</div>)}
+        <div style={{display:"grid",gridTemplateColumns:"160px 72px 44px 1fr 90px 86px 72px",padding:"8px 14px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.06)",gap:"6px"}}>
+          {["Clienta","Fecha","Ses","Paquete / Servicio","Ses. usadas","",""].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:T.faint,fontWeight:600}}>{h}</div>)}
         </div>
         {citas.map(c=>{
-          const val=edits[c.id]??c.servicio;
-          const isDirty=(edits[c.id]&&edits[c.id]!==c.servicio);
+          const e=edits[c.id]||{};
+          const servVal=e.servicio!==undefined?e.servicio:"Servicio";
+          const isManual=!!e.manual;
+          const isDirty=servVal&&servVal!=="Servicio";
           return(
-            <div key={c.id} style={{display:"grid",gridTemplateColumns:"1fr 80px 54px 1fr 80px",padding:"7px 14px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",background:saved[c.id]?"rgba(16,185,129,0.04)":"transparent"}}>
-              <div style={{fontSize:"12px",fontWeight:500,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"8px"}}>{c.clienta_nombre}</div>
+            <div key={c.id} style={{display:"grid",gridTemplateColumns:"160px 72px 44px 1fr 90px 86px 72px",padding:"8px 14px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",gap:"6px"}}>
+              {/* Nombre */}
+              <div style={{fontSize:"12px",fontWeight:500,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c.clienta_nombre}>{c.clienta_nombre}</div>
+              {/* Fecha */}
               <div style={{fontSize:"11px",color:T.faint}}>{c.fecha?new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"2-digit"}):"-"}</div>
-              <div style={{fontSize:"11px",color:"#49B8D3",fontWeight:600}}>#{c.sesion_numero||"?"}</div>
-              <div style={{paddingRight:"8px"}}>
-                <select value={val} onChange={e=>setEdits(p=>({...p,[c.id]:e.target.value}))}
-                  style={{width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${isDirty?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",cursor:"pointer"}}>
-                  <option value="Servicio">— Sin clasificar —</option>
-                  {CATALOGO.map(cat=>(
-                    <optgroup key={cat.categoria} label={cat.categoria}>
-                      {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
+              {/* Sesión ICS */}
+              <div style={{fontSize:"11px",color:"#49B8D3",fontWeight:600,textAlign:"center"}}>#{c.sesion_numero||"?"}</div>
+              {/* Paquete — dropdown o texto libre */}
+              <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                {isManual
+                  ?<input value={servVal==="Servicio"?"":servVal} onChange={e2=>setEdit(c.id,"servicio",e2.target.value)}
+                      placeholder="Ej: Axilas (8 ses)" autoFocus
+                      style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${isDirty?"#2721E8":"rgba(255,255,255,0.15)"}`,borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",width:"100%",boxSizing:"border-box"}}/>
+                  :<select value={servVal} onChange={e2=>setEdit(c.id,"servicio",e2.target.value)}
+                      style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${isDirty?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",width:"100%",cursor:"pointer"}}>
+                    <option value="Servicio">— Sin clasificar —</option>
+                    {CATALOGO.map(cat=>(
+                      <optgroup key={cat.categoria} label={cat.categoria}>
+                        {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                }
+                <button onClick={()=>setEdit(c.id,"manual",!isManual)}
+                  style={{background:"none",border:"none",cursor:"pointer",color:T.faint,fontSize:"10px",textAlign:"left",padding:"0",textDecoration:"underline"}}>
+                  {isManual?"← Usar catálogo":"✏ Escribir manualmente"}
+                </button>
               </div>
-              <div style={{display:"flex",gap:"5px",justifyContent:"flex-end"}}>
-                {isDirty&&<button onClick={()=>guardar(c)} disabled={saving[c.id]} style={{fontSize:"10px",padding:"5px 10px",borderRadius:"6px",background:"rgba(39,33,232,0.15)",border:"1px solid rgba(39,33,232,0.4)",color:"#818cf8",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>{saving[c.id]?"...":"Guardar"}</button>}
-                <button onClick={()=>borrar(c.id)} title="Eliminar cita" style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"13px",padding:"3px 5px",opacity:0.5,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>🗑</button>
+              {/* Sesiones usadas */}
+              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                <input type="number" min="0" max="30"
+                  value={e.sesUsadas!==undefined?e.sesUsadas:""}
+                  onChange={e2=>setEdit(c.id,"sesUsadas",e2.target.value)}
+                  placeholder="0"
+                  style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",width:"100%",boxSizing:"border-box",textAlign:"center"}}/>
+                <div style={{fontSize:"9px",color:T.faint,textAlign:"center",lineHeight:1.2}}>sesiones ya<br/>recibidas</div>
+              </div>
+              {/* Guardar */}
+              <div>
+                <button onClick={()=>guardar(c)} disabled={!isDirty||saving[c.id]}
+                  style={{width:"100%",fontSize:"11px",padding:"6px 8px",borderRadius:"6px",background:isDirty?"rgba(39,33,232,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${isDirty?"rgba(39,33,232,0.4)":"rgba(255,255,255,0.07)"}`,color:isDirty?"#818cf8":T.faint,cursor:isDirty?"pointer":"default",fontWeight:600}}>
+                  {saving[c.id]?"...":"Guardar"}
+                </button>
+              </div>
+              {/* Borrar */}
+              <div style={{textAlign:"center"}}>
+                <button onClick={()=>borrar(c.id)} title="Eliminar cita"
+                  style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"14px",padding:"3px 6px",opacity:0.45,lineHeight:1}}
+                  onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.45"}>🗑</button>
               </div>
             </div>
           );
