@@ -1104,24 +1104,24 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
         </div>
       </div></div>}
       {hoverCita&&!detalle&&(()=>{const c=hoverCita,col=colorCita(c),sinAnt=c.notas?.includes("Sin anticipo"),aparto=!c.es_cobro&&!!c.notas?.match(/Anticipo \$/),liquido=c.es_cobro,reag=c.notas?.startsWith("Reagendada"),datPend=c.datos_pendientes&&c.estado==="completada";const vp=window.innerHeight;const cardH=200;const y=hoverPos.y+cardH>vp?hoverPos.y-cardH:hoverPos.y;const x=hoverPos.x+260>window.innerWidth?hoverPos.x-280:hoverPos.x;return(<div style={{position:"fixed",left:`${x}px`,top:`${y}px`,zIndex:9999,pointerEvents:"none",animation:"fadeIn 0.15s ease"}}>
-        <div style={{width:240,background:"rgba(12,12,20,0.97)",border:`1px solid ${col}55`,borderRadius:"12px",padding:"14px 16px",boxShadow:`0 8px 32px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.04)`,backdropFilter:"blur(16px)"}}>
+        <div style={{width:240,background:light?"rgba(238,235,227,0.98)":"rgba(12,12,20,0.97)",border:`1px solid ${col}55`,borderRadius:"12px",padding:"14px 16px",boxShadow:light?`0 8px 32px rgba(0,0,0,0.15),0 0 0 1px rgba(0,0,0,0.06)`:`0 8px 32px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.04)`,backdropFilter:"blur(16px)"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}}>
             <div style={{width:"8px",height:"8px",borderRadius:"50%",background:col,flexShrink:0}}/>
-            <div style={{fontSize:"13px",fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clienta_nombre}</div>
+            <div style={{fontSize:"13px",fontWeight:700,color:light?"#1a1a2e":"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clienta_nombre}</div>
           </div>
           <div style={{fontSize:"11px",color:T.muted,marginBottom:c.servicios_sesion?.length>0?"4px":"8px",fontWeight:500}}>{c.servicio}</div>
           {c.servicios_sesion?.length>0&&<div style={{fontSize:"10px",color:T.muted,marginBottom:"8px"}}>+ {c.servicios_sesion.map(s=>s.servicio).join(" · ")}</div>}
           <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Horario</span><span style={{color:"#fff",fontWeight:600}}>{c.hora_inicio} – {c.hora_fin}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Sesión</span><span style={{color:"#fff",fontWeight:600}}>#{c.sesion_numero}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Horario</span><span style={{color:light?"#1a1a2e":"#fff",fontWeight:600}}>{c.hora_inicio} – {c.hora_fin}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Sesión</span><span style={{color:light?"#1a1a2e":"#fff",fontWeight:600}}>#{c.sesion_numero}</span></div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Estado</span><span style={{fontWeight:600,color:c.estado==="completada"?"#10b981":c.estado==="agendada"?col:c.estado==="perdida"?"#eab308":T.sub}}>{c.estado==="completada"?"✓ Completada":c.estado==="agendada"?"Agendada":c.estado==="perdida"?"✗ No se presentó":"Cancelada"}</span></div>
             {c.estado==="perdida"&&c.razon_perdida&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Motivo</span><span style={{fontWeight:500,color:"rgba(234,179,8,0.8)",maxWidth:"140px",textAlign:"right"}}>{c.razon_perdida}</span></div>}
             {c.agendado_por&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Agendó</span><span style={{color:T.muted,fontWeight:500}}>{c.agendado_por}</span></div>}
             {c.metodo_pago&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Pago</span><span style={{color:"#10b981",fontWeight:600}}>{c.metodo_pago}</span></div>}
             {c.ticket_zettle&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Ticket</span><span style={{color:T.muted,fontWeight:600,fontFamily:"monospace"}}>{c.ticket_zettle}</span></div>}
-            {(sinAnt||aparto||liquido||reag||datPend)&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:"rgba(255,255,255,0.04)",fontSize:"10px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>{datPend?"📋 Datos pendientes":sinAnt?"⚠ Sin anticipo · cobrar al llegar":aparto?"💰 Anticipo — pendiente liquidar":liquido?"✅ Liquidada":reag?"↻ Reagendada":""}</div>}
+            {(sinAnt||aparto||liquido||reag||datPend)&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.04)",fontSize:"10px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>{datPend?"📋 Datos pendientes":sinAnt?"⚠ Sin anticipo · cobrar al llegar":aparto?"💰 Anticipo — pendiente liquidar":liquido?"✅ Liquidada":reag?"↻ Reagendada":""}</div>}
           </div>
-          <div style={{marginTop:"8px",paddingTop:"6px",borderTop:"1px solid rgba(255,255,255,0.05)",fontSize:"9px",color:T.faint,textAlign:"center",letterSpacing:"0.5px"}}>Haz clic para abrir ficha completa</div>
+          <div style={{marginTop:"8px",paddingTop:"6px",borderTop:light?"1px solid rgba(0,0,0,0.08)":"1px solid rgba(255,255,255,0.05)",fontSize:"9px",color:T.faint,textAlign:"center",letterSpacing:"0.5px"}}>Haz clic para abrir ficha completa</div>
         </div>
       </div>);})()}
       {detalle&&<div className="overlay" onClick={()=>setDetalle(null)}><div className="glass" style={{width:400,padding:"26px",borderColor:`${colorCita(detalle)}44`,color:light?"#1a1a2e":"#fff",display:"flex",flexDirection:"column",maxHeight:"90vh"}} onClick={e=>e.stopPropagation()}>
@@ -2390,7 +2390,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
 // IMPORTAR CALENDARIO — Archivo .ics exportado de Google Calendar
 // ══════════════════════════════════════════════════════════════════════════════
 // Helpers para parseo robusto de ICS
-const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario|festivo|simulacro|inventario|limpieza|mantenimiento|dia de asueto|cierre/i;
+const ICS_SKIP_RE=/bloquear|bloqueado|descanso|capacitaci|permiso|cambiar agua|ir a sucursal|reunion|reunión|junta|no asiste|no asistio|recordatorio|birthday|aniversario|festivo|simulacro|inventario|limpieza|mantenimiento|dia de asueto|cierre|comida|refrigerio|almuerzo|desayuno|cena|lunch/i;
 const ICS_EMOJI_RE=/[\p{Emoji_Presentation}\p{Extended_Pictographic}✅🔁🤖🧾\u200d\ufe0f]/gu;
 // Mapas de iniciales → nombre completo por sucursal
 const PERSONAL_MAPS={
