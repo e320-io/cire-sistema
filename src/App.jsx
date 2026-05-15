@@ -4692,7 +4692,7 @@ function RepararImport({sucursalId,sucursalNombre}){
     if(!sucursalId)return;
     setLoading(true);
     supabase.from("citas").select("id,clienta_id,clienta_nombre,fecha,hora_inicio,servicio,sesion_numero,estado,paquete_id")
-      .eq("sucursal_id",sucursalId).eq("servicio","Servicio")
+      .eq("sucursal_id",sucursalId).eq("servicio","Servicio").gte("fecha","2026-05-01")
       .order("clienta_nombre").order("fecha")
       .then(({data})=>{setCitas(data||[]);setLoading(false);});
   },[sucursalId]);
