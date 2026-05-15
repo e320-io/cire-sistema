@@ -727,6 +727,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
                 }</>}
               </div>
               {esPerd&&c.razon_perdida&&<div style={{fontSize:"11px",color:"rgba(234,179,8,0.7)",marginTop:"2px"}}>✗ {c.razon_perdida}</div>}
+              {(()=>{const n=c.notas;const libre=n&&!/^(Importado de|Agendada |Reagendada|Ticket #|Preventa|Sin anticipo|Anticipo \$)/.test(n)?n:null;return libre&&<div style={{fontSize:"11px",color:T.faint,marginTop:"3px",fontStyle:"italic"}}>📝 {libre}</div>;})()}
             </div>
             <div style={{fontSize:"12px",fontWeight:700,color:esComp?"#10b981":esProx?"#49B8D3":esAb?"#f59e0b":esPerd?"#eab308":T.dim}}>{esComp?"✓":esProx?"Próx.":esAb?"📅":esPerd?"✗":"✕"}</div>
           </div>);
@@ -1120,6 +1121,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
             {c.metodo_pago&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Pago</span><span style={{color:"#10b981",fontWeight:600}}>{c.metodo_pago}</span></div>}
             {c.ticket_zettle&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Ticket</span><span style={{color:T.muted,fontWeight:600,fontFamily:"monospace"}}>{c.ticket_zettle}</span></div>}
             {(sinAnt||aparto||liquido||reag||datPend)&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.04)",fontSize:"10px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>{datPend?"📋 Datos pendientes":sinAnt?"⚠ Sin anticipo · cobrar al llegar":aparto?"💰 Anticipo — pendiente liquidar":liquido?"✅ Liquidada":reag?"↻ Reagendada":""}</div>}
+            {(()=>{const n=c.notas;const libre=n&&!/^(Importado de|Agendada |Reagendada|Ticket #|Preventa|Sin anticipo|Anticipo \$)/.test(n)?n:null;return libre&&<div style={{marginTop:"4px",padding:"5px 8px",borderRadius:"6px",background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.04)",fontSize:"10px",color:T.muted,fontStyle:"italic"}}>📝 {libre}</div>;})()}
           </div>
           <div style={{marginTop:"8px",paddingTop:"6px",borderTop:light?"1px solid rgba(0,0,0,0.08)":"1px solid rgba(255,255,255,0.05)",fontSize:"9px",color:T.faint,textAlign:"center",letterSpacing:"0.5px"}}>Haz clic para abrir ficha completa</div>
         </div>
@@ -1199,7 +1201,8 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
           </div>}
         </div>}
         {detalle.notas?.match(/Anticipo \$(\d+)/)&&!detalle.es_cobro&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>💰 {detalle.notas.match(/Anticipo \$\d+ \w+/)?.[0]} pagado · <span style={{fontWeight:700}}>pendiente de liquidar</span></div>}
-        {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}</div>
+        {detalle.notas?.includes("Sin anticipo")&&<div style={{padding:"9px 12px",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:"8px",fontSize:"11px",color:"#f97316",marginBottom:"12px",display:"flex",alignItems:"center",gap:"6px"}}>⚠ Sin anticipo · <span style={{fontWeight:700}}>cobrar al llegar</span></div>}
+        {(()=>{const n=detalle.notas;const libre=n&&!/^(Importado de|Agendada |Reagendada|Ticket #|Preventa|Sin anticipo|Anticipo \$)/.test(n)?n:null;return libre&&<div style={{padding:"9px 12px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",fontSize:"12px",color:T.muted,marginBottom:"12px",display:"flex",alignItems:"flex-start",gap:"6px",fontStyle:"italic"}}>📝 <span>{libre}</span></div>;})()}</div>
         <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
           {detalle.estado==="agendada"&&<div style={{display:"flex",flexDirection:"column",gap:"8px",width:"100%"}}><div style={{display:"flex",gap:"8px"}}><button className="btn-ghost" style={{flex:1,color:"#ff6b6b",borderColor:"rgba(255,80,80,0.3)"}} onClick={()=>cancelar(detalle.id,detalle.paquete_id,detalle.sesion_numero)}>Cancelar</button><button className="btn-ghost" style={{flex:1,color:"#eab308",borderColor:"rgba(234,179,8,0.3)"}} onClick={()=>{setCitaPerdida(detalle);setRazonPerdida("");setModalPerdida(true);}}>✗ No vino</button>{!detalle.notas?.startsWith("Reagendada")&&<button className="btn-ghost" style={{flex:1,color:"#f59e0b",borderColor:"rgba(245,158,11,0.3)"}} onClick={()=>{setCitaReagendar(detalle);setFechaRe("");setHoraRe("");setModalReagendar(true);}}>↻ Reagendar</button>}</div><button className="btn-blue" style={{width:"100%",padding:"12px"}} onClick={()=>intentarCompletar(detalle)}>✓ Completada</button></div>}
           {detalle.estado==="completada"&&!detalle.datos_pendientes&&<div style={{width:"100%"}}><div style={{textAlign:"center",fontSize:"13px",color:"#10b981",fontWeight:600,marginBottom:detalle.metodo_pago?"8px":"0"}}>✓ Completada</div>{detalle.metodo_pago&&<div style={{display:"flex",flexDirection:"column",gap:"5px",padding:"10px 12px",background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px"}}><div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Pago</span><span style={{color:"#10b981",fontWeight:600}}>{detalle.metodo_pago}</span></div>{detalle.ticket_zettle&&<div style={{display:"flex",justifyContent:"space-between",fontSize:"11px"}}><span style={{color:T.muted}}>Ticket</span><span style={{color:T.muted,fontWeight:600,fontFamily:"monospace"}}>{detalle.ticket_zettle}</span></div>}</div>}</div>}
@@ -4706,8 +4709,8 @@ function RepararImport({sucursalId,sucursalNombre}){
     setSaving(p=>({...p,[cita.id]:true}));
 
     const tipo=detectTipo(nuevoServicio);
-    // Actualizar cita
-    await supabase.from("citas").update({servicio:nuevoServicio,tipo_servicio:tipo.id}).eq("id",cita.id);
+    const notaUpdate=e.notas!==undefined&&e.notas.trim()?{notas:e.notas.trim()}:{};
+    await supabase.from("citas").update({servicio:nuevoServicio,tipo_servicio:tipo.id,...notaUpdate}).eq("id",cita.id);
 
     // Actualizar o crear paquete
     if(cita.paquete_id){
@@ -4822,6 +4825,14 @@ function RepararImport({sucursalId,sucursalNombre}){
                 <button onClick={()=>borrar(c.id)} title="Eliminar cita"
                   style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"14px",padding:"3px 6px",opacity:0.45,lineHeight:1}}
                   onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.45"}>🗑</button>
+              </div>
+              {/* Nota — fila completa */}
+              <div style={{gridColumn:"1/-1",paddingTop:"4px",paddingBottom:"2px"}}>
+                <input value={e.notas||""} onChange={e2=>setEdit(c.id,"notas",e2.target.value)}
+                  placeholder="Nota sobre esta cita (opcional)..."
+                  style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"11px",padding:"5px 9px",fontFamily:"inherit",outline:"none"}}
+                  onFocus={e2=>e2.target.style.borderColor="rgba(39,33,232,0.4)"}
+                  onBlur={e2=>e2.target.style.borderColor="rgba(255,255,255,0.08)"}/>
               </div>
             </div>
           );
