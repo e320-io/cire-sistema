@@ -4679,6 +4679,98 @@ function BotWhatsApp({session}){
   );
 }
 
+function RepararImport({sucursalId,sucursalNombre}){
+  const{light,T}=useT();
+  const[citas,setCitas]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[edits,setEdits]=useState({});   // {id: servicio}
+  const[saving,setSaving]=useState({});
+  const[saved,setSaved]=useState({});
+
+  useEffect(()=>{
+    if(!sucursalId)return;
+    setLoading(true);
+    supabase.from("citas").select("id,clienta_nombre,fecha,hora_inicio,servicio,sesion_numero,estado,paquete_id")
+      .eq("sucursal_id",sucursalId).eq("servicio","Servicio")
+      .order("clienta_nombre").order("fecha")
+      .then(({data})=>{setCitas(data||[]);setLoading(false);});
+  },[sucursalId]);
+
+  const guardar=async(cita)=>{
+    const nuevoServicio=(edits[cita.id]||"").trim();
+    if(!nuevoServicio||nuevoServicio===cita.servicio)return;
+    setSaving(p=>({...p,[cita.id]:true}));
+    const tipo=detectTipo(nuevoServicio);
+    const updates={servicio:nuevoServicio,tipo_servicio:tipo.id};
+    await supabase.from("citas").update(updates).eq("id",cita.id);
+    if(cita.paquete_id){
+      await supabase.from("paquetes").update({servicio:nuevoServicio}).eq("id",cita.paquete_id);
+    }
+    setCitas(prev=>prev.filter(c=>c.id!==cita.id));
+    setSaving(p=>({...p,[cita.id]:false}));
+    setSaved(p=>({...p,[cita.id]:true}));
+  };
+
+  const borrar=async(id)=>{
+    if(!window.confirm("¿Eliminar esta cita?"))return;
+    await supabase.from("citas").delete().eq("id",id);
+    setCitas(prev=>prev.filter(c=>c.id!==id));
+  };
+
+  const serviciosFlat=CATALOGO.flatMap(c=>c.items.map(i=>i.nombre));
+
+  if(loading)return<div style={{padding:"24px",color:T.faint,fontSize:"13px"}}>Cargando...</div>;
+  if(!citas.length)return(
+    <div style={{padding:"32px",textAlign:"center"}}>
+      <div style={{fontSize:"32px",marginBottom:"8px"}}>✅</div>
+      <div style={{fontSize:"14px",fontWeight:600,color:T.muted}}>Sin citas sin clasificar en {sucursalNombre}</div>
+    </div>
+  );
+
+  return(
+    <div style={{padding:"20px 24px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"16px"}}>
+        <div style={{fontSize:"20px"}}>🔧</div>
+        <div>
+          <div style={{fontSize:"15px",fontWeight:700}}>Citas sin servicio — {sucursalNombre}</div>
+          <div style={{fontSize:"12px",color:T.sub}}>{citas.length} cita{citas.length!==1?"s":""} importadas sin servicio detectado · Asigna el servicio correcto y guarda</div>
+        </div>
+      </div>
+      <div style={{border:"1px solid rgba(255,255,255,0.06)",borderRadius:"10px",overflow:"hidden"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 80px 54px 1fr 80px",padding:"8px 14px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+          {["Clienta","Fecha","Ses","Servicio correcto",""].map(h=><div key={h} style={{fontSize:"9px",letterSpacing:"1px",color:T.faint,fontWeight:600}}>{h}</div>)}
+        </div>
+        {citas.map(c=>{
+          const val=edits[c.id]??c.servicio;
+          const isDirty=(edits[c.id]&&edits[c.id]!==c.servicio);
+          return(
+            <div key={c.id} style={{display:"grid",gridTemplateColumns:"1fr 80px 54px 1fr 80px",padding:"7px 14px",borderBottom:"1px solid rgba(255,255,255,0.03)",alignItems:"center",background:saved[c.id]?"rgba(16,185,129,0.04)":"transparent"}}>
+              <div style={{fontSize:"12px",fontWeight:500,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"8px"}}>{c.clienta_nombre}</div>
+              <div style={{fontSize:"11px",color:T.faint}}>{c.fecha?new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"2-digit"}):"-"}</div>
+              <div style={{fontSize:"11px",color:"#49B8D3",fontWeight:600}}>#{c.sesion_numero||"?"}</div>
+              <div style={{paddingRight:"8px"}}>
+                <select value={val} onChange={e=>setEdits(p=>({...p,[c.id]:e.target.value}))}
+                  style={{width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${isDirty?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",cursor:"pointer"}}>
+                  <option value="Servicio">— Sin clasificar —</option>
+                  {CATALOGO.map(cat=>(
+                    <optgroup key={cat.categoria} label={cat.categoria}>
+                      {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div style={{display:"flex",gap:"5px",justifyContent:"flex-end"}}>
+                {isDirty&&<button onClick={()=>guardar(c)} disabled={saving[c.id]} style={{fontSize:"10px",padding:"5px 10px",borderRadius:"6px",background:"rgba(39,33,232,0.15)",border:"1px solid rgba(39,33,232,0.4)",color:"#818cf8",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>{saving[c.id]?"...":"Guardar"}</button>}
+                <button onClick={()=>borrar(c.id)} title="Eliminar cita" style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"13px",padding:"3px 5px",opacity:0.5,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>🗑</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=false}){
   const{light,T}=useT();
   const sucVisible=sucursalesFiltro||SUCURSALES_NAMES;
@@ -7171,6 +7263,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               :<CSVImport key={`${importSuc.id}-csv`} session={importSuc}/>}
           </div>}
           {!importSuc&&<div style={{textAlign:"center",padding:"60px",color:T.faint,fontSize:"13px"}}>Selecciona una sucursal para comenzar</div>}
+          {importSuc&&<div className="glass" style={{padding:"0",overflow:"hidden"}}>
+            <RepararImport key={importSuc.id} sucursalId={importSuc.id} sucursalNombre={importSuc.nombre}/>
+          </div>}
         </div>}
 
         {/* ═══ ANALÍTICA ═══ */}
