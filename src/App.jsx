@@ -5155,10 +5155,10 @@ Responde SOLO con JSON válido:
     setVentas(ventasMap);setVentasAnt(ventasAntMap);setGastos(g||[]);
     if(META_TOKEN&&META_ACCOUNT){
       try{
-        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
         const json=await(await fetch(url)).json();
         const ms={};SUCURSALES_NAMES.forEach(s=>{ms[s]=0;});
-        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();const sp=Number(r.spend||0);if(nm.includes("valle")&&nm.includes("polanco")){ms["Valle"]+=sp;}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=sp;});}});
+        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;const sp=Number(r.spend||0);const n=SUCURSALES_NAMES.length;if(comb.includes("coapa")){ms["Coapa"]+=sp;}else if(comb.includes("valle")||nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{ms[s]+=sp/n;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=sp;});}});
         setMetaGs(ms);
       }catch{}
     }
@@ -6292,7 +6292,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
     try{
-      const since=desde,until=hasta,fields="adset_name,spend,actions,impressions,clicks,reach";
+      const since=desde,until=hasta,fields="campaign_name,adset_name,spend,actions,impressions,clicks,reach";
       const ahora=new Date();
       const curYM=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
       const curMonthStart=`${curYM}-01`;
@@ -6318,15 +6318,18 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
       let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
-      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;if(nm.includes("valle")&&nm.includes("polanco")){pS["Valle"].spend+=sp;pS["Valle"].mensajes+=ms;}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
+      const n5=SUCURSALES_NAMES.length;
+      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(comb.includes("valle")||nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5;pS[s].mensajes+=ms/n5;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
       setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
       let allDiarioData=[...(jsonDiario.data||[])];
       let nextUrl=jsonDiario.paging?.next;
       while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
       const diario=[];
       allDiarioData.forEach(r=>{
-        const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();
-        if(nm.includes("valle")&&nm.includes("polanco")){if(ms>0){diario.push({fecha,sucursal:"Valle",mensajes:ms,spend:sp});}}else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp})}});}
+        const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;
+        if(comb.includes("coapa")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Coapa",mensajes:ms,spend:sp});}}
+        else if(comb.includes("valle")||nm.includes("5 sucursales")){if(ms>0||sp>0){SUCURSALES_NAMES.forEach(suc=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms/n5),spend:sp/n5});});}}
+        else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&(ms>0||sp>0)){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp})}});}
       });
       setMetaDiario(diario);
       // Guardar datos diarios históricos en caché para futuras consultas
@@ -6363,7 +6366,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const[y,m]=ym.split("-").map(Number);
       const since=`${ym}-01`;
       const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
-      const fields="adset_name,spend,actions,impressions,clicks,reach";
+      const fields="campaign_name,adset_name,spend,actions,impressions,clicks,reach";
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
       const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
       const[res,resD]=await Promise.all([fetch(url),fetch(urlD)]);
@@ -6371,7 +6374,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
       const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
-      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;tI+=Number(r.impressions||0);tC+=Number(r.clicks||0);tA+=Number(r.reach||0);if(nm.includes("valle")&&nm.includes("polanco")){pS["Valle"].spend+=sp;pS["Valle"].mensajes+=ms;}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
+      const n5m=SUCURSALES_NAMES.length;
+      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;tI+=Number(r.impressions||0);tC+=Number(r.clicks||0);tA+=Number(r.reach||0);if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(comb.includes("valle")||nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5m;pS[s].mensajes+=ms/n5m;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
       setMetaDataMes({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
       // Guardar en caché
       const now=new Date().toISOString();
@@ -6383,7 +6387,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
       while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
       const diario=[];
-      allD.forEach(r=>{const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();if(nm.includes("valle")&&nm.includes("polanco")){if(ms>0){diario.push({fecha,sucursal:"Valle",mensajes:ms,spend:sp});}}else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&ms>0){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp})}});}});
+      allD.forEach(r=>{const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;if(comb.includes("coapa")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Coapa",mensajes:ms,spend:sp});}}else if(comb.includes("valle")||nm.includes("5 sucursales")){if(ms>0||sp>0){SUCURSALES_NAMES.forEach(suc=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms/n5m),spend:sp/n5m});});}}else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&(ms>0||sp>0)){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});}});
       setMetaDiarioMes(diario);
       // Guardar datos diarios en caché para meses pasados
       if(isPast&&diario.length>0){
@@ -6415,12 +6419,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
         // Fetch desde Meta API (mes actual o caché faltante)
         try{
-          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=adset_name,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
           const res=await fetch(url);const json=await res.json();
           if(json.error)return{ym,label,spend:0,mensajes:0,porSucursal:{}};
           const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+          const n5h=SUCURSALES_NAMES.length;
           let tS=0,tM=0;
-          (json.data||[]).forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase();tS+=sp;tM+=ms;if(nm.includes("valle")&&nm.includes("polanco")){pS["Valle"].spend+=sp;pS["Valle"].mensajes+=ms;}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
+          (json.data||[]).forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(comb.includes("valle")||nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5h;pS[s].mensajes+=ms/n5h;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
           // Guardar en caché
           const now=new Date().toISOString();
           supabase.from("meta_mensual").upsert([
