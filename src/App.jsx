@@ -379,6 +379,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const[editingCitaHora,setEditingCitaHora]=useState(null);const[newCitaHora,setNewCitaHora]=useState("");
   const[editingCitaHoraFin,setEditingCitaHoraFin]=useState(null);const[newCitaHoraFin,setNewCitaHoraFin]=useState("");
   const[modalAgSig,setModalAgSig]=useState(false);const[agSigPaqId,setAgSigPaqId]=useState(null);const[fechaAgSig,setFechaAgSig]=useState("");const[horaAgSig,setHoraAgSig]=useState("");const[savingAgSig,setSavingAgSig]=useState(false);
+  const[modalSeg2da,setModalSeg2da]=useState(false);const[seg2daGrupo,setSeg2daGrupo]=useState(null);const[fechaSeg2da,setFechaSeg2da]=useState("");const[horaSeg2da,setHoraSeg2da]=useState("");const[savingSeg2da,setSavingSeg2da]=useState(false);
 
   const cargar=async()=>{setLoading(true);const{data:c}=await supabase.from("clientas").select("*").eq("id",clientaId).single();const{data:p}=await supabase.from("paquetes").select("*").eq("clienta_id",clientaId).order("fecha_compra",{ascending:false});const{data:ci}=await supabase.from("citas").select("*").eq("clienta_id",clientaId).order("fecha",{ascending:false});setClienta(c);setPaquetes(p||[]);setCitasH(ci||[]);setLoading(false);};
   useEffect(()=>{cargar();},[clientaId]);
@@ -426,11 +427,14 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const guardarHoraFinCita=async()=>{if(!editingCitaHoraFin||!newCitaHoraFin)return;await supabase.from("citas").update({hora_fin:newCitaHoraFin}).eq("id",editingCitaHoraFin.id);setEditingCitaHoraFin(null);setNewCitaHoraFin("");await cargar();};
   const abrirAgendarSig=()=>{const paqActivo=paquetes.find(p=>p.activo)||paquetes[0];setAgSigPaqId(paqActivo?.id||null);setFechaAgSig("");setHoraAgSig("");setModalAgSig(true);};
   const agendarSiguienteSesion=async()=>{if(!agSigPaqId||!fechaAgSig||!horaAgSig)return;setSavingAgSig(true);try{const paq=paquetes.find(p=>p.id===agSigPaqId);if(!paq)return;const tipo=detectTipo(paq.servicio);const dur=getDuracionServicio(paq.servicio,tipo.id)??tipo.duracion??60;const sN=paq.sesiones_usadas+1;await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,paquete_id:paq.id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:paq.servicio,tipo_servicio:tipo.id,duracion_min:dur,fecha:fechaAgSig,hora_inicio:horaAgSig,hora_fin:horaFin(horaAgSig,dur),sesion_numero:sN,es_cobro:false,estado:"agendada",notas:"Agendada desde ficha de clienta"}]);setModalAgSig(false);setFechaAgSig("");setHoraAgSig("");setAgSigPaqId(null);await cargar();}catch(e){console.error(e);}setSavingAgSig(false);};
+  const agendarSeg2da=async()=>{if(!seg2daGrupo||!fechaSeg2da||!horaSeg2da)return;setSavingSeg2da(true);try{const tipo=detectTipo(seg2daGrupo.servicio);const dur=getDuracionServicio(seg2daGrupo.servicio,tipo.id)??tipo.duracion??90;await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,paquete_id:seg2daGrupo.paquete_id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:seg2daGrupo.servicio,tipo_servicio:tipo.id,duracion_min:dur,fecha:fechaSeg2da,hora_inicio:horaSeg2da,hora_fin:horaFin(horaSeg2da,dur),sesion_numero:2,es_cobro:false,estado:"agendada",notas:"2ª sesión agendada desde ficha de clienta"}]);if(seg2daGrupo.paquete_id){const paq=paquetes.find(p=>p.id===seg2daGrupo.paquete_id);if(paq&&paq.total_sesiones<2)await supabase.from("paquetes").update({total_sesiones:2,activo:true}).eq("id",paq.id);}setModalSeg2da(false);setFechaSeg2da("");setHoraSeg2da("");setSeg2daGrupo(null);await cargar();}catch(e){console.error(e);}setSavingSeg2da(false);};
 
   if(loading)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>Cargando ficha...</div>;
   if(!clienta)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>No encontrada</div>;
   const prox=citasH.find(c=>c.estado==="agendada");
   const abiertas=citasH.filter(c=>c.estado==="abierta");
+  const esDosZonas=s=>/cire lift 2 personas|hifu.{0,10}2 personas/i.test(s||"");
+  const pendientes2daZona=(()=>{const citasDz=citasH.filter(c=>esDosZonas(c.servicio));if(!citasDz.length)return[];const grupos={};citasDz.forEach(c=>{const key=c.paquete_id||c.servicio;if(!grupos[key])grupos[key]={servicio:c.servicio,paquete_id:c.paquete_id||null,citas:[]};grupos[key].citas.push(c);});return Object.values(grupos).filter(g=>!g.citas.some(c=>c.sesion_numero===2&&(c.estado==="agendada"||c.estado==="completada")));})();
 
   if(editMode)return(
     <div style={{padding:"20px 24px",overflowY:"auto",flex:1,color:light?"#1a1a2e":"#fff"}}>
@@ -637,6 +641,22 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
         ))}
       </div>}
 
+      {/* 2ª SESIÓN PENDIENTE — Cire Lift 2 personas */}
+      {pendientes2daZona.length>0&&<div className="glass" style={{padding:"18px 20px",marginBottom:"24px",borderColor:"rgba(99,102,241,0.35)"}}>
+        <SH>2ª sesión pendiente de agendar</SH>
+        {pendientes2daZona.map((g,i)=>(
+          <div key={i} style={{marginBottom:"12px",padding:"12px 14px",background:"rgba(99,102,241,0.06)",borderRadius:"10px",border:"1px solid rgba(99,102,241,0.2)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px"}}>
+              <div>
+                <div style={{fontSize:"14px",fontWeight:700,marginBottom:"3px"}}>{g.servicio}</div>
+                <div style={{fontSize:"12px",color:T.muted}}>Sesión 2 de 2 · pendiente de agendar</div>
+              </div>
+              <button className="btn-ghost" style={{color:"#818cf8",borderColor:"rgba(99,102,241,0.4)",fontSize:"12px",padding:"8px 14px",whiteSpace:"nowrap",flexShrink:0}} onClick={()=>{setSeg2daGrupo(g);setFechaSeg2da("");setHoraSeg2da("");setModalSeg2da(true);}}>＋ Agendar 2ª sesión</button>
+            </div>
+          </div>
+        ))}
+      </div>}
+
       {/* PAQUETES */}
       <div style={{marginBottom:"28px"}}>
         <SH count={paquetes.length}>Paquetes</SH>
@@ -753,6 +773,16 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
         {fechaAgSig&&new Date(fechaAgSig+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
         {fechaAgSig&&new Date(fechaAgSig+"T12:00:00").getDay()!==0&&agSigPaqId&&(()=>{const paq=paquetes.find(p=>p.id===agSigPaqId);const tipo=detectTipo(paq?.servicio||"");const dur=getDuracionServicio(paq?.servicio||"",tipo.id)??tipo.duracion??60;return(<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>HORA</div><MiniAgendaDia session={session} fecha={fechaAgSig} onSelectHora={h=>setHoraAgSig(h)} horaSeleccionada={horaAgSig} duracion={dur}/></div>);})()}
         <div style={{display:"flex",gap:"8px",marginTop:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalAgSig(false);setFechaAgSig("");setHoraAgSig("");setAgSigPaqId(null);}}>Cancelar</button><button style={{flex:2,padding:"12px",borderRadius:"10px",border:"1px solid rgba(16,185,129,0.5)",background:"rgba(16,185,129,0.15)",color:"#10b981",fontSize:"13px",fontWeight:700,cursor:"pointer",opacity:(!fechaAgSig||!horaAgSig||savingAgSig||new Date(fechaAgSig+"T12:00:00").getDay()===0)?0.4:1}} disabled={!fechaAgSig||!horaAgSig||savingAgSig||new Date(fechaAgSig+"T12:00:00").getDay()===0} onClick={agendarSiguienteSesion}>{savingAgSig?"Agendando...":"✓ Confirmar cita"}</button></div>
+      </div></div>}
+
+      {/* MODAL AGENDAR 2ª SESIÓN — Cire Lift 2 personas */}
+      {modalSeg2da&&seg2daGrupo&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(99,102,241,0.4)"}}>
+        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>＋</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Agendar 2ª sesión</div><div style={{fontSize:"13px",color:T.muted}}>{clienta.nombre} · {seg2daGrupo.servicio}</div></div>
+        <div style={{marginBottom:"12px",padding:"10px 14px",background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:"10px",fontSize:"13px"}}>Sesión <span style={{color:"#818cf8",fontWeight:700}}>2 de 2</span> · 2ª zona</div>
+        <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>FECHA</div><input type="date" className="inp" value={fechaSeg2da} onChange={e=>{setFechaSeg2da(e.target.value);setHoraSeg2da("");}} style={{colorScheme:"dark"}}/></div>
+        {fechaSeg2da&&new Date(fechaSeg2da+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
+        {fechaSeg2da&&new Date(fechaSeg2da+"T12:00:00").getDay()!==0&&(()=>{const tipo=detectTipo(seg2daGrupo.servicio);const dur=getDuracionServicio(seg2daGrupo.servicio,tipo.id)??tipo.duracion??90;return(<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>HORA</div><MiniAgendaDia session={session} fecha={fechaSeg2da} onSelectHora={h=>setHoraSeg2da(h)} horaSeleccionada={horaSeg2da} duracion={dur}/></div>);})()}
+        <div style={{display:"flex",gap:"8px",marginTop:"8px"}}><button className="btn-ghost" style={{flex:1}} onClick={()=>{setModalSeg2da(false);setFechaSeg2da("");setHoraSeg2da("");setSeg2daGrupo(null);}}>Cancelar</button><button style={{flex:2,padding:"12px",borderRadius:"10px",border:"1px solid rgba(99,102,241,0.5)",background:"rgba(99,102,241,0.15)",color:"#818cf8",fontSize:"13px",fontWeight:700,cursor:"pointer",opacity:(!fechaSeg2da||!horaSeg2da||savingSeg2da||new Date(fechaSeg2da+"T12:00:00").getDay()===0)?0.4:1}} disabled={!fechaSeg2da||!horaSeg2da||savingSeg2da||new Date(fechaSeg2da+"T12:00:00").getDay()===0} onClick={agendarSeg2da}>{savingSeg2da?"Agendando...":"✓ Confirmar 2ª sesión"}</button></div>
       </div></div>}
 
       {/* HISTORIAL DE PAGOS */}
