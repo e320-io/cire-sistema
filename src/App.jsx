@@ -635,10 +635,10 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"10px"}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:"14px",fontWeight:700,marginBottom:"3px"}}>{c.servicio}</div>
-                <div style={{fontSize:"12px",color:T.muted,marginBottom:c.razon_perdida?"6px":"0"}}>Sesión {c.sesion_numero} · Fecha original: {new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</div>
+                <div style={{fontSize:"12px",color:T.muted,marginBottom:c.razon_perdida?"6px":"0"}}>Sesión {c.sesion_numero}{c.fecha?" · Fecha original: "+new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"}):" · Sin fecha asignada"}</div>
                 {c.razon_perdida&&<div style={{fontSize:"12px",color:"rgba(255,200,50,0.8)",fontStyle:"italic",lineHeight:1.4}}>"{c.razon_perdida}"</div>}
               </div>
-              <button className="btn-ghost" style={{color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontSize:"12px",padding:"8px 14px",whiteSpace:"nowrap",flexShrink:0}} onClick={()=>{setReagendarAbierta(c);setFechaRAb("");setHoraRAb("");}}>↻ Reagendar</button>
+              <button className="btn-ghost" style={{color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",fontSize:"12px",padding:"8px 14px",whiteSpace:"nowrap",flexShrink:0}} onClick={()=>{setReagendarAbierta(c);setFechaRAb("");setHoraRAb("");}}>{c.fecha?"↻ Reagendar":"📅 Agendar"}</button>
             </div>
           </div>
         ))}
@@ -736,9 +736,9 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
               <div style={{fontSize:"12px",color:T.muted,display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}}>
                 {editingCitaFecha?.id===c.id
                   ?<><input type="date" className="inp" value={newCitaFecha} onChange={e=>setNewCitaFecha(e.target.value)} style={{fontSize:"11px",padding:"2px 6px",colorScheme:"dark",width:"130px"}} autoFocus/><button onClick={guardarFechaCita} disabled={!newCitaFecha} style={{fontSize:"10px",padding:"2px 8px",borderRadius:"5px",background:"#10b981",border:"none",color:"#fff",cursor:"pointer",fontWeight:700}}>OK</button><button onClick={()=>{setEditingCitaFecha(null);setNewCitaFecha("");}} style={{fontSize:"10px",padding:"2px 6px",borderRadius:"5px",background:"rgba(255,255,255,0.08)",border:"none",color:T.muted,cursor:"pointer"}}>✕</button></>
-                  :<><span>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</span>{isAdmin&&<button onClick={()=>{setEditingCitaFecha(c);setNewCitaFecha(c.fecha);}} style={{background:"none",border:"none",color:T.faint,cursor:"pointer",fontSize:"16px",padding:"0 2px",lineHeight:1}} title="Corregir fecha">✎</button>}</>
+                  :<>{c.fecha?<span>{new Date(c.fecha+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</span>:<span style={{color:"#f59e0b"}}>Sin fecha</span>}{isAdmin&&c.fecha&&<button onClick={()=>{setEditingCitaFecha(c);setNewCitaFecha(c.fecha);}} style={{background:"none",border:"none",color:T.faint,cursor:"pointer",fontSize:"16px",padding:"0 2px",lineHeight:1}} title="Corregir fecha">✎</button>}</>
                 }
-                <span style={{color:T.dim}}>·</span>
+                {c.fecha&&<><span style={{color:T.dim}}>·</span>
                 {editingCitaHora?.id===c.id
                   ?<><input type="time" className="inp" value={newCitaHora} onChange={e=>setNewCitaHora(e.target.value)} style={{fontSize:"11px",padding:"2px 6px",colorScheme:"dark",width:"100px"}} autoFocus/><button onClick={guardarHoraCita} disabled={!newCitaHora} style={{fontSize:"10px",padding:"2px 8px",borderRadius:"5px",background:"#10b981",border:"none",color:"#fff",cursor:"pointer",fontWeight:700}}>OK</button><button onClick={()=>{setEditingCitaHora(null);setNewCitaHora("");}} style={{fontSize:"10px",padding:"2px 6px",borderRadius:"5px",background:"rgba(255,255,255,0.08)",border:"none",color:T.muted,cursor:"pointer"}}>✕</button></>
                   :<><span>{c.hora_inicio}</span>{isAdmin&&<button onClick={()=>{setEditingCitaHora(c);setNewCitaHora(c.hora_inicio);}} style={{background:"none",border:"none",color:T.faint,cursor:"pointer",fontSize:"16px",padding:"0 2px",lineHeight:1}} title="Corregir hora inicio">✎</button>}</>
@@ -747,7 +747,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
                 {editingCitaHoraFin?.id===c.id
                   ?<><input type="time" className="inp" value={newCitaHoraFin} onChange={e=>setNewCitaHoraFin(e.target.value)} style={{fontSize:"11px",padding:"2px 6px",colorScheme:"dark",width:"100px"}} autoFocus/><button onClick={guardarHoraFinCita} disabled={!newCitaHoraFin} style={{fontSize:"10px",padding:"2px 8px",borderRadius:"5px",background:"#10b981",border:"none",color:"#fff",cursor:"pointer",fontWeight:700}}>OK</button><button onClick={()=>{setEditingCitaHoraFin(null);setNewCitaHoraFin("");}} style={{fontSize:"10px",padding:"2px 6px",borderRadius:"5px",background:"rgba(255,255,255,0.08)",border:"none",color:T.muted,cursor:"pointer"}}>✕</button></>
                   :<><span>{c.hora_fin}</span>{isAdmin&&<button onClick={()=>{setEditingCitaHoraFin(c);setNewCitaHoraFin(c.hora_fin);}} style={{background:"none",border:"none",color:T.faint,cursor:"pointer",fontSize:"16px",padding:"0 2px",lineHeight:1}} title="Corregir hora fin">✎</button>}</>
-                }</>}
+                }</>}</>}
               </div>
               {esPerd&&c.razon_perdida&&<div style={{fontSize:"11px",color:"rgba(234,179,8,0.7)",marginTop:"2px"}}>✗ {c.razon_perdida}</div>}
               {(()=>{const n=c.notas;const libre=n&&!/^(Importado de|Agendada |Reagendada|Ticket #|Preventa|Sin anticipo|Anticipo \$)/.test(n)?n:null;return libre&&<div style={{fontSize:"11px",color:T.faint,marginTop:"3px",fontStyle:"italic"}}>📝 {libre}</div>;})()}
@@ -760,7 +760,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
 
       {/* REAGENDAR CITA ABIERTA */}
       {reagendarAbierta&&<div className="overlay"><div className="glass" style={{width:500,maxHeight:"90vh",overflow:"auto",padding:"28px",borderColor:"rgba(245,158,11,0.3)"}}>
-        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>↻</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Reagendar cita abierta</div><div style={{fontSize:"13px",color:T.muted}}>Sesión {reagendarAbierta.sesion_numero} · {reagendarAbierta.servicio}</div></div>
+        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"28px",marginBottom:"8px"}}>{reagendarAbierta.fecha?"↻":"📅"}</div><div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>{reagendarAbierta.fecha?"Reagendar cita":"Agendar 1ª sesión"}</div><div style={{fontSize:"13px",color:T.muted}}>Sesión {reagendarAbierta.sesion_numero} · {reagendarAbierta.servicio}</div></div>
         <div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>NUEVA FECHA</div><input type="date" className="inp" value={fechaRAb} onChange={e=>{setFechaRAb(e.target.value);setHoraRAb("");}} style={{colorScheme:"dark"}}/></div>
         {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()!==0&&<div style={{marginBottom:"12px"}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>NUEVA HORA</div><MiniAgendaDia session={session} fecha={fechaRAb} onSelectHora={h=>setHoraRAb(h)} horaSeleccionada={horaRAb} duracion={getDuracionServicio(reagendarAbierta.servicio,reagendarAbierta.tipo_servicio)??TIPOS_SVC.find(t=>t.id===reagendarAbierta.tipo_servicio)?.duracion??60}/></div>}
         {fechaRAb&&new Date(fechaRAb+"T12:00:00").getDay()===0&&<div style={{fontSize:"11px",color:"#ff6b6b",marginBottom:"12px"}}>⚠ Domingo — cerrado</div>}
@@ -1927,7 +1927,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[tipoTicket,setTipoTicket]=useState("nueva"); // "nueva" | "recompra"
   const[clientaSel,setClientaSel]=useState(null);const[busqCli,setBusqCli]=useState("");const[cliResults,setCliResults]=useState([]);
   const[nombreCli,setNombreCli]=useState("");const[telCli,setTelCli]=useState("");const[nacDia,setNacDia]=useState("");const[nacMes,setNacMes]=useState("");const[nacAnio,setNacAnio]=useState("");const[comoNos,setComoNos]=useState("");const[depiAntes,setDepiAntes]=useState(null);const[showDatosOpc,setShowDatosOpc]=useState(false);
-  const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);
+  const[fechaCita,setFechaCita]=useState("");const[horaCita,setHoraCita]=useState("");const[showAgenda,setShowAgenda]=useState(false);const[sinFechaOpt,setSinFechaOpt]=useState(false);
   const[metodo,setMetodo]=useState("");const[msiSel,setMsiSel]=useState(0);const[descuento,setDescuento]=useState(0);const[showConfirm,setShowConfirm]=useState(false);const[saving,setSaving]=useState(false);const[showExito,setShowExito]=useState(false);const[errGuardar,setErrGuardar]=useState("");const[ticketZettlePOS,setTicketZettlePOS]=useState("");
   const[anticoOpt,setAnticoOpt]=useState("no"); // "no" | "transferencia" | "efectivo" | "otra"
   const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
@@ -1954,13 +1954,13 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
-  const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&aOk;
+  const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&(aOk||sinFechaOpt);
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
   const fechaNacISO=nacAnio&&nacMes&&nacDia?`${nacAnio}-${nacMes}-${nacDia}`:null;
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setSinFechaOpt(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);};
 
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
   const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
@@ -1985,7 +1985,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
-      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:true,metodo_pago:mpago,total_pagado:totalCD,estado:"agendada",notas:`Ticket #${tId||""}`}]);
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:true,metodo_pago:mpago,total_pagado:totalCD,estado:sinFechaOpt?"abierta":"agendada",notas:`Ticket #${tId||""}`}]);
       if(eCi)throw new Error("Cita: "+eCi.message);
     }
     logActividad(session,"venta_completada",carrito.map(i=>i.nombre).join(", "));
@@ -2014,7 +2014,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:montoAnt,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
-      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:`Anticipo $${montoAnt} ${mpAnticipo} · Ticket #${tId||""}`,  ...camposAnticipo}]);
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:sinFechaOpt?"abierta":"agendada",notas:`Anticipo $${montoAnt} ${mpAnticipo} · Ticket #${tId||""}`,  ...camposAnticipo}]);
       if(eCi)throw new Error("Cita: "+eCi.message);
     }
     logActividad(session,"venta_anticipo",carrito.map(i=>i.nombre).join(", "));
@@ -2030,7 +2030,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
-      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:"Sin anticipo"}]);
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:sinFechaOpt?"abierta":"agendada",notas:"Sin anticipo"}]);
       if(eCi)throw new Error("Cita: "+eCi.message);
     }
     setShowExito(true);cargarT(session.id);setTimeout(()=>{setShowExito(false);limpiar();},2200);
@@ -2061,7 +2061,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
         const camposAnticipo=esPrimero&&esAnticipo250?{anticipo_metodo:`Anticipo ${preventaMetodo}`,anticipo_monto:250,...(tzVal?{anticipo_ticket:tzVal}:{})}:{};
         const notasPreventa=`Preventa Hot Sale · ${esAnticipo250?`Anticipo $250`:`50% pagado`} · Ticket #${tId||""}`;
-        const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:fechaCita,hora_inicio:horaCita,hora_fin:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:"agendada",notas:notasPreventa,...camposAnticipo}]);
+        const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:sinFechaOpt?"abierta":"agendada",notas:notasPreventa,...camposAnticipo}]);
         if(eCi)throw new Error("Cita: "+eCi.message);
       }
       logActividad(session,"venta_preventa",carrito.map(i=>i.nombre).join(", "));
@@ -2316,17 +2316,19 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               </div>}
             </div>}
             {/* 3 Agendar */}
-            {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:aOk?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:aOk?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:aOk?"#fff":T.faint,flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
-              <input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",marginBottom:"6px",cursor:"pointer"}}/>
-              {fechaCita&&!esDom&&<div>
+            {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(aOk||sinFechaOpt)?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(aOk||sinFechaOpt)?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(aOk||sinFechaOpt)?"#fff":T.faint,flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
+              {!sinFechaOpt&&<input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",marginBottom:"6px",cursor:"pointer"}}/>}
+              {!sinFechaOpt&&fechaCita&&!esDom&&<div>
                 <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginBottom:"6px",borderColor:showAgenda?"#2721E8":"rgba(255,255,255,0.1)",color:showAgenda?(light?"#2721E8":"#fff"):T.faint}} onClick={()=>setShowAgenda(!showAgenda)}>{showAgenda?"📅 Viendo agenda":"📅 Ver agenda del día"}</button>
                 {!showAgenda&&<input type="time" className="inp" value={horaCita} onChange={e=>setHoraCita(e.target.value)} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",cursor:"pointer"}}/>}
                 {aOk&&<div style={{padding:"8px 10px",background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#10b981"}}>✓ {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita} – {horaFin(horaCita,duracionCita)} · {tipoSvc.label}</div>}
               </div>}
-              {esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
+              {!sinFechaOpt&&esDom&&<div style={{fontSize:"11px",color:"#ff6b6b",padding:"6px 0"}}>⚠ Domingo — cerrado</div>}
+              <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginTop:"6px",borderColor:sinFechaOpt?"#f59e0b":"rgba(255,255,255,0.1)",color:sinFechaOpt?"#f59e0b":T.faint}} onClick={()=>{setSinFechaOpt(!sinFechaOpt);setFechaCita("");setHoraCita("");setShowAgenda(false);}}>{sinFechaOpt?"✓ Sin fecha — agendar desde ficha":"🗓 Agendar en otro momento (está de viaje)"}</button>
+              {sinFechaOpt&&<div style={{padding:"8px 10px",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#f59e0b"}}>La sesión quedará pagada pero sin fecha. Podrás agendarla desde su ficha cuando regrese.</div>}
             </div>}
             {/* 4 Anticipo / Preventa */}
-            {aOk&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(preventaOpt!=="no"||anticoOpt!=="no")?"#fff":T.faint,flexShrink:0}}>4</div>PAGO INICIAL</div>
+            {(aOk||sinFechaOpt)&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(preventaOpt!=="no"||anticoOpt!=="no")?"#fff":T.faint,flexShrink:0}}>4</div>PAGO INICIAL</div>
               <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
                 {/* Preventa Hot Sale options */}
                 <div style={{fontSize:"9px",letterSpacing:"1px",color:"#f97316",marginBottom:"3px",fontWeight:600}}>🔥 PREVENTA HOT SALE</div>
@@ -2390,7 +2392,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
             {carrito.map((item,idx)=><div key={idx} style={{fontSize:"12px",fontWeight:600,marginBottom:idx<carrito.length-1?"4px":"0"}}>{item.nombre} — {fmt(item.precio)}</div>)}
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div><div style={{fontSize:"11px",color:T.muted}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div>{sinFechaOpt?<div style={{fontSize:"11px",color:"#f59e0b"}}>🗓 Sin fecha — se agendará desde su ficha</div>:<div style={{fontSize:"11px",color:T.muted}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>}
           </div>
           <div style={{padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"10px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}</div>
           {/* Multi-pago */}
