@@ -182,7 +182,7 @@ const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f
 const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
 const defaultMes=()=>{const d=new Date();if(d.getDate()<=5){const p=new Date(d.getFullYear(),d.getMonth()-1,1);return`${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}`;}return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
 
-const PROMO_EXPIRY=new Date('2026-05-31T23:59:59');
+const PROMO_EXPIRY=new Date('2026-06-07T23:59:59');
 const getPrecioActual=(item)=>(item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY)?item.precioPromo:item.precio;
 const CATALOGO=[
   {categoria:"Combos Láser",items:[
