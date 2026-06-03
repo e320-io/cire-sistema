@@ -4910,7 +4910,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const listaMeses=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});})();
 
   const[periodo,setPeriodo]=useState(hoyYM());
-  const[vista,setVista]=useState("individual");
+  const[vista,setVista]=useState(()=>!!sucursalesFiltro&&!sucursalesPropias?"comisiones":"individual");
   const[sucSel,setSucSel]=useState(sucVisible[0]);
   const[sucMulti,setSucMulti]=useState(sucursalesPropias||sucVisible.slice(0,2));
   const[ventas,setVentas]=useState({});
@@ -5846,12 +5846,12 @@ Responde SOLO con JSON válido:
           {listaMeses.map(m=><option key={m} value={m}>{etiq(m)}</option>)}
         </select>
       </div>
-      {puedeMV&&<div>
+      <div>
         <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>VISTA</div>
         <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-          {[["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]].map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
+          {(esSocia?[["comisiones","Comisiones"]]:([["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]])).map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
         </div>
-      </div>}
+      </div>
       {(vista==="individual"||vista==="comisiones"||esSocia)&&<div>
         <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>SUCURSAL</div>
         <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
