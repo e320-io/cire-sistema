@@ -176,7 +176,7 @@ const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
 const cdmx=(d=new Date())=>d.toLocaleDateString("en-CA",{timeZone:"America/Mexico_City"});
 const hoy=()=>cdmx();
 const ayer=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);};
-const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(data?.[0]?.ticket_num||0)+1;};
+const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(parseInt(data?.[0]?.ticket_num)||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
 const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();
 const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
@@ -4940,6 +4940,15 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[loadingSemanales,setLoadingSemanales]=useState(false);
   const[proyeccion,setProyeccion]=useState(null);
   const[loadingProy,setLoadingProy]=useState(false);
+  const[comData,setComData]=useState([]);
+  const[loadingCom,setLoadingCom]=useState(false);
+  const[moverFila,setMoverFila]=useState(null);
+  const[buscarCom,setBuscarCom]=useState("");
+  const[editMontoCom,setEditMontoCom]=useState(null);
+  const[editMontoVal,setEditMontoVal]=useState("");
+  const[editTerminalCom,setEditTerminalCom]=useState(null);
+  const[editMsiCom,setEditMsiCom]=useState(null);
+  const[confirmDelCom,setConfirmDelCom]=useState(null);
 
   // Trae tickets directamente de Supabase (más rápido que pasar por la Edge Function)
   const fetchTicketsDB=async(desde,hasta)=>{
@@ -5221,6 +5230,147 @@ Responde SOLO con JSON válido:
 
   useEffect(()=>{cargar();setAiTxt("");cargarVentasSemanales(periodo);},[periodo]);
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
+
+  const TIERS_RECEP=[{desde:350000,pct:3.00},{desde:300000,pct:2.50},{desde:250000,pct:2.25},{desde:210000,pct:2.00},{desde:190000,pct:1.75},{desde:160000,pct:1.50},{desde:130000,pct:1.25},{desde:90000,pct:1.00},{desde:0,pct:0}];
+  const getTierRecep=(base)=>TIERS_RECEP.find(t=>base>=t.desde)||{desde:0,pct:0};
+  const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.49};
+  const TASAS_MSI_COM={
+    "Mercado Pago":{3:3.48,6:5.99,9:8.99,12:11.98},
+    Banorte:{3:3.5,6:5.50,9:8.5,12:11.5},
+    BBVA:{3:3,6:6,9:8,12:10},
+    Zettle:{3:4,6:7,9:9,12:12},
+  };
+  const calcCom=(t)=>{
+    const mp=t.metodo_pago||"";
+    const terminal=t.comision_terminal_override||(mp.includes(" · ")?mp.replace(/^.* · /,"").trim():null);
+    const msiM=(mp.match(/(\d+)MSI/)||[])[1];
+    const msiMeses=t.comision_msi_override!==undefined&&t.comision_msi_override!==null?t.comision_msi_override:(msiM?parseInt(msiM):null);
+    const tBase=TASAS_BASE_COM[terminal]||0;
+    const tMsi=(TASAS_MSI_COM[terminal]&&msiMeses&&TASAS_MSI_COM[terminal][msiMeses])||0;
+    const monto=Number(t.comision_monto??t.total)||0;
+    const cBase=Math.round(monto*(tBase*1.16/100)*100)/100;
+    const cMsi=Math.round(monto*(tMsi*1.16/100)*100)/100;
+    const cTotal=Math.round((cBase+cMsi)*100)/100;
+    const mRec=Math.round((monto-cTotal)*100)/100;
+    const esCera=(t.servicios||[]).some(s=>s.toLowerCase().includes("cera"));
+    const cCos=Math.round(mRec*(esCera?0.10:0.05)*100)/100;
+    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos};
+  };
+  const cargarComisiones=async()=>{
+    setLoadingCom(true);
+    try{
+      const{desde,hasta}=rango(periodo);
+      const[y,m]=desde.split("-").map(Number);
+      const desdeExt=new Date(y,m-1,0).toISOString().slice(0,10);
+      const colsExtra="comision_periodo,comision_monto,comision_terminal_override,comision_msi_override,";
+      const colsBase="id,fecha,ticket_zettle,sucursal_nombre,clienta_nombre,clienta,servicios,metodo_pago,total";
+      const applyFiltroSuc=(q)=>{
+        if(esSocia||vista==="individual"||vista==="comisiones")return q.ilike("sucursal_nombre",`%${sucSel}%`);
+        if(sucursalesFiltro)return q.in("sucursal_nombre",sucursalesFiltro);
+        return q;
+      };
+      // Intentar con columnas extra; si falla, usar solo columnas base
+      let r1,r2;
+      const q1Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).gte("fecha",desdeExt).lte("fecha",hasta).is("comision_periodo",null)).order("fecha").order("created_at");
+      const q2Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).eq("comision_periodo",periodo)).order("fecha").order("created_at");
+      [r1,r2]=await Promise.all([q1Full,q2Full]);
+      if(r1.error||r2.error){
+        // Fallback sin columnas extra (migraciones pendientes)
+        const q1=applyFiltroSuc(supabase.from("tickets").select(colsBase).gte("fecha",desdeExt).lte("fecha",hasta)).order("fecha").order("created_at");
+        [r1]= await Promise.all([q1]);
+        r2={data:[]};
+      }
+      const ids=new Set();
+      const data=[...(r1.data||[]),...(r2.data||[])].filter(t=>{if(ids.has(t.id))return false;ids.add(t.id);return true;});
+      data.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
+      setComData(data.map(calcCom));
+    }catch(e){console.error("cargarComisiones:",e);}
+    setLoadingCom(false);
+  };
+  useEffect(()=>{if(vista==="comisiones")cargarComisiones();},[vista,periodo,sucSel]);
+  const exportarComPDF=()=>{
+    const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
+    const r2=v=>Math.round(v*100)/100;
+    const fmtP=v=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(v);
+    const rows=comData.map((r,i)=>`<tr style="background:${i%2===0?"#fff":"#f9fafb"}">
+      <td>${r.fecha}</td><td style="font-family:monospace;font-size:10px">${r.recibo}</td>
+      <td style="font-weight:600">${r.nombre}</td><td style="color:#555">${r.servicios}</td>
+      <td><span style="padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;background:${r.terminal==="Efectivo / Otro"?"#f3f4f6":r.terminal==="Mercado Pago"?"#e0f7ff":r.terminal==="Zettle"?"#e0f4ff":"#ede9fe"};color:${r.terminal==="Efectivo / Otro"?"#6b7280":r.terminal==="Mercado Pago"?"#0072a3":r.terminal==="Zettle"?"#0e6a8a":"#5b21b6"}">${r.terminal}</span></td>
+      <td style="text-align:center">${r.msi_meses||"—"}</td>
+      <td style="text-align:right;font-weight:600">${fmtP(r.monto)}</td>
+      <td style="text-align:right;color:#ea580c">${r.com_base>0?fmtP(r.com_base):"—"}</td>
+      <td style="text-align:right;color:#ea580c">${r.com_msi>0?fmtP(r.com_msi):"—"}</td>
+      <td style="text-align:right;font-weight:700;color:#ea580c">${r.com_terminal>0?fmtP(r.com_terminal):"—"}</td>
+      <td style="text-align:right;font-weight:600;color:#16a34a">${fmtP(r.monto_recibido)}</td>
+      <td style="text-align:right;font-weight:700;color:#0e6a8a">${r.com_cosmetara>0?fmtP(r.com_cosmetara):"—"}</td>
+    </tr>`).join("");
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Comisiones ${sucSel} ${etiq(periodo)}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#111;padding:28px 32px}
+      h1{font-size:18px;font-weight:700;margin-bottom:2px}
+      .sub{font-size:12px;color:#555;margin-bottom:20px}
+      table{width:100%;border-collapse:collapse;margin-top:8px}
+      th{background:#1e1e3a;color:#fff;padding:8px 9px;text-align:left;font-size:9px;letter-spacing:1px;white-space:nowrap}
+      th.r{text-align:right}
+      td{padding:7px 9px;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:10.5px}
+      tfoot td{border-top:2px solid #1e1e3a;background:#f0f0f8;font-weight:700;font-size:11px;padding:9px}
+      tfoot td.r{text-align:right}
+      @media print{@page{margin:14mm 12mm;size:A4 landscape}body{padding:0}}
+    </style></head><body>
+    <h1>Comisiones Cosmetaras — ${sucSel}</h1>
+    <div class="sub">${etiq(periodo).toUpperCase()} · ${comData.length} registros</div>
+    <table>
+      <thead><tr>
+        <th>Fecha</th><th>Recibo</th><th>Nombre</th><th>Servicios</th><th>Terminal</th>
+        <th style="text-align:center">MSI</th>
+        <th class="r">Monto</th><th class="r">Com. Base</th><th class="r">Com. MSI</th>
+        <th class="r">Com. Terminal</th><th class="r">Monto Recibido</th><th class="r">Com. Cosmetara</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="6">TOTAL</td>
+        <td class="r">${fmtP(r2(tot.monto))}</td>
+        <td class="r" style="color:#ea580c">${tot.com_base>0?fmtP(r2(tot.com_base)):"—"}</td>
+        <td class="r" style="color:#ea580c">${tot.com_msi>0?fmtP(r2(tot.com_msi)):"—"}</td>
+        <td class="r" style="color:#ea580c">${tot.com_terminal>0?fmtP(r2(tot.com_terminal)):"—"}</td>
+        <td class="r" style="color:#16a34a">${fmtP(r2(tot.monto_recibido))}</td>
+        <td class="r" style="color:#0e6a8a">${fmtP(r2(tot.com_cosmetara))}</td>
+      </tr></tfoot>
+    </table>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>`;
+    const w=window.open("","_blank");w.document.write(html);w.document.close();
+  };
+  const moverComision=async(id,nuevoPeriodo)=>{
+    await supabase.from("tickets").update({comision_periodo:nuevoPeriodo||null}).eq("id",id);
+    setMoverFila(null);
+    await cargarComisiones();
+  };
+  const eliminarFilaCom=async(id)=>{
+    await supabase.from("tickets").delete().eq("id",id);
+    setConfirmDelCom(null);
+    await cargarComisiones();
+  };
+  const guardarMsiCom=async(id,val)=>{
+    await supabase.from("tickets").update({comision_msi_override:val?Number(val):null}).eq("id",id);
+    setEditMsiCom(null);
+    await cargarComisiones();
+  };
+  const guardarTerminalCom=async(id,val)=>{
+    await supabase.from("tickets").update({comision_terminal_override:val||null}).eq("id",id);
+    setEditTerminalCom(null);
+    await cargarComisiones();
+  };
+  const guardarMontoCom=async(id,val)=>{
+    const n=Number(val);
+    if(isNaN(n)||n<0)return;
+    await supabase.from("tickets").update({comision_monto:n||null}).eq("id",id);
+    setEditMontoCom(null);
+    await cargarComisiones();
+  };
+  const mesesOpciones=(()=>{const res=[];let[y,m]=periodo.split("-").map(Number);for(let i=6;i>=1;i--){let mm=m-i,yy=y;if(mm<1){mm+=12;yy--;}res.push(`${yy}-${String(mm).padStart(2,"0")}`);}for(let i=1;i<=6;i++){let mm=m+i,yy=y;if(mm>12){mm-=12;yy++;}res.push(`${yy}-${String(mm).padStart(2,"0")}`);}return res;})();
   useEffect(()=>{cargarHistorial();},[]);
 
   const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro","consumibles"]);
@@ -5699,10 +5849,10 @@ Responde SOLO con JSON válido:
       {puedeMV&&<div>
         <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>VISTA</div>
         <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-          {[["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"]].map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
+          {[["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]].map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
         </div>
       </div>}
-      {(vista==="individual"||esSocia)&&<div>
+      {(vista==="individual"||vista==="comisiones"||esSocia)&&<div>
         <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>SUCURSAL</div>
         <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
           {sucVisible.map(s=><button key={s} onClick={()=>{setSucSel(s);setAiTxt("");}} style={{padding:"6px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${sucSel===s?COLORES[s]:"rgba(255,255,255,0.1)"}`,borderRadius:"8px",background:sucSel===s?`${COLORES[s]}22`:"transparent",color:sucSel===s?(light?COLORES[s]:"#fff"):T.faint,fontFamily:"'Albert Sans',sans-serif",transition:"all 0.15s"}}>{s}</button>)}
@@ -5719,13 +5869,13 @@ Responde SOLO con JSON válido:
     </div>
 
     {/* Gráfico histórico de ventas */}
-    <GraficoVentas/>
+    {vista!=="comisiones"&&<GraficoVentas/>}
 
     {/* Análisis semanal + proyección IA */}
-    <AnalisisSemanal/>
+    {vista!=="comisiones"&&<AnalisisSemanal/>}
 
     {/* Vistas P&L — overlay mientras carga para no ver cambios bruscos */}
-    <div style={{position:"relative",opacity:loading?0.45:1,transition:"opacity 0.2s",pointerEvents:loading?"none":"auto"}}>
+    {vista!=="comisiones"&&<div style={{position:"relative",opacity:loading?0.45:1,transition:"opacity 0.2s",pointerEvents:loading?"none":"auto"}}>
       {loading&&<div style={{position:"absolute",inset:0,zIndex:10,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"40px"}}>
         <div style={{background:light?"rgba(255,255,255,0.9)":"rgba(20,20,40,0.85)",borderRadius:"20px",padding:"8px 20px",fontSize:"12px",fontWeight:600,color:T.muted,backdropFilter:"blur(4px)",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>Cargando datos...</div>
       </div>}
@@ -5750,10 +5900,143 @@ Responde SOLO con JSON válido:
           {sucVisible.map(s=><TarjetaPL key={s} suc={s} compact showDelta/>)}
         </div>
       </>}
-    </div>
+    </div>}
+
+    {/* Panel comisiones */}
+    {vista==="comisiones"&&<div className="glass" style={{padding:"22px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
+        <div>
+          <div style={{fontSize:"14px",fontWeight:700}}>Comisiones cosmetaras</div>
+          <div style={{fontSize:"11px",color:T.sub}}>{sucSel} · {etiq(periodo)}</div>
+        </div>
+        <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+          <input className="inp" placeholder="Buscar por nombre…" value={buscarCom} onChange={e=>setBuscarCom(e.target.value)} style={{width:"200px",fontSize:"12px"}}/>
+          <button className="btn-ghost" onClick={cargarComisiones} disabled={loadingCom} style={{fontSize:"12px"}}>↻ {loadingCom?"Cargando...":"Actualizar"}</button>
+          <button className="btn-blue" onClick={exportarComPDF} disabled={!comData.length} style={{fontSize:"12px"}}>⬇ Exportar PDF</button>
+        </div>
+      </div>
+      {loadingCom&&<div style={{textAlign:"center",padding:"30px",color:T.muted,fontSize:"13px"}}>Cargando datos...</div>}
+      {!loadingCom&&comData.length===0&&<div style={{textAlign:"center",padding:"30px",color:T.faint,fontSize:"13px"}}>Sin registros para este período</div>}
+      {!loadingCom&&comData.length>0&&(()=>{const comFiltrado=buscarCom.trim()?comData.filter(r=>r.nombre.toLowerCase().includes(buscarCom.toLowerCase())):comData;return(<div style={{overflowX:"auto"}}>
+        {buscarCom.trim()&&<div style={{fontSize:"11px",color:T.sub,marginBottom:"8px"}}>{comFiltrado.length} resultado{comFiltrado.length!==1?"s":""} para "{buscarCom}"</div>}
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
+          <thead>
+            <tr style={{borderBottom:`2px solid ${T.div}`}}>
+              {["Fecha","Recibo","Nombre","Servicios","Terminal","MSI","Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:["Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara"].includes(h)?"right":"left",fontSize:"10px",letterSpacing:"1px",color:T.faint,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {comFiltrado.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${T.div}`,background:i%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
+              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.muted}}>{r.fecha}</td>
+              <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:"11px",color:T.faint,whiteSpace:"nowrap"}}>{r.recibo}</td>
+              <td style={{padding:"7px 10px",fontWeight:500,whiteSpace:"nowrap"}}>{r.nombre}</td>
+              <td style={{padding:"7px 10px",color:T.muted,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.servicios}</td>
+              <td style={{padding:"4px 10px",whiteSpace:"nowrap"}}>
+                {editTerminalCom===r.id
+                  ?<select autoFocus value={r.terminal} onChange={e=>guardarTerminalCom(r.id,e.target.value==="Efectivo / Otro"?null:e.target.value)} onBlur={()=>setEditTerminalCom(null)} style={{fontSize:"11px",padding:"4px 6px",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+                    {["Efectivo / Otro","Mercado Pago","Zettle","BBVA","Banorte"].map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  :<div style={{display:"flex",alignItems:"center",gap:"5px",cursor:"pointer"}} onClick={()=>setEditTerminalCom(r.id)}>
+                    <span style={{padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:600,background:r.terminal==="Efectivo / Otro"?"rgba(255,255,255,0.06)":r.terminal==="Mercado Pago"?"rgba(0,174,239,0.12)":r.terminal==="Zettle"?"rgba(73,184,211,0.12)":"rgba(99,102,241,0.12)",color:r.terminal==="Efectivo / Otro"?T.faint:r.terminal==="Mercado Pago"?"#00aeef":r.terminal==="Zettle"?"#49B8D3":"#a5b4fc"}}>{r.terminal}</span>
+                    {r.comision_terminal_override&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
+                    <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✎</span>
+                  </div>}
+              </td>
+              <td style={{padding:"4px 10px",textAlign:"center"}}>
+                {editMsiCom===r.id
+                  ?<select autoFocus value={r.msi_meses||""} onChange={e=>guardarMsiCom(r.id,e.target.value||null)} onBlur={()=>setEditMsiCom(null)} style={{fontSize:"11px",padding:"4px 6px",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",cursor:"pointer",fontFamily:"inherit",width:"70px"}}>
+                    <option value="">—</option>
+                    {[3,6,9,12].map(m=><option key={m} value={m}>{m} MSI</option>)}
+                  </select>
+                  :<div style={{display:"inline-flex",alignItems:"center",gap:"4px",cursor:"pointer"}} onClick={()=>setEditMsiCom(r.id)}>
+                    <span style={{color:T.faint}}>{r.msi_meses?`${r.msi_meses}`:""}</span>
+                    {r.comision_msi_override!==null&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
+                    <span style={{fontSize:"10px",color:T.faint,opacity:0.4}}>✎</span>
+                  </div>}
+              </td>
+              <td style={{padding:"4px 10px",textAlign:"right"}}>
+                {editMontoCom===r.id
+                  ?<div style={{display:"flex",alignItems:"center",gap:"4px",justifyContent:"flex-end"}}>
+                    <input autoFocus type="number" value={editMontoVal} onChange={e=>setEditMontoVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")guardarMontoCom(r.id,editMontoVal);if(e.key==="Escape")setEditMontoCom(null);}} style={{width:"90px",padding:"4px 6px",fontSize:"12px",textAlign:"right",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",fontFamily:"inherit"}}/>
+                    <button onClick={()=>guardarMontoCom(r.id,editMontoVal)} style={{background:"#2721E8",border:"none",borderRadius:"5px",color:"#fff",cursor:"pointer",fontSize:"11px",padding:"4px 7px"}}>✓</button>
+                    <button onClick={()=>setEditMontoCom(null)} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"5px",color:"#888",cursor:"pointer",fontSize:"11px",padding:"4px 7px"}}>✕</button>
+                  </div>
+                  :<div style={{display:"flex",alignItems:"center",gap:"6px",justifyContent:"flex-end",cursor:"pointer"}} onClick={()=>{setEditMontoCom(r.id);setEditMontoVal(r.monto);}}>
+                    <span style={{fontWeight:600}}>{fmt(r.monto)}</span>
+                    {r.comision_monto!=null&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
+                    <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✎</span>
+                  </div>}
+              </td>
+              <td style={{padding:"7px 10px",textAlign:"right",color:"#f97316"}}>{r.com_base>0?`-${fmt(r.com_base)}`:"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"right",color:"#f97316"}}>{r.com_msi>0?`-${fmt(r.com_msi)}`:"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{r.com_terminal>0?`-${fmt(r.com_terminal)}`:"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#10b981"}}>{fmt(r.monto_recibido)}</td>
+              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#49B8D3"}}>{r.com_cosmetara>0?fmt(r.com_cosmetara):"—"}</td>
+              <td style={{padding:"7px 10px",position:"relative"}}>
+                {r.comision_periodo&&<span style={{fontSize:"9px",background:"rgba(251,146,60,0.15)",color:"#f97316",border:"1px solid rgba(251,146,60,0.4)",borderRadius:"10px",padding:"1px 6px",marginRight:"4px",whiteSpace:"nowrap"}}>{etiq(r.comision_periodo).split(" ")[0]}</span>}
+                <div style={{display:"flex",gap:"4px",alignItems:"center"}}>
+                  <button onClick={()=>setMoverFila(moverFila===r.id?null:r.id)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:T.muted,cursor:"pointer",fontSize:"11px",padding:"3px 8px",fontFamily:"inherit",whiteSpace:"nowrap"}}>→ Mover</button>
+                  {confirmDelCom===r.id
+                    ?<div style={{display:"flex",gap:"4px"}}>
+                        <button onClick={()=>setConfirmDelCom(null)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"6px",color:T.muted,cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit"}}>No</button>
+                        <button onClick={()=>eliminarFilaCom(r.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button>
+                      </div>
+                    :<button onClick={()=>setConfirmDelCom(r.id)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.35)",cursor:"pointer",fontSize:"15px",padding:"2px 4px",lineHeight:1}} title="Eliminar">🗑</button>}
+                </div>
+                {moverFila===r.id&&<div style={{position:"absolute",right:0,top:"100%",zIndex:50,background:light?"#fff":"#1e1e3a",border:`1px solid ${T.div}`,borderRadius:"10px",padding:"8px",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",minWidth:"150px"}}>
+                  <div style={{fontSize:"10px",letterSpacing:"1px",color:T.faint,marginBottom:"6px",padding:"0 4px"}}>MOVER A</div>
+                  {mesesOpciones.map((mes,i)=><button key={mes} onClick={()=>moverComision(r.id,mes)} style={{display:"block",width:"100%",textAlign:"left",padding:"7px 10px",background:"none",border:i===5?"1px solid rgba(255,255,255,0.08)":"none",borderLeft:"none",borderRight:"none",borderTop:i===6?"1px solid rgba(255,255,255,0.08)":"none",borderBottom:"none",borderRadius:"0",color:i<6?T.faint:T.text,cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}} onMouseEnter={e=>e.target.style.background="rgba(39,33,232,0.1)"} onMouseLeave={e=>e.target.style.background="none"}>{i===5?"── ":i===6?"→ ":i<6?"← ":""}{etiq(mes)}</button>)}
+                  {r.comision_periodo&&<><div style={{height:"1px",background:T.div,margin:"4px 0"}}/>
+                  <button onClick={()=>moverComision(r.id,null)} style={{display:"block",width:"100%",textAlign:"left",padding:"7px 10px",background:"none",border:"none",borderRadius:"6px",color:"#f97316",cursor:"pointer",fontSize:"11px",fontFamily:"inherit"}}>↩ Restaurar fecha original</button></>}
+                </div>}
+              </td>
+            </tr>)}
+          </tbody>
+          <tfoot>{(()=>{const tot=comFiltrado.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});const r2=v=>Math.round(v*100)/100;return(<tr style={{borderTop:`2px solid ${T.div}`,background:"rgba(255,255,255,0.04)"}}>
+            <td colSpan={6} style={{padding:"10px",fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:T.sub}}>TOTAL · {comFiltrado.length} registros{buscarCom.trim()?` (filtrado de ${comData.length})`:""}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px"}}>{fmt(r2(tot.monto))}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_base>0?`-${fmt(r2(tot.com_base))}`:"—"}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_msi>0?`-${fmt(r2(tot.com_msi))}`:"—"}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_terminal>0?`-${fmt(r2(tot.com_terminal))}`:"—"}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px",color:"#10b981"}}>{fmt(r2(tot.monto_recibido))}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px",color:"#49B8D3"}}>{fmt(r2(tot.com_cosmetara))}</td>
+          </tr>);})()}</tfoot>
+        </table>
+      </div>);})()}
+
+    {/* Resumen comisión recepcionista */}
+    {!loadingCom&&comData.length>0&&(()=>{
+      const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
+      const r2=v=>Math.round(v*100)/100;
+      const baseRecep=r2(tot.monto_recibido-tot.com_cosmetara);
+      const tier=getTierRecep(baseRecep);
+      const comRecep=r2(baseRecep*tier.pct/100);
+      return(
+        <div style={{marginTop:"16px",padding:"18px 20px",background:light?"#f8f9ff":"rgba(39,33,232,0.06)",border:`1px solid ${light?"rgba(39,33,232,0.15)":"rgba(39,33,232,0.25)"}`,borderRadius:"12px"}}>
+          <div style={{fontSize:"11px",letterSpacing:"2px",color:"#2721E8",fontWeight:700,marginBottom:"14px"}}>COMISIÓN RECEPCIONISTA</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"12px",marginBottom:"14px"}}>
+            {[["Ventas brutas",fmt(r2(tot.monto)),T.text],["− Com. terminal",`-${fmt(r2(tot.com_terminal))}`,"#f97316"],["− Com. cosmetaras",`-${fmt(r2(tot.com_cosmetara))}`,"#49B8D3"],["Base recepcionista",fmt(baseRecep),"#10b981"],["Nivel alcanzado",`${tier.pct.toFixed(2)}%`,tier.pct>0?"#2721E8":T.faint]].map(([l,v,c])=>(
+              <div key={l} style={{padding:"12px 14px",background:light?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.04)",borderRadius:"8px",border:`1px solid ${T.div}`}}>
+                <div style={{fontSize:"10px",color:T.faint,marginBottom:"4px"}}>{l}</div>
+                <div style={{fontSize:"16px",fontWeight:700,color:c}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",background:tier.pct>0?(light?"rgba(39,33,232,0.07)":"rgba(39,33,232,0.15)"):"rgba(255,255,255,0.03)",borderRadius:"10px",border:`1px solid ${tier.pct>0?"rgba(39,33,232,0.3)":T.div}`}}>
+            <div>
+              <div style={{fontSize:"12px",color:T.sub,marginBottom:"2px"}}>Comisión recepcionista · {fmt(baseRecep)} × {tier.pct.toFixed(2)}%</div>
+              {tier.pct===0&&<div style={{fontSize:"11px",color:T.faint}}>Se requieren al menos $100,000 para generar comisión</div>}
+              {tier.pct>0&&(()=>{const nextTier=TIERS_RECEP.filter(t=>t.desde>baseRecep).at(-1);return nextTier?<div style={{fontSize:"11px",color:T.faint}}>Siguiente nivel: {nextTier.pct.toFixed(2)}% al llegar a {fmt(nextTier.desde)}</div>:null;})()}
+            </div>
+            <div style={{fontSize:"28px",fontWeight:800,color:tier.pct>0?"#2721E8":T.faint}}>{fmt(comRecep)}</div>
+          </div>
+        </div>
+      );
+    })()}
+    </div>}
 
     {/* Formulario gastos */}
-    <div className="glass" style={{padding:"22px"}}>
+    {vista!=="comisiones"&&<div className="glass" style={{padding:"22px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>REGISTRAR GASTO · <span style={{color:T.muted}}>{etiq(fPeriodo).toUpperCase()}</span></div>
         <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",userSelect:"none"}}>
@@ -5832,10 +6115,10 @@ Responde SOLO con JSON válido:
           <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar consumibles"}</button>
         </div>
       </div>}
-    </div>
+    </div>}
 
     {/* Bloque IA */}
-    <div className="glass" style={{padding:"22px",borderColor:aiTxt?"rgba(39,33,232,0.4)":"rgba(255,255,255,0.08)"}}>
+    {vista!=="comisiones"&&<div className="glass" style={{padding:"22px",borderColor:aiTxt?"rgba(39,33,232,0.4)":"rgba(255,255,255,0.08)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:aiTxt||aiLoad?"16px":"0"}}>
         <div>
           <div style={{fontSize:"14px",fontWeight:700,marginBottom:"2px"}}>Análisis con IA</div>
@@ -5845,7 +6128,7 @@ Responde SOLO con JSON válido:
       </div>
       {aiLoad&&<div style={{color:T.muted,fontSize:"13px",fontStyle:"italic"}}>Analizando resultados de {etiq(periodo)}...</div>}
       {aiTxt&&<div style={{paddingTop:"4px"}}>{renderMarkdown(aiTxt,T,light)}</div>}
-    </div>
+    </div>}
   </div>);}
 
 // ══════════════════════════════════════════════════════════════════════════════
