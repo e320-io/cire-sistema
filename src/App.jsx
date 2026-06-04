@@ -5292,6 +5292,10 @@ Responde SOLO con JSON válido:
     const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
     const r2=v=>Math.round(v*100)/100;
     const fmtP=v=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(v);
+    const baseRecepPDF=r2(tot.monto_recibido-tot.com_cosmetara);
+    const tierPDF=getTierRecep(baseRecepPDF);
+    const comRecepPDF=r2(baseRecepPDF*tierPDF.pct/100);
+    const nextTierPDF=TIERS_RECEP.filter(t=>t.desde>baseRecepPDF).at(-1);
     const rows=comData.map((r,i)=>`<tr style="background:${i%2===0?"#fff":"#f9fafb"}">
       <td>${r.fecha}</td><td style="font-family:monospace;font-size:10px">${r.recibo}</td>
       <td style="font-weight:600">${r.nombre}</td><td style="color:#555">${r.servicios}</td>
@@ -5339,6 +5343,32 @@ Responde SOLO con JSON válido:
         <td class="r" style="color:#0e6a8a">${fmtP(r2(tot.com_cosmetara))}</td>
       </tr></tfoot>
     </table>
+    <div style="margin-top:28px;page-break-inside:avoid">
+      <div style="background:#1e1e3a;color:#fff;padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:2px;border-radius:8px 8px 0 0">COMISIÓN RECEPCIÓN</div>
+      <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:16px">
+        <table style="width:100%;border-collapse:collapse;margin:0">
+          <tr style="background:#f9fafb">
+            <td style="padding:8px 12px;font-size:11px;color:#555">Ventas brutas</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:600">${fmtP(r2(tot.monto))}</td>
+            <td style="padding:8px 12px;font-size:11px;color:#555">− Comisión terminal</td>
+            <td style="padding:8px 12px;text-align:right;color:#ea580c;font-weight:600">-${fmtP(r2(tot.com_terminal))}</td>
+            <td style="padding:8px 12px;font-size:11px;color:#555">− Comisión cosmetaras</td>
+            <td style="padding:8px 12px;text-align:right;color:#0e6a8a;font-weight:600">-${fmtP(r2(tot.com_cosmetara))}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;font-size:11px;color:#555">Base recepcionista</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:700;color:#16a34a">${fmtP(baseRecepPDF)}</td>
+            <td style="padding:8px 12px;font-size:11px;color:#555">Nivel alcanzado</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:700;color:#1e1e3a">${tierPDF.pct.toFixed(2)}%</td>
+            ${nextTierPDF?`<td style="padding:8px 12px;font-size:10px;color:#888">Siguiente nivel: ${nextTierPDF.pct.toFixed(2)}% desde ${fmtP(nextTierPDF.desde)}</td><td></td>`:`<td colspan="2"></td>`}
+          </tr>
+        </table>
+        <div style="margin-top:12px;padding:12px 16px;background:#f0f0f8;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:12px;color:#444">${fmtP(baseRecepPDF)} × ${tierPDF.pct.toFixed(2)}%</div>
+          <div style="font-size:22px;font-weight:800;color:${comRecepPDF>0?"#1e1e3a":"#999"}">${fmtP(comRecepPDF)}</div>
+        </div>
+      </div>
+    </div>
     <script>window.onload=()=>{window.print();}<\/script>
     </body></html>`;
     const w=window.open("","_blank");w.document.write(html);w.document.close();
