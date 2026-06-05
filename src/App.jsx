@@ -159,7 +159,7 @@ const USUARIOS=[
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
   {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle","reparar"]},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
-  {id:13,nombre:"Marce Gallardo",usuario:"marce_gallardo",password:"cire2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true},
+  {id:13,nombre:"Marce Gallardo",usuario:"marce_gallardo",password:"cire2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true,passwordFinal:true},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
 ];
 const SUCURSALES_NAMES=["Coapa","Valle","Oriente","Polanco","Metepec"];
@@ -8297,10 +8297,11 @@ export default function App(){
       }else{
         if(hardcoded.password!==pass){setErr("Usuario o contraseña incorrectos");setLoading(false);return;}
         const hash=await hashPassword(pass);
-        const{data:newRec}=await supabase.from("system_users").insert([{id:hardcoded.id,username:hardcoded.usuario,password_hash:hash,must_change_password:true}]).select().maybeSingle();
-        setSession(hardcoded);setSupaUser(newRec||{must_change_password:true});
+        const forceChange=!hardcoded.passwordFinal;
+        const{data:newRec}=await supabase.from("system_users").insert([{id:hardcoded.id,username:hardcoded.usuario,password_hash:hash,must_change_password:forceChange}]).select().maybeSingle();
+        setSession(hardcoded);setSupaUser(newRec||{must_change_password:forceChange});
         logActividad(hardcoded,"session_start",hardcoded.rol);
-        setMustChange(true);
+        if(forceChange)setMustChange(true);
       }
     }catch(e){setErr("Error de conexión. Intenta de nuevo.");}
     setLoading(false);
