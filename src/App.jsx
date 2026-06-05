@@ -159,7 +159,7 @@ const USUARIOS=[
   {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
   {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle","reparar"]},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
-  {id:13,nombre:"Gerencia Oriente",usuario:"gerencia_oriente",password:"oriente2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true},
+  {id:13,nombre:"Marce Gallardo",usuario:"marce_gallardo",password:"cire2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true},
   {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
 ];
 const SUCURSALES_NAMES=["Coapa","Valle","Oriente","Polanco","Metepec"];
@@ -4910,7 +4910,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const listaMeses=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});})();
 
   const[periodo,setPeriodo]=useState(hoyYM());
-  const[vista,setVista]=useState(()=>!!sucursalesFiltro&&!sucursalesPropias?"comisiones":"individual");
+  const[vista,setVista]=useState("individual");
   const[sucSel,setSucSel]=useState(sucVisible[0]);
   const[sucMulti,setSucMulti]=useState(sucursalesPropias||sucVisible.slice(0,2));
   const[ventas,setVentas]=useState({});
@@ -5879,7 +5879,7 @@ Responde SOLO con JSON válido:
       <div>
         <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>VISTA</div>
         <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-          {(esSocia?[["comisiones","Comisiones"]]:([["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]])).map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
+          {([["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]]).map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
         </div>
       </div>
       {(vista==="individual"||vista==="comisiones"||esSocia)&&<div>
@@ -5911,7 +5911,7 @@ Responde SOLO con JSON válido:
       </div>}
 
       {/* Vista individual */}
-      {(vista==="individual"||esSocia)&&<TarjetaPL suc={sucSel}/>}
+      {vista==="individual"&&<TarjetaPL suc={sucSel}/>}
 
       {/* Vista consolidada */}
       {vista==="consolidado"&&pc&&<>
