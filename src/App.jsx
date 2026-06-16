@@ -1956,9 +1956,11 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
   const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasDuracion,setZonasDuracion]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");const[zonasExtra,setZonasExtra]=useState([]);const[zonaExtraInput,setZonaExtraInput]=useState("");
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
+  const[usarPromo,setUsarPromo]=useState(false);
+  const getPrecio=(item)=>(usarPromo&&item.precioPromo!==undefined)?item.precioPromo:item.precio;
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
-  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,precio:getPrecioActual(item),qty:1}]);};
+  const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,precio:getPrecio(item),qty:1}]);};
   const total=carrito.reduce((s,i)=>s+i.precio,0);const totalCD=Math.round(total*(1-descuento/100));const msiD=[...new Set(carrito.flatMap(i=>i.msi||[]))].sort((a,b)=>a-b);
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
@@ -2210,6 +2212,13 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{padding:"12px 20px",borderBottom:`1px solid ${T.div}`,flexShrink:0,background:"transparent"}}>
             <div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{FILTROS.map(f=><button key={f} onClick={()=>{setFiltro(f);if(f==="Mantenimiento"){setShowMantForm(true);setShowZonasForm(false);setShowCeraForm(false);}else if(f==="Personalizado"){setShowZonasForm(true);setShowMantForm(false);setShowCeraForm(false);}else if(f==="Cera"){setShowCeraForm(true);setShowMantForm(false);setShowZonasForm(false);}else{setShowMantForm(false);setShowZonasForm(false);setShowCeraForm(false);}}} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",background:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):"transparent",borderColor:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):T.chipBdr,color:filtro===f?"#fff":T.muted}}>{f}</button>)}</div>
+            {session.usuario==="valle"&&<div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
+              <span style={{fontSize:"11px",color:T.sub,letterSpacing:"0.5px"}}>Modo precio:</span>
+              <button onClick={()=>{setUsarPromo(!usarPromo);setCarrito([]);}} style={{display:"flex",alignItems:"center",gap:"6px",padding:"5px 14px",borderRadius:"20px",border:`1px solid ${usarPromo?"#f59e0b":"rgba(255,255,255,0.15)"}`,background:usarPromo?"rgba(245,158,11,0.15)":"transparent",color:usarPromo?"#f59e0b":T.muted,fontSize:"11px",fontWeight:600,cursor:"pointer",transition:"all 0.2s"}}>
+                {usarPromo?"🔥 Hot Sale":"Precio normal"}
+              </button>
+              {usarPromo&&<span style={{fontSize:"10px",color:"#f59e0b",opacity:0.8}}>Aplican precios de promoción</span>}
+            </div>}
             {filtro!=="Mantenimiento"&&filtro!=="Personalizado"&&filtro!=="Cera"&&<input className="inp" placeholder="Buscar servicio..." value={busq} onChange={e=>setBusq(e.target.value)} style={{padding:"8px 14px",fontSize:"12px"}}/>}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
@@ -2264,7 +2273,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                 <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.12)":T.cardBg,border:`1px solid ${ec?"rgba(39,33,232,0.45)":T.cardBdr}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative",boxShadow:light&&!ec?"0 1px 3px rgba(0,0,0,0.05)":"none"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background=T.hoverBg;}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.12)":T.cardBg;}}>
                   <div style={{fontSize:"9px",color:T.sub,letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
                   <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
-                  <div style={{fontSize:"16px",fontWeight:700,color:"#49B8D3"}}>{fmt(getPrecioActual(item))}{item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY&&<span style={{fontSize:"9px",fontWeight:600,color:"#ef4444",marginLeft:"6px",textDecoration:"line-through"}}>{fmt(item.precio)}</span>}</div>
+                  <div style={{fontSize:"16px",fontWeight:700,color:usarPromo&&item.precioPromo!==undefined?"#f59e0b":"#49B8D3"}}>{fmt(getPrecio(item))}{usarPromo&&item.precioPromo!==undefined&&<span style={{fontSize:"9px",fontWeight:600,color:"#ef4444",marginLeft:"6px",textDecoration:"line-through"}}>{fmt(item.precio)}</span>}</div>
                   {item.msi?.length>0&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
                   {ec&&<div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700,color:"#fff"}}>✓</div>}
                 </div>);})}
