@@ -1141,7 +1141,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const todosServicios=[cita.servicio,...otrosPaquetes.map(x=>x.cita.servicio)];
       const tzVal=ticketZettle.trim().startsWith("#")?ticketZettle.trim():"#"+ticketZettle.trim();
       const etiquetaCobro=citaCobro.esPreventa?"Preventa Hot Sale Q1":"Liquidación";
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`${etiquetaCobro} · ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:todosServicios,total:totalFinal,metodo_pago:`${etiquetaCobro} · ${mpago}`,descuento:pagosAg.length===1?descuentoAg:0,tipo_clienta:"Recompra",fecha:fechaTicketAg,clienta_id:cita.clienta_id||null,clienta_nombre:cita.clienta_nombre||null,ticket_zettle:tzVal,usuario:session.usuario}]);
       await supabase.from("citas").update({es_cobro:true,metodo_pago:mpago,total_pagado:totalFinal,ticket_zettle:tzVal}).eq("id",cita.id);
       for(const op of otrosPaquetes){
         await supabase.from("citas").update({es_cobro:true,metodo_pago:`Liquidación conjunta · ${mpago}`,total_pagado:0}).eq("id",op.cita.id);
@@ -1983,7 +1983,7 @@ function PreventaView({session,isAdmin,onVerFicha}){
       const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
       const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session.usuario}]);
       await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
       setLiquidando(null);cargar();
     }catch(e){console.error(e);alert("Error: "+e.message);}
@@ -2121,7 +2121,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     const mpago=pagos.length===1?(pagos[0].metodo+(msiSel>0?` ${msiSel}MSI`:"")+( ["Débito","Crédito"].includes(pagos[0].metodo)&&termSel[0]?` · ${termSel[0]}`:"")):pagos.filter(p=>p.metodo&&p.monto>0).map((p,i)=>`${p.metodo}${["Débito","Crédito"].includes(p.metodo)&&termSel[i]?` · ${termSel[i]}`:""} ${fmt(p.monto)}`).join(" + ");
     const tNum=await nextTicketNum();
     const tzPOS=ticketZettlePOS.trim().startsWith("#")?ticketZettlePOS.trim():"#"+ticketZettlePOS.trim();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzPOS}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:totalCD,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzPOS,usuario:session.usuario}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     for(const item of carrito){
@@ -2147,7 +2147,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     if(anticoOpt==="otra"&&montoAnt<=0){setErrGuardar("Ingresa un monto válido.");setSaving(false);return;}
     const tNum=await nextTicketNum();
     const tzAntVal=ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim();
-    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoAnt,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzAntVal}]).select();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoAnt,metodo_pago:`Anticipo ${mpAnticipo}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzAntVal,usuario:session.usuario}]).select();
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
@@ -2194,7 +2194,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       const tzVal=preventaTicket.trim().startsWith("#")?preventaTicket.trim():"#"+preventaTicket.trim();
       const mpago=preventaMetodo+(preventaMsi>0?` ${preventaMsi}MSI`:"")+( ["Débito","Crédito"].includes(preventaMetodo)&&preventaTerminal?` · ${preventaTerminal}`:"");
       const tNum=await nextTicketNum();
-      const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoInicial,metodo_pago:`Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzVal}]).select();
+      const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:montoInicial,metodo_pago:`Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzVal,usuario:session.usuario}]).select();
       if(eT)throw new Error("Ticket: "+eT.message);
       const tId=tD?.[0]?.id;
       for(let idx=0;idx<carrito.length;idx++){
@@ -5397,7 +5397,9 @@ Responde SOLO con JSON válido:
     const mRec=Math.round((monto-cTotal)*100)/100;
     const esCera=(t.servicios||[]).some(s=>s.toLowerCase().includes("cera"));
     const cCos=Math.round(mRec*(esCera?0.10:0.05)*100)/100;
-    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos};
+    const hora=t.created_at?new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"—";
+    const capturista=USUARIOS.find(u=>u.usuario===t.usuario)?.nombre||t.usuario||"Importado";
+    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos,usuario:capturista,hora};
   };
   const cargarComisiones=async()=>{
     setLoadingCom(true);
@@ -5406,7 +5408,7 @@ Responde SOLO con JSON válido:
       const[y,m]=desde.split("-").map(Number);
       const desdeExt=new Date(y,m-1,0).toISOString().slice(0,10);
       const colsExtra="comision_periodo,comision_monto,comision_terminal_override,comision_msi_override,";
-      const colsBase="id,fecha,ticket_zettle,sucursal_nombre,clienta_nombre,clienta,servicios,metodo_pago,total";
+      const colsBase="id,fecha,ticket_zettle,sucursal_nombre,clienta_nombre,clienta,servicios,metodo_pago,total,usuario,created_at";
       const applyFiltroSuc=(q)=>{
         if(esSocia||vista==="individual"||vista==="comisiones")return q.ilike("sucursal_nombre",`%${sucSel}%`);
         if(sucursalesFiltro)return q.in("sucursal_nombre",sucursalesFiltro);
@@ -5440,8 +5442,8 @@ Responde SOLO con JSON válido:
     const comRecepPDF=r2(baseRecepPDF*tierPDF.pct/100);
     const nextTierPDF=TIERS_RECEP.filter(t=>t.desde>baseRecepPDF).at(-1);
     const rows=comData.map((r,i)=>`<tr style="background:${i%2===0?"#fff":"#f9fafb"}">
-      <td>${r.fecha}</td><td style="font-family:monospace;font-size:10px">${r.recibo}</td>
-      <td style="font-weight:600">${r.nombre}</td><td style="color:#555">${r.servicios}</td>
+      <td>${r.fecha}</td><td style="font-size:10px;color:#555">${r.hora}</td><td style="font-family:monospace;font-size:10px">${r.recibo}</td>
+      <td style="font-weight:600">${r.nombre}</td><td style="font-size:10px;color:#555">${r.usuario}</td><td style="color:#555">${r.servicios}</td>
       <td><span style="padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;background:${r.terminal==="Efectivo / Otro"?"#f3f4f6":r.terminal==="Mercado Pago"?"#e0f7ff":r.terminal==="Zettle"?"#e0f4ff":"#ede9fe"};color:${r.terminal==="Efectivo / Otro"?"#6b7280":r.terminal==="Mercado Pago"?"#0072a3":r.terminal==="Zettle"?"#0e6a8a":"#5b21b6"}">${r.terminal}</span></td>
       <td style="text-align:center">${r.msi_meses||"—"}</td>
       <td style="text-align:right;font-weight:600">${fmtP(r.monto)}</td>
@@ -5470,14 +5472,14 @@ Responde SOLO con JSON válido:
     <div class="sub">${etiq(periodo).toUpperCase()} · ${comData.length} registros</div>
     <table>
       <thead><tr>
-        <th>Fecha</th><th>Recibo</th><th>Nombre</th><th>Servicios</th><th>Terminal</th>
+        <th>Fecha</th><th>Hora</th><th>Recibo</th><th>Nombre</th><th>Usuario</th><th>Servicios</th><th>Terminal</th>
         <th style="text-align:center">MSI</th>
         <th class="r">Monto</th><th class="r">Com. Base</th><th class="r">Com. MSI</th>
         <th class="r">Com. Terminal</th><th class="r">Monto Recibido</th><th class="r">Com. Cosmetara</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr>
-        <td colspan="6">TOTAL</td>
+        <td colspan="8">TOTAL</td>
         <td class="r">${fmtP(r2(tot.monto))}</td>
         <td class="r" style="color:#ea580c">${tot.com_base>0?fmtP(r2(tot.com_base)):"—"}</td>
         <td class="r" style="color:#ea580c">${tot.com_msi>0?fmtP(r2(tot.com_msi)):"—"}</td>
@@ -6095,14 +6097,16 @@ Responde SOLO con JSON válido:
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
           <thead>
             <tr style={{borderBottom:`2px solid ${T.div}`}}>
-              {["Fecha","Recibo","Nombre","Servicios","Terminal","MSI","Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:["Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara"].includes(h)?"right":"left",fontSize:"10px",letterSpacing:"1px",color:T.faint,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
+              {["Fecha","Hora","Recibo","Nombre","Usuario","Servicios","Terminal","MSI","Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:["Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara"].includes(h)?"right":"left",fontSize:"10px",letterSpacing:"1px",color:T.faint,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {comFiltrado.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${T.div}`,background:i%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
               <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.muted}}>{r.fecha}</td>
+              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.faint,fontSize:"11px"}}>{r.hora}</td>
               <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:"11px",color:T.faint,whiteSpace:"nowrap"}}>{r.recibo}</td>
               <td style={{padding:"7px 10px",fontWeight:500,whiteSpace:"nowrap"}}>{r.nombre}</td>
+              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.muted,fontSize:"11px"}}>{r.usuario}</td>
               <td style={{padding:"7px 10px",color:T.muted,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.servicios}</td>
               <td style={{padding:"4px 10px",whiteSpace:"nowrap"}}>
                 {editTerminalCom===r.id
@@ -6166,7 +6170,7 @@ Responde SOLO con JSON válido:
             </tr>)}
           </tbody>
           <tfoot>{(()=>{const tot=comFiltrado.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});const r2=v=>Math.round(v*100)/100;return(<tr style={{borderTop:`2px solid ${T.div}`,background:"rgba(255,255,255,0.04)"}}>
-            <td colSpan={6} style={{padding:"10px",fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:T.sub}}>TOTAL · {comFiltrado.length} registros{buscarCom.trim()?` (filtrado de ${comData.length})`:""}</td>
+            <td colSpan={8} style={{padding:"10px",fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:T.sub}}>TOTAL · {comFiltrado.length} registros{buscarCom.trim()?` (filtrado de ${comData.length})`:""}</td>
             <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px"}}>{fmt(r2(tot.monto))}</td>
             <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_base>0?`-${fmt(r2(tot.com_base))}`:"—"}</td>
             <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_msi>0?`-${fmt(r2(tot.com_msi))}`:"—"}</td>
@@ -6590,7 +6594,7 @@ function Analitica(){
 const inicioSemana=()=>{const h=cdmx();const d=new Date(h+"T12:00:00"),dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().slice(0,10);};
 const semanaLabel=()=>{const ini=new Date(inicioSemana()+"T12:00:00"),fin=new Date(ini);fin.setDate(ini.getDate()+6);return`${ini.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${fin.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;};
 
-function PreventaDashboard({sucursalesFiltro}){
+function PreventaDashboard({sucursalesFiltro,session}){
   const{light,T}=useT();
   const sucVisible=sucursalesFiltro||SUCURSALES_NAMES;
   const[preventas,setPreventas]=useState([]);
@@ -6625,7 +6629,7 @@ function PreventaDashboard({sucursalesFiltro}){
       const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
       const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:liquidando.sucursal_id,sucursal_nombre:liquidando.sucursal_nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:liquidando.sucursal_id,sucursal_nombre:liquidando.sucursal_nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session?.usuario}]);
       await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
       setLiquidando(null);cargar();
     }catch(e){console.error(e);alert("Error: "+e.message);}
@@ -7778,7 +7782,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
 
         {/* ═══ PREVENTA ═══ */}
-        {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro}/>}
+        {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro} session={session}/>}
 
         {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
         {showWhatsNew&&<div style={{position:"fixed",bottom:"28px",right:"28px",zIndex:9999,width:"360px",background:light?"#fff":"#1a1a2e",border:"1px solid rgba(39,33,232,0.35)",borderRadius:"16px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
