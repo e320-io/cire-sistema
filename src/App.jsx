@@ -168,7 +168,7 @@ const TERMINALES_DEFAULT=[
   {nombre:"Zettle",comision:2.29,activa:true},
   {nombre:"BBVA",comision:2.75,activa:true},
   {nombre:"Banorte",comision:2.50,activa:true},
-  {nombre:"Mercado Pago",comision:3.29,activa:true},
+  {nombre:"Mercado Pago",comision:2.99,activa:true},
 ];
 const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
 const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
@@ -5376,7 +5376,7 @@ Responde SOLO con JSON válido:
 
   const TIERS_RECEP=[{desde:350000,pct:3.00},{desde:300000,pct:2.50},{desde:250000,pct:2.25},{desde:210000,pct:2.00},{desde:190000,pct:1.75},{desde:160000,pct:1.50},{desde:130000,pct:1.25},{desde:90000,pct:1.00},{desde:0,pct:0}];
   const getTierRecep=(base)=>TIERS_RECEP.find(t=>base>=t.desde)||{desde:0,pct:0};
-  const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.49};
+  const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.99};
   const TASAS_MSI_COM={
     "Mercado Pago":{3:3.48,6:5.99,9:8.99,12:11.98},
     Banorte:{3:3.5,6:5.50,9:8.5,12:11.5},
@@ -6148,9 +6148,9 @@ Responde SOLO con JSON válido:
               <td style={{padding:"7px 10px",position:"relative"}}>
                 {r.comision_periodo&&<span style={{fontSize:"9px",background:"rgba(251,146,60,0.15)",color:"#f97316",border:"1px solid rgba(251,146,60,0.4)",borderRadius:"10px",padding:"1px 6px",marginRight:"4px",whiteSpace:"nowrap"}}>{etiq(r.comision_periodo).split(" ")[0]}</span>}
                 <div style={{display:"flex",gap:"4px",alignItems:"center"}}>
-                  <button onClick={()=>setMoverFila(moverFila===r.id?null:r.id)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:T.muted,cursor:"pointer",fontSize:"11px",padding:"3px 8px",fontFamily:"inherit",whiteSpace:"nowrap"}}>→ Mover</button>
+                  {confirmDelCom!==r.id&&<button onClick={()=>setMoverFila(moverFila===r.id?null:r.id)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:T.muted,cursor:"pointer",fontSize:"11px",padding:"3px 8px",fontFamily:"inherit",whiteSpace:"nowrap"}}>→ Mover</button>}
                   {confirmDelCom===r.id
-                    ?<div style={{display:"flex",gap:"4px"}}>
+                    ?<div style={{display:"flex",gap:"4px",whiteSpace:"nowrap"}}>
                         <button onClick={()=>setConfirmDelCom(null)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"6px",color:T.muted,cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit"}}>No</button>
                         <button onClick={()=>eliminarFilaCom(r.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button>
                       </div>
