@@ -186,63 +186,63 @@ const PROMO_EXPIRY=new Date('2026-12-31T23:59:59');
 const getPrecioActual=(item)=>(item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY)?item.precioPromo:item.precio;
 const CATALOGO=[
   {categoria:"Láser Mujer - Zona Íntima",items:[
-    {nombre:"Bikini Básico Mujer (8 ses)",precio:2250,precioPromo:1800,msi:[3]},
-    {nombre:"Sexy Bikini Mujer (8 ses)",precio:2500,precioPromo:2000,msi:[3]},
-    {nombre:"French Bikini Mujer (8 ses)",precio:3500,precioPromo:2800,msi:[3]},
-    {nombre:"Bikini Brazilian Mujer (8 ses)",precio:4000,precioPromo:3200,msi:[3]},
-    {nombre:"Crack Mujer (8 ses)",precio:1800,precioPromo:1300,msi:[]},
+    {nombre:"Bikini Básico Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
+    {nombre:"Sexy Bikini Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
+    {nombre:"French Bikini Mujer (8 ses)",precio:3500,precioPromo:3000,msi:[3]},
+    {nombre:"Bikini Brazilian Mujer (8 ses)",precio:4000,precioPromo:3500,msi:[3]},
+    {nombre:"Crack Mujer (8 ses)",precio:1800,precioPromo:1625,msi:[]},
   ]},
   {categoria:"Láser Mujer - Cuerpo Inferior",items:[
-    {nombre:"Coxis Mujer (8 ses)",precio:1800,msi:[]},
-    {nombre:"Glúteos Mujer (8 ses)",precio:2500,precioPromo:1600,msi:[3]},
-    {nombre:"Medias Piernas Mujer (8 ses)",precio:3500,precioPromo:2400,msi:[3]},
-    {nombre:"Piernas Completas Mujer (8 ses)",precio:5000,msi:[3]},
-    {nombre:"Pies Mujer (8 ses)",precio:1800,msi:[]},
+    {nombre:"Coxis Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
+    {nombre:"Glúteos Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
+    {nombre:"Medias Piernas Mujer (8 ses)",precio:3500,precioPromo:3000,msi:[3]},
+    {nombre:"Piernas Completas Mujer (8 ses)",precio:5000,precioPromo:4500,msi:[3]},
+    {nombre:"Pies Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
   ]},
   {categoria:"Láser Mujer - Cuerpo Superior",items:[
-    {nombre:"Brazos Completos Mujer (8 ses)",precio:4000,precioPromo:3000,msi:[3]},
-    {nombre:"Medios Brazos Mujer (8 ses)",precio:2800,precioPromo:2000,msi:[3]},
-    {nombre:"Axilas Mujer (8 ses)",precio:1800,precioPromo:1200,msi:[]},
-    {nombre:"Manos Mujer (8 ses)",precio:1500,msi:[]},
-    {nombre:"Espalda Completa Mujer (8 ses)",precio:4800,precioPromo:3600,msi:[3]},
-    {nombre:"Media Espalda Mujer (8 ses)",precio:2500,msi:[3]},
-    {nombre:"Hombros Mujer (8 ses)",precio:2000,msi:[]},
-    {nombre:"Abdomen Mujer (8 ses)",precio:2250,precioPromo:1600,msi:[3]},
-    {nombre:"Línea de Abdomen Mujer (8 ses)",precio:1500,precioPromo:1000,msi:[]},
-    {nombre:"Pecho Mujer (8 ses)",precio:2250,msi:[3]},
-    {nombre:"Pezones Mujer (8 ses)",precio:1500,msi:[]},
+    {nombre:"Brazos Completos Mujer (8 ses)",precio:4000,precioPromo:3750,msi:[3]},
+    {nombre:"Medios Brazos Mujer (8 ses)",precio:2800,precioPromo:2500,msi:[3]},
+    {nombre:"Axilas Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
+    {nombre:"Manos Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
+    {nombre:"Espalda Completa Mujer (8 ses)",precio:4800,precioPromo:4500,msi:[3]},
+    {nombre:"Media Espalda Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
+    {nombre:"Hombros Mujer (8 ses)",precio:2000,precioPromo:1750,msi:[]},
+    {nombre:"Abdomen Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
+    {nombre:"Línea de Abdomen Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
+    {nombre:"Pecho Mujer (8 ses)",precio:2250,precioPromo:2500,msi:[3]},
+    {nombre:"Pezones Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
   ]},
   {categoria:"Láser Mujer - Rostro",items:[
-    {nombre:"Rostro Completo Mujer (8 ses)",precio:2750,precioPromo:2000,msi:[3]},
-    {nombre:"Medio Rostro Mujer (8 ses)",precio:2250,precioPromo:1600,msi:[3]},
-    {nombre:"Cuello Mujer (8 ses)",precio:1800,msi:[]},
-    {nombre:"Nuca Mujer (8 ses)",precio:1800,msi:[]},
-    {nombre:"Bigote Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Entreceja Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Frente Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Mejillas Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Mentón Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Patillas Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Nariz Mujer (8 ses)",precio:1250,msi:[]},
-    {nombre:"Orejas Mujer (8 ses)",precio:1250,msi:[]},
+    {nombre:"Rostro Completo Mujer (8 ses)",precio:2750,precioPromo:2500,msi:[3]},
+    {nombre:"Medio Rostro Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
+    {nombre:"Cuello Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
+    {nombre:"Nuca Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
+    {nombre:"Bigote Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Entreceja Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Frente Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Mejillas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Mentón Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Patillas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Nariz Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
+    {nombre:"Orejas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
   ]},
   {categoria:"Combos Láser Mujer",items:[
     {nombre:"Combo Abdomen Mujer (8 ses)",precio:4500,msi:[3]},
-    {nombre:"Combo Axilas Mujer (8 ses)",precio:5000,precioPromo:4500,msi:[3]},
+    {nombre:"Combo Axilas Mujer (8 ses)",precio:5000,precioPromo:5500,msi:[3]},
     {nombre:"Combo Glúteos Mujer (8 ses)",precio:5500,msi:[3]},
     {nombre:"Combo Bikini Mujer (8 ses)",precio:5000,precioPromo:4500,msi:[3]},
-    {nombre:"Combo Piernas Mujer (8 ses)",precio:6500,msi:[3,6]},
-    {nombre:"Combo Brazos Mujer (8 ses)",precio:5500,msi:[3]},
-    {nombre:"Combo Playa Básico Mujer (8 ses)",precio:6750,msi:[3,6]},
-    {nombre:"Combo Playa Sexy Mujer (8 ses)",precio:6750,msi:[3,6]},
-    {nombre:"Combo Playa French Mujer (8 ses)",precio:6750,msi:[3,6]},
-    {nombre:"Combo Playa Brazilian Mujer (8 ses)",precio:6750,msi:[3,6]},
-    {nombre:"Combo Sexy Básico Mujer (8 ses)",precio:7750,precioPromo:7500,msi:[3,6]},
-    {nombre:"Combo Sexy Sexy Mujer (8 ses)",precio:7750,precioPromo:7500,msi:[3,6]},
-    {nombre:"Combo Sexy French Mujer (8 ses)",precio:7750,precioPromo:7500,msi:[3,6]},
-    {nombre:"Combo Sexy Brazilian Mujer (8 ses)",precio:7750,precioPromo:7500,msi:[3,6]},
-    {nombre:"Combo Rostro Mujer (8 ses)",precio:8500,msi:[3,6]},
-    {nombre:"Cuerpo Completo Mujer (8 ses)",precio:10500,precioPromo:8500,msi:[3,6,9]},
+    {nombre:"Combo Piernas Mujer (8 ses)",precio:6500,precioPromo:7000,msi:[3,6]},
+    {nombre:"Combo Brazos Mujer (8 ses)",precio:5500,precioPromo:6000,msi:[3]},
+    {nombre:"Combo Playa Básico Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
+    {nombre:"Combo Playa Sexy Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
+    {nombre:"Combo Playa French Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
+    {nombre:"Combo Playa Brazilian Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
+    {nombre:"Combo Sexy Básico Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
+    {nombre:"Combo Sexy Sexy Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
+    {nombre:"Combo Sexy French Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
+    {nombre:"Combo Sexy Brazilian Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
+    {nombre:"Combo Rostro Mujer (8 ses)",precio:8500,precioPromo:9000,msi:[3,6]},
+    {nombre:"Cuerpo Completo Mujer (8 ses)",precio:10500,precioPromo:9500,msi:[3,6,9]},
   ]},
   {categoria:"Láser Hombre - Zona Íntima",items:[
     {nombre:"Classic Boy Bikini (8 ses)",precio:2750,msi:[3]},
@@ -2089,7 +2089,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[showMantForm,setShowMantForm]=useState(false);const[mantZona,setMantZona]=useState("");const[mantSesiones,setMantSesiones]=useState("");const[mantPrecio,setMantPrecio]=useState("");
   const[showZonasForm,setShowZonasForm]=useState(false);const[zonasSeleccionadas,setZonasSeleccionadas]=useState([]);const[zonasSesiones,setZonasSesiones]=useState("");const[zonasDuracion,setZonasDuracion]=useState("");const[zonasPrecio,setZonasPrecio]=useState("");const[zonasMsi,setZonasMsi]=useState("");const[zonasExtra,setZonasExtra]=useState([]);const[zonaExtraInput,setZonaExtraInput]=useState("");
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
-  const[usarPromo,setUsarPromo]=useState(false);
+  const[usarPromo,setUsarPromo]=useState(true);
   const getPrecio=(item)=>(usarPromo&&item.precioPromo!==undefined)?item.precioPromo:item.precio;
   const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
@@ -2345,13 +2345,13 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{padding:"12px 20px",borderBottom:`1px solid ${T.div}`,flexShrink:0,background:"transparent"}}>
             <div style={{display:"flex",gap:"6px",marginBottom:"10px",flexWrap:"wrap"}}>{FILTROS.map(f=><button key={f} onClick={()=>{setFiltro(f);if(f==="Mantenimiento"){setShowMantForm(true);setShowZonasForm(false);setShowCeraForm(false);}else if(f==="Personalizado"){setShowZonasForm(true);setShowMantForm(false);setShowCeraForm(false);}else if(f==="Cera"){setShowCeraForm(true);setShowMantForm(false);setShowZonasForm(false);}else{setShowMantForm(false);setShowZonasForm(false);setShowCeraForm(false);}}} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",transition:"all 0.15s",background:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):"transparent",borderColor:filtro===f?(f==="Mantenimiento"?"#f97316":f==="Personalizado"?"#7c3aed":f==="Cera"?"#0891b2":"#2721E8"):T.chipBdr,color:filtro===f?"#fff":T.muted}}>{f}</button>)}</div>
-            {["valle","admin","jaz","oriente"].includes(session.usuario)&&<div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
               <span style={{fontSize:"11px",color:T.sub,letterSpacing:"0.5px"}}>Modo precio:</span>
               <button onClick={()=>{setUsarPromo(!usarPromo);setCarrito([]);}} style={{display:"flex",alignItems:"center",gap:"6px",padding:"5px 14px",borderRadius:"20px",border:`1px solid ${usarPromo?"#f59e0b":"rgba(255,255,255,0.15)"}`,background:usarPromo?"rgba(245,158,11,0.15)":"transparent",color:usarPromo?"#f59e0b":T.muted,fontSize:"11px",fontWeight:600,cursor:"pointer",transition:"all 0.2s"}}>
-                {usarPromo?"🔥 Hot Sale":"Precio normal"}
+                {usarPromo?"🔥 Hot Summer":"Precio normal"}
               </button>
               {usarPromo&&<span style={{fontSize:"10px",color:"#f59e0b",opacity:0.8}}>Aplican precios de promoción</span>}
-            </div>}
+            </div>
             {filtro!=="Mantenimiento"&&filtro!=="Personalizado"&&filtro!=="Cera"&&<input className="inp" placeholder="Buscar servicio..." value={busq} onChange={e=>setBusq(e.target.value)} style={{padding:"8px 14px",fontSize:"12px"}}/>}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
