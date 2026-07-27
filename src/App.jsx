@@ -5085,6 +5085,9 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   const[loadingProy,setLoadingProy]=useState(false);
   const[comData,setComData]=useState([]);
   const[loadingCom,setLoadingCom]=useState(false);
+  const[comSubTab,setComSubTab]=useState("tabla");
+  const[comZettleTotal,setComZettleTotal]=useState(null);
+  const[loadingComZettle,setLoadingComZettle]=useState(false);
   const[moverFila,setMoverFila]=useState(null);
   const[buscarCom,setBuscarCom]=useState("");
   const[editMontoCom,setEditMontoCom]=useState(null);
@@ -5416,12 +5419,12 @@ Responde SOLO con JSON válido:
       };
       // Intentar con columnas extra; si falla, usar solo columnas base
       let r1,r2;
-      const q1Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).gte("fecha",desdeExt).lte("fecha",hasta).is("comision_periodo",null)).order("fecha").order("created_at");
-      const q2Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).eq("comision_periodo",periodo)).order("fecha").order("created_at");
+      const q1Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).gte("fecha",desdeExt).lte("fecha",hasta).is("comision_periodo",null).neq("fuente","zettle")).order("fecha").order("created_at");
+      const q2Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).eq("comision_periodo",periodo).neq("fuente","zettle")).order("fecha").order("created_at");
       [r1,r2]=await Promise.all([q1Full,q2Full]);
       if(r1.error||r2.error){
         // Fallback sin columnas extra (migraciones pendientes)
-        const q1=applyFiltroSuc(supabase.from("tickets").select(colsBase).gte("fecha",desdeExt).lte("fecha",hasta)).order("fecha").order("created_at");
+        const q1=applyFiltroSuc(supabase.from("tickets").select(colsBase).gte("fecha",desdeExt).lte("fecha",hasta).neq("fuente","zettle")).order("fecha").order("created_at");
         [r1]= await Promise.all([q1]);
         r2={data:[]};
       }
@@ -5432,7 +5435,21 @@ Responde SOLO con JSON válido:
     }catch(e){console.error("cargarComisiones:",e);}
     setLoadingCom(false);
   };
+  const cargarComparativoZettle=async()=>{
+    setLoadingComZettle(true);
+    try{
+      const{desde,hasta}=rango(periodo);
+      let q=supabase.from("tickets").select("total,sucursal_nombre,fecha").eq("fuente","zettle").gte("fecha",desde).lte("fecha",hasta);
+      if(esSocia||vista==="individual"||vista==="comisiones")q=q.ilike("sucursal_nombre",`%${sucSel}%`);
+      else if(sucursalesFiltro)q=q.in("sucursal_nombre",sucursalesFiltro);
+      const{data,error}=await q;
+      if(error)throw error;
+      setComZettleTotal({total:(data||[]).reduce((s,t)=>s+Number(t.total||0),0),count:(data||[]).length});
+    }catch(e){console.error("cargarComparativoZettle:",e);setComZettleTotal(null);}
+    setLoadingComZettle(false);
+  };
   useEffect(()=>{if(vista==="comisiones")cargarComisiones();},[vista,periodo,sucSel]);
+  useEffect(()=>{if(vista==="comisiones"&&comSubTab==="comparativo")cargarComparativoZettle();},[vista,comSubTab,periodo,sucSel]);
   const exportarComPDF=()=>{
     const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
     const r2=v=>Math.round(v*100)/100;
@@ -6085,11 +6102,44 @@ Responde SOLO con JSON válido:
           <div style={{fontSize:"11px",color:T.sub}}>{sucSel} · {etiq(periodo)}</div>
         </div>
         <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-          <input className="inp" placeholder="Buscar por nombre…" value={buscarCom} onChange={e=>setBuscarCom(e.target.value)} style={{width:"200px",fontSize:"12px"}}/>
-          <button className="btn-ghost" onClick={cargarComisiones} disabled={loadingCom} style={{fontSize:"12px"}}>↻ {loadingCom?"Cargando...":"Actualizar"}</button>
-          <button className="btn-blue" onClick={exportarComPDF} disabled={!comData.length} style={{fontSize:"12px"}}>⬇ Exportar PDF</button>
+          {comSubTab==="tabla"&&<input className="inp" placeholder="Buscar por nombre…" value={buscarCom} onChange={e=>setBuscarCom(e.target.value)} style={{width:"200px",fontSize:"12px"}}/>}
+          {comSubTab==="tabla"&&<button className="btn-ghost" onClick={cargarComisiones} disabled={loadingCom} style={{fontSize:"12px"}}>↻ {loadingCom?"Cargando...":"Actualizar"}</button>}
+          {comSubTab==="tabla"&&<button className="btn-blue" onClick={exportarComPDF} disabled={!comData.length} style={{fontSize:"12px"}}>⬇ Exportar PDF</button>}
+          {comSubTab==="comparativo"&&<button className="btn-ghost" onClick={cargarComparativoZettle} disabled={loadingComZettle} style={{fontSize:"12px"}}>↻ {loadingComZettle?"Cargando...":"Actualizar"}</button>}
         </div>
       </div>
+      <div style={{display:"flex",gap:"6px",marginBottom:"16px"}}>
+        {[["tabla","Plataforma"],["comparativo","Comparativo Zettle"]].map(([v,l])=><button key={v} onClick={()=>setComSubTab(v)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:600,cursor:"pointer",background:comSubTab===v?"rgba(39,33,232,0.15)":"transparent",borderColor:comSubTab===v?"#2721E8":T.dim,color:comSubTab===v?"#2721E8":T.muted}}>{l}</button>)}
+      </div>
+      {comSubTab==="comparativo"&&(()=>{
+        const totalPlataforma=comData.reduce((s,r)=>s+r.monto,0);
+        const totalZettle=comZettleTotal?.total??0;
+        const diff=totalZettle-totalPlataforma;
+        const pct=totalZettle>0?Math.round(totalPlataforma/totalZettle*100):0;
+        const color=p=>p>=90?"#10b981":p>=70?"#f59e0b":"#ef4444";
+        return<div>
+          <div style={{fontSize:"11px",color:T.sub,marginBottom:"14px"}}>Total mensual capturado en Zettle vs. total registrado en plataforma · {sucSel} · {etiq(periodo)}</div>
+          {loadingComZettle&&<div style={{textAlign:"center",padding:"30px",color:T.muted,fontSize:"13px"}}>Cargando datos de Zettle...</div>}
+          {!loadingComZettle&&<div style={{display:"grid",gridTemplateColumns:"1fr 140px 1fr",gap:"24px",alignItems:"center",padding:"18px 20px",background:light?"#f8f9ff":"rgba(39,33,232,0.06)",borderRadius:"12px",border:`1px solid ${T.div}`}}>
+            <div>
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"10px"}}>💳 ZETTLE (MES)</div>
+              <div style={{fontSize:"28px",fontWeight:800,color:"#49B8D3"}}>{fmt(totalZettle)}</div>
+              <div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>{comZettleTotal?.count??0} ventas</div>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:"22px",fontWeight:800,color:color(pct)}}>{pct}%</div>
+              <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>capturado</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"10px"}}>🖥 PLATAFORMA (MES)</div>
+              <div style={{fontSize:"28px",fontWeight:800,color:"#10b981"}}>{fmt(totalPlataforma)}</div>
+              <div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>{comData.length} registros</div>
+            </div>
+          </div>}
+          {!loadingComZettle&&diff>0&&<div style={{marginTop:"12px",fontSize:"12px",color:"#ef4444",fontWeight:600}}>Faltan {fmt(diff)} por capturar en plataforma este mes.</div>}
+        </div>;
+      })()}
+      {comSubTab==="tabla"&&<>
       {loadingCom&&<div style={{textAlign:"center",padding:"30px",color:T.muted,fontSize:"13px"}}>Cargando datos...</div>}
       {!loadingCom&&comData.length===0&&<div style={{textAlign:"center",padding:"30px",color:T.faint,fontSize:"13px"}}>Sin registros para este período</div>}
       {!loadingCom&&comData.length>0&&(()=>{const comFiltrado=buscarCom.trim()?comData.filter(r=>r.nombre.toLowerCase().includes(buscarCom.toLowerCase())):comData;return(<div style={{overflowX:"auto"}}>
@@ -6210,6 +6260,7 @@ Responde SOLO con JSON válido:
         </div>
       );
     })()}
+    </>}
     </div>}
 
     {/* Formulario gastos */}
