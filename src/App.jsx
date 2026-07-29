@@ -6779,6 +6779,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[ultimaActualizacion,setUltimaActualizacion]=useState(null);
   const[metaData,setMetaData]=useState(null);
   const[metaDiario,setMetaDiario]=useState([]); // [{fecha,sucursal,mensajes,spend}]
+  const[resumenCampanas,setResumenCampanas]=useState([]); // [{campania,adset,spend,mensajes,reparto}]
+  const[resumenCampanasMes,setResumenCampanasMes]=useState([]);
+  const[resumenSucAbierto,setResumenSucAbierto]=useState(null); // nombre de la sucursal expandida, o null
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
@@ -6855,10 +6858,39 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     setUltimaActualizacion(new Date());
     setLoadingDB(false);
   };
+  // ── Excepciones de reparto por sucursal para julio 2026 (ver ONBOARDING/notas de campañas) ──
+  // Ad set reusa el nombre genérico "CC | WOMEN | 5 sucursales" en varias campañas; solo el de
+  // "Láser CC | VALLE JULIO 2026" cambió de targeting a las 5 sucursales → solo Valle+Polanco a mitad de mes.
+  const JULIO26_MIXTO_ADSET_ID="6989629881967";
+  const JULIO26_MIXTO_CUTOFF="2026-07-21"; // último día con targeting a las 5 sucursales (cambio confirmado 21 jul 20:22 UTC)
+  // Ad sets literalmente llamados "Cire Valle - 7km - Parche": solo mencionan Valle, sin Polanco.
+  const JULIO26_VALLE_ADSET_IDS=new Set(["52519186761371","52517464244571"]);
+  const repartoCinco=()=>{const f={};SUCURSALES_NAMES.forEach(s=>f[s]=1/SUCURSALES_NAMES.length);return f;};
+  const fraccionSucursales=(r,fecha)=>{
+    const nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;
+    // Estos ids son únicos y solo existen en campañas de julio 2026, así que no dependen de `fecha`
+    if(JULIO26_VALLE_ADSET_IDS.has(String(r.adset_id)))return{Valle:1};
+    const esJulio2026=fecha&&fecha.slice(0,7)==="2026-07";
+    if(esJulio2026&&String(r.adset_id)===JULIO26_MIXTO_ADSET_ID)return fecha<=JULIO26_MIXTO_CUTOFF?repartoCinco():{Valle:0.5,Polanco:0.5};
+    if(comb.includes("coapa"))return{Coapa:1};
+    if(nm.includes("valle"))return{Valle:0.5,Polanco:0.5};
+    if(nm.includes("5 sucursales"))return repartoCinco();
+    const f={};SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))f[s]=1;});
+    return f;
+  };
+  // Descripción legible de cómo se repartió un adset, para el resumen colapsable
+  const describirReparto=(r,fecha)=>{
+    const frac=fraccionSucursales(r,fecha);
+    const entries=Object.entries(frac);
+    if(entries.length===0)return"Sin asignar";
+    if(entries.length===1)return entries[0][0];
+    if(entries.length===SUCURSALES_NAMES.length)return"5 sucursales (÷5)";
+    return entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(" + ");
+  };
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
     try{
-      const since=desde,until=hasta,fields="campaign_name,adset_name,spend,actions,impressions,clicks,reach";
+      const since=desde,until=hasta,fields="campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
       const ahora=new Date();
       const curYM=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
       const curMonthStart=`${curYM}-01`;
@@ -6884,19 +6916,49 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
       let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
-      const n5=SUCURSALES_NAMES.length;
-      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(nm.includes("valle")){pS["Valle"].spend+=sp/2;pS["Valle"].mensajes+=ms/2;pS["Polanco"].spend+=sp/2;pS["Polanco"].mensajes+=ms/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5;pS[s].mensajes+=ms/n5;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
-      setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
+      const resumen=[];let mixtoEntry=null,mixtoFallback=null;
+      rows.forEach(r=>{
+        const sp=Number(r.spend||0),ms=getM(r.actions),im=Number(r.impressions||0),cl=Number(r.clicks||0),al=Number(r.reach||0);
+        tS+=sp;tM+=ms;tI+=im;tC+=cl;tA+=al;
+        const esMixto=String(r.adset_id)===JULIO26_MIXTO_ADSET_ID;
+        const entry={campania:r.campaign_name,adset:r.adset_name,spend:sp,mensajes:ms,reparto:esMixto?"5 sucursales hasta 21 jul, luego Valle+Polanco":describirReparto(r,null),porSucursal:{}};
+        resumen.push(entry);
+        if(esMixto){mixtoEntry=entry;mixtoFallback={sp,ms};return;} // se reparte por día más abajo con datos diarios (el targeting cambió a mitad de mes)
+        const frac=fraccionSucursales(r,null);
+        Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
+      });
       let allDiarioData=[...(jsonDiario.data||[])];
       let nextUrl=jsonDiario.paging?.next;
       while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
+      const mixtoDiario=allDiarioData.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
+      if(jsonDiario.error||mixtoDiario.length===0){
+        // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
+        // para no perder el gasto de este ad set, en vez de dejarlo fuera del reparto por sucursal.
+        if(mixtoFallback){
+          const frac=repartoCinco();
+          Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=mixtoFallback.sp*f;pS[s].mensajes+=mixtoFallback.ms*f;});
+          if(mixtoEntry){mixtoEntry.porSucursal=frac;mixtoEntry.reparto="5 sucursales (reparto diario no disponible)";}
+        }
+      }else{
+        // Contribución diaria del adset con targeting mixto (cambió a mitad de julio 2026)
+        mixtoDiario.forEach(r=>{
+          const sp=Number(r.spend||0),ms=getM(r.actions);
+          const frac=fraccionSucursales(r,r.date_start);
+          Object.entries(frac).forEach(([s,f])=>{
+            pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;
+            if(mixtoEntry){mixtoEntry.porSucursal[s]=mixtoEntry.porSucursal[s]||{spend:0,mensajes:0};mixtoEntry.porSucursal[s].spend+=sp*f;mixtoEntry.porSucursal[s].mensajes+=ms*f;}
+          });
+        });
+      }
+      setMetaData({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
+      setResumenCampanas(resumen);
       const diario=[];
       allDiarioData.forEach(r=>{
-        const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;
-        if(comb.includes("coapa")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Coapa",mensajes:ms,spend:sp});}}
-        else if(nm.includes("valle")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Valle",mensajes:Math.round(ms/2),spend:sp/2});diario.push({fecha,sucursal:"Polanco",mensajes:Math.round(ms/2),spend:sp/2});}}
-        else if(nm.includes("5 sucursales")){if(ms>0||sp>0){SUCURSALES_NAMES.forEach(suc=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms/n5),spend:sp/n5});});}}
-        else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&(ms>0||sp>0)){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp})}});}
+        const fecha=r.date_start;const ms=getM(r.actions);const sp=Number(r.spend||0);
+        if(ms>0||sp>0){
+          const frac=fraccionSucursales(r,fecha);
+          Object.entries(frac).forEach(([suc,f])=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms*f),spend:sp*f});});
+        }
       });
       setMetaDiario(diario);
       // Guardar datos diarios históricos en caché para futuras consultas
@@ -6926,6 +6988,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           setMetaDataMes({spend:Number(todas.spend),mensajes:Number(todas.mensajes),impresiones:Number(todas.impresiones),clics:Number(todas.clics),alcance:Number(todas.alcance),porSucursal:pS});
           const{data:diarioCached}=await supabase.from("meta_diario").select("*").eq("mes",ym);
           setMetaDiarioMes((diarioCached||[]).map(r=>({fecha:r.fecha,sucursal:r.sucursal,mensajes:Number(r.mensajes),spend:Number(r.spend)})));
+          setResumenCampanasMes([]); // el detalle por adset solo está disponible al leer en vivo de Meta
           setLoadingMetaMes(false);return;
         }
       }
@@ -6933,7 +6996,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const[y,m]=ym.split("-").map(Number);
       const since=`${ym}-01`;
       const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
-      const fields="campaign_name,adset_name,spend,actions,impressions,clicks,reach";
+      const fields="campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
       const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
       const[res,resD]=await Promise.all([fetch(url),fetch(urlD)]);
@@ -6941,8 +7004,41 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
       const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
-      const n5m=SUCURSALES_NAMES.length;
-      rows.forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;tI+=Number(r.impressions||0);tC+=Number(r.clicks||0);tA+=Number(r.reach||0);if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(nm.includes("valle")){pS["Valle"].spend+=sp/2;pS["Valle"].mensajes+=ms/2;pS["Polanco"].spend+=sp/2;pS["Polanco"].mensajes+=ms/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5m;pS[s].mensajes+=ms/n5m;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
+      const resumenMes=[];let mixtoEntryMes=null,mixtoFallback=null;
+      rows.forEach(r=>{
+        const sp=Number(r.spend||0),ms=getMetaM(r.actions);
+        tS+=sp;tM+=ms;tI+=Number(r.impressions||0);tC+=Number(r.clicks||0);tA+=Number(r.reach||0);
+        const esMixto=String(r.adset_id)===JULIO26_MIXTO_ADSET_ID;
+        const entry={campania:r.campaign_name,adset:r.adset_name,spend:sp,mensajes:ms,reparto:esMixto?"5 sucursales hasta 21 jul, luego Valle+Polanco":describirReparto(r,null),porSucursal:{}};
+        resumenMes.push(entry);
+        if(esMixto){mixtoEntryMes=entry;mixtoFallback={sp,ms};return;} // se reparte por día más abajo con datos diarios (el targeting cambió a mitad de mes)
+        const frac=fraccionSucursales(r,null);
+        Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
+      });
+      // Datos diarios
+      let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
+      while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
+      const mixtoDiario=allD.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
+      if(jsonD.error||mixtoDiario.length===0){
+        // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
+        // para no perder el gasto de este ad set, en vez de dejarlo fuera del reparto por sucursal.
+        if(mixtoFallback){
+          const frac=repartoCinco();
+          Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=mixtoFallback.sp*f;pS[s].mensajes+=mixtoFallback.ms*f;});
+          if(mixtoEntryMes){mixtoEntryMes.porSucursal=frac;mixtoEntryMes.reparto="5 sucursales (reparto diario no disponible)";}
+        }
+      }else{
+        // Contribución diaria del adset con targeting mixto (cambió a mitad de julio 2026)
+        mixtoDiario.forEach(r=>{
+          const sp=Number(r.spend||0),ms=getMetaM(r.actions);
+          const frac=fraccionSucursales(r,r.date_start);
+          Object.entries(frac).forEach(([s,f])=>{
+            pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;
+            if(mixtoEntryMes){mixtoEntryMes.porSucursal[s]=mixtoEntryMes.porSucursal[s]||{spend:0,mensajes:0};mixtoEntryMes.porSucursal[s].spend+=sp*f;mixtoEntryMes.porSucursal[s].mensajes+=ms*f;}
+          });
+        });
+      }
+      setResumenCampanasMes(resumenMes);
       setMetaDataMes({spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,porSucursal:pS});
       // Guardar en caché
       const now=new Date().toISOString();
@@ -6950,11 +7046,14 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {mes:ym,sucursal:"Todas",spend:tS,mensajes:tM,impresiones:tI,clics:tC,alcance:tA,updated_at:now},
         ...SUCURSALES_NAMES.map(s=>({mes:ym,sucursal:s,spend:pS[s].spend,mensajes:pS[s].mensajes,impresiones:0,clics:0,alcance:0,updated_at:now}))
       ],{onConflict:"mes,sucursal"});
-      // Datos diarios
-      let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
-      while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
       const diario=[];
-      allD.forEach(r=>{const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;if(comb.includes("coapa")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Coapa",mensajes:ms,spend:sp});}}else if(nm.includes("valle")){if(ms>0||sp>0){diario.push({fecha,sucursal:"Valle",mensajes:Math.round(ms/2),spend:sp/2});diario.push({fecha,sucursal:"Polanco",mensajes:Math.round(ms/2),spend:sp/2});}}else if(nm.includes("5 sucursales")){if(ms>0||sp>0){SUCURSALES_NAMES.forEach(suc=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms/n5m),spend:sp/n5m});});}}else{SUCURSALES_NAMES.forEach(suc=>{if(nm.includes(suc.toLowerCase())&&(ms>0||sp>0)){diario.push({fecha,sucursal:suc,mensajes:ms,spend:sp});}});}});
+      allD.forEach(r=>{
+        const fecha=r.date_start;const ms=getMetaM(r.actions);const sp=Number(r.spend||0);
+        if(ms>0||sp>0){
+          const frac=fraccionSucursales(r,fecha);
+          Object.entries(frac).forEach(([suc,f])=>{diario.push({fecha,sucursal:suc,mensajes:Math.round(ms*f),spend:sp*f});});
+        }
+      });
       setMetaDiarioMes(diario);
       // Guardar datos diarios en caché para meses pasados
       if(isPast&&diario.length>0){
@@ -6986,13 +7085,40 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
         // Fetch desde Meta API (mes actual o caché faltante)
         try{
-          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
           const res=await fetch(url);const json=await res.json();
           if(json.error)return{ym,label,spend:0,mensajes:0,porSucursal:{}};
           const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
-          const n5h=SUCURSALES_NAMES.length;
-          let tS=0,tM=0;
-          (json.data||[]).forEach(r=>{const sp=Number(r.spend||0),ms=getMetaM(r.actions),nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;tS+=sp;tM+=ms;if(comb.includes("coapa")){pS["Coapa"].spend+=sp;pS["Coapa"].mensajes+=ms;}else if(nm.includes("valle")){pS["Valle"].spend+=sp/2;pS["Valle"].mensajes+=ms/2;pS["Polanco"].spend+=sp/2;pS["Polanco"].mensajes+=ms/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{pS[s].spend+=sp/n5h;pS[s].mensajes+=ms/n5h;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase())){pS[s].spend+=sp;pS[s].mensajes+=ms;}});}});
+          let tS=0,tM=0,mixtoFallback=null;
+          (json.data||[]).forEach(r=>{
+            const sp=Number(r.spend||0),ms=getMetaM(r.actions);
+            tS+=sp;tM+=ms;
+            if(String(r.adset_id)===JULIO26_MIXTO_ADSET_ID){mixtoFallback={sp,ms};return;} // se reparte por día abajo
+            const frac=fraccionSucursales(r,null);
+            Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;});
+          });
+          // El adset con targeting mixto cambió a mitad de julio 2026: se reparte por día
+          if(ym==="2026-07"&&mixtoFallback){
+            let mixtoOK=false;
+            try{
+              const urlMixto=`https://graph.facebook.com/v19.0/${JULIO26_MIXTO_ADSET_ID}/insights?fields=spend,actions&time_range={"since":"${since}","until":"${until}"}&time_increment=1&limit=100&access_token=${META_TOKEN}`;
+              const resMixto=await fetch(urlMixto);const jsonMixto=await resMixto.json();
+              const diasMixto=jsonMixto.data||[];
+              if(!jsonMixto.error&&diasMixto.length>0){
+                mixtoOK=true;
+                diasMixto.forEach(r=>{
+                  const sp=Number(r.spend||0),ms=getMetaM(r.actions);
+                  const frac=fraccionSucursales({adset_id:JULIO26_MIXTO_ADSET_ID},r.date_start);
+                  Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;});
+                });
+              }
+            }catch{}
+            if(!mixtoOK){
+              // La API de Meta falló: usar reparto de respaldo (5 sucursales) para no perder el gasto
+              const frac=repartoCinco();
+              Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=mixtoFallback.sp*f;pS[s].mensajes+=mixtoFallback.ms*f;});
+            }
+          }
           // Guardar en caché
           const now=new Date().toISOString();
           supabase.from("meta_mensual").upsert([
@@ -7131,6 +7257,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const metaDiarioDisplay=isCustomPeriod?metaDiarioF:metaDiarioMesF;
   const loadingMetaDisplay=isCustomPeriod?loadingMeta:loadingMetaMes;
   const metaErrorDisplay=isCustomPeriod?metaError:metaErrorMes;
+  const resumenCampanasDisplay=isCustomPeriod?resumenCampanas:resumenCampanasMes;
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const esDuenaGeneral=!!sucursalesPropias;
@@ -7468,6 +7595,35 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                   <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
                 </div>)}
               </div>
+              {/* Resumen colapsable por sucursal: qué campañas/ad sets aportaron a cada una */}
+              {resumenCampanasDisplay.length>0&&(()=>{
+                const sucursalesConDatos=porSucMes.filter(s=>s.spend>0||s.mensajes>0).sort((a,b)=>b.spend-a.spend);
+                return<div className="glass" style={{overflow:"hidden"}}>
+                  <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`}}><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>DETALLE DE CAMPAÑAS Y AD SETS POR SUCURSAL</div></div>
+                  {sucursalesConDatos.map(s=>{
+                    const aportes=resumenCampanasDisplay.filter(r=>r.porSucursal?.[s.nombre]).map(r=>({...r,...r.porSucursal[s.nombre]})).sort((a,b)=>b.spend-a.spend);
+                    const abierta=resumenSucAbierto===s.nombre;
+                    return<div key={s.nombre} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                      <div onClick={()=>setResumenSucAbierto(abierta?null:s.nombre)} style={{padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                        <span style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",fontWeight:600}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/>{s.nombre}<span style={{fontSize:"11px",color:T.faint,fontWeight:400}}>· {aportes.length} ad sets</span></span>
+                        <span style={{display:"flex",alignItems:"center",gap:"14px"}}>
+                          <span style={{fontSize:"12px",color:T.sub}}>{fmtN(s.mensajes)} msgs</span>
+                          <span style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{fmt(s.spend)}</span>
+                          <span style={{fontSize:"12px",color:T.muted,transform:abierta?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▾</span>
+                        </span>
+                      </div>
+                      {abierta&&<div style={{padding:"0 20px 12px 32px"}}>
+                        {aportes.map((a,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px 90px",gap:"10px",padding:"7px 0",fontSize:"12px",borderTop:i>0?"1px solid rgba(255,255,255,0.03)":"none"}}>
+                          <span style={{color:T.muted}}>{a.campania}<br/><span style={{fontSize:"11px",color:T.faint}}>{a.adset}</span></span>
+                          <span style={{color:T.sub,fontSize:"11px"}}>{a.reparto}</span>
+                          <span style={{textAlign:"right"}}>{fmtN(Math.round(a.mensajes))} msgs</span>
+                          <span style={{textAlign:"right",color:"#f97316",fontWeight:600}}>{fmt(a.spend)}</span>
+                        </div>)}
+                      </div>}
+                    </div>;
+                  })}
+                </div>;
+              })()}
               {/* Gráfica diaria */}
               {metaDiarioDisplay.length>0&&(()=>{
                 const selSt2={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:light?"#1a1a2e":"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"};
