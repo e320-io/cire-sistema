@@ -1964,6 +1964,7 @@ function PreventaView({session,isAdmin,onVerFicha}){
   const[liqTerminal,setLiqTerminal]=useState("");
   const[liqMsi,setLiqMsi]=useState(0);
   const[liqTicket,setLiqTicket]=useState("");
+  const[liqMonto,setLiqMonto]=useState("");
   const[liqSaving,setLiqSaving]=useState(false);
   const[terminalesLiq,setTerminalesLiq]=useState([]);
   const[statusFiltro,setStatusFiltro]=useState("activas");
@@ -1973,17 +1974,19 @@ function PreventaView({session,isAdmin,onVerFicha}){
   const estaVencida=(p)=>p.preventa_vencida===true;
   const esCompletada=(p)=>p.preventa_liquidado===true&&!p.preventa_vencida;
   const fechaLimitePasada=(p)=>p.preventa_fecha_limite&&hoy()>p.preventa_fecha_limite&&!p.preventa_vencida&&!p.preventa_liquidado;
-  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");};
+  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");setLiqMonto(String(p.preventa_pendiente||0));};
   const liquidar=async()=>{
     if(!liquidando)return;
     if(!liqTicket.trim()){alert("El número de ticket Zettle es obligatorio.");return;}
     if(!liqMetodo){alert("Selecciona el método de pago.");return;}
+    const monto=Number(liqMonto);
+    if(!monto||monto<=0){alert("Ingresa el monto cobrado.");return;}
     setLiqSaving(true);
     try{
       const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
       const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session.usuario}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:[liquidando.servicio],total:monto,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session.usuario}]);
       await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
       setLiquidando(null);cargar();
     }catch(e){console.error(e);alert("Error: "+e.message);}
@@ -2037,10 +2040,14 @@ function PreventaView({session,isAdmin,onVerFicha}){
       </div>}
       {liquidando&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>LIQUIDAR PREVENTA</div>
-        <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"16px"}}>
+        <div style={{padding:"12px",background:T.cardBg,border:`1px solid ${T.cardBdr}`,borderRadius:"10px",marginBottom:"16px"}}>
           <div style={{fontSize:"13px",fontWeight:700,marginBottom:"4px"}}>{liquidando.clienta_nombre}</div>
           <div style={{fontSize:"12px",color:T.muted,marginBottom:"8px"}}>{liquidando.servicio}</div>
-          <div style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>Cobrar: {fmt(liquidando.preventa_pendiente)}</div>
+          <div style={{fontSize:"9px",color:T.sub,marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>MONTO A COBRAR</div>
+          <div style={{display:"flex",alignItems:"center",gap:"4px"}}>
+            <span style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>$</span>
+            <input className="inp" type="number" value={liqMonto} onChange={e=>setLiqMonto(e.target.value)} style={{fontSize:"16px",fontWeight:700,color:"#f97316",padding:"6px 8px",width:"140px"}}/>
+          </div>
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
           {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
@@ -6655,6 +6662,7 @@ function PreventaDashboard({sucursalesFiltro,session}){
   const[liqTerminal,setLiqTerminal]=useState("");
   const[liqMsi,setLiqMsi]=useState(0);
   const[liqTicket,setLiqTicket]=useState("");
+  const[liqMonto,setLiqMonto]=useState("");
   const[liqSaving,setLiqSaving]=useState(false);
   const[terminalesMap,setTerminalesMap]=useState({});
   const[sucFiltro,setSucFiltro]=useState("Todas");
@@ -6671,16 +6679,18 @@ function PreventaDashboard({sucursalesFiltro,session}){
   const estaVencida=(p)=>p.preventa_vencida===true;
   const esCompletada=(p)=>p.preventa_liquidado===true&&!p.preventa_vencida;
   const fechaLimitePasada=(p)=>p.preventa_fecha_limite&&hoy()>p.preventa_fecha_limite&&!p.preventa_vencida&&!p.preventa_liquidado;
-  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");};
+  const abrirLiquidar=(p)=>{setLiquidando(p);setLiqMetodo("");setLiqTerminal("");setLiqMsi(0);setLiqTicket("");setLiqMonto(String(p.preventa_pendiente||0));};
   const liquidar=async()=>{
     if(!liquidando)return;
     if(!liqTicket.trim()||!liqMetodo)return;
+    const monto=Number(liqMonto);
+    if(!monto||monto<=0){alert("Ingresa el monto cobrado.");return;}
     setLiqSaving(true);
     try{
       const mpago=liqMetodo+(liqMsi>0?` ${liqMsi}MSI`:"")+( ["Débito","Crédito"].includes(liqMetodo)&&liqTerminal?` · ${liqTerminal}`:"");
       const tzVal=liqTicket.trim().startsWith("#")?liqTicket.trim():"#"+liqTicket.trim();
       const tNum=await nextTicketNum();
-      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:liquidando.sucursal_id,sucursal_nombre:liquidando.sucursal_nombre,servicios:[liquidando.servicio],total:liquidando.preventa_pendiente,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session?.usuario}]);
+      await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:liquidando.sucursal_id,sucursal_nombre:liquidando.sucursal_nombre,servicios:[liquidando.servicio],total:monto,metodo_pago:`Liquidación Preventa Hot Sale · ${mpago}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:liquidando.clienta_id||null,clienta_nombre:liquidando.clienta_nombre||null,ticket_zettle:tzVal,usuario:session?.usuario}]);
       await supabase.from("paquetes").update({preventa_liquidado:true,preventa_pendiente:0}).eq("id",liquidando.id);
       setLiquidando(null);cargar();
     }catch(e){console.error(e);alert("Error: "+e.message);}
@@ -6742,10 +6752,14 @@ function PreventaDashboard({sucursalesFiltro,session}){
       </div>}
       {liquidando&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px"}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>LIQUIDAR PREVENTA · {liquidando.sucursal_nombre}</div>
-        <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px",marginBottom:"16px"}}>
+        <div style={{padding:"12px",background:T.cardBg,border:`1px solid ${T.cardBdr}`,borderRadius:"10px",marginBottom:"16px"}}>
           <div style={{fontSize:"13px",fontWeight:700,marginBottom:"4px"}}>{liquidando.clienta_nombre}</div>
           <div style={{fontSize:"12px",color:T.muted,marginBottom:"8px"}}>{liquidando.servicio}</div>
-          <div style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>Cobrar: {fmt(liquidando.preventa_pendiente)}</div>
+          <div style={{fontSize:"9px",color:T.sub,marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>MONTO A COBRAR</div>
+          <div style={{display:"flex",alignItems:"center",gap:"4px"}}>
+            <span style={{fontSize:"16px",fontWeight:700,color:"#f97316"}}>$</span>
+            <input className="inp" type="number" value={liqMonto} onChange={e=>setLiqMonto(e.target.value)} style={{fontSize:"16px",fontWeight:700,color:"#f97316",padding:"6px 8px",width:"140px"}}/>
+          </div>
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
           {["Efectivo","Débito","Crédito","Transferencia","Depósito","Link de pago"].map(m=>(
