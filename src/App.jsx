@@ -5149,7 +5149,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
   const cargarHistorial=async()=>{
     setLoadingHistorial(true);
-    const meses=Array.from({length:24},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i-1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}).reverse();
+    const hoy=new Date();
+    const meses=Array.from({length:24},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i-1,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}).reverse();
     const desde=`${meses[0]}-01`;
     const[hy,hm]=meses[23].split("-").map(Number);
     const hasta=new Date(hy,hm,0).toISOString().slice(0,10);
