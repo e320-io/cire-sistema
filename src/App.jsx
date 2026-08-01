@@ -393,6 +393,18 @@ const CATALOGO=[
   {categoria:"Aparatología",items:[
     {nombre:"Aparatología 1 zona",precio:649,msi:[]},
   ]},
+  {categoria:"Productos",items:[
+    {nombre:"Inhibidor de vello Beautive",precio:500,msi:[]},
+    {nombre:"Exfoliante corporal Beautive",precio:500,msi:[]},
+    {nombre:"Moisten Ácido Hialurónico",precio:1200,msi:[]},
+    {nombre:"Moisten PDRN",precio:1200,msi:[]},
+    {nombre:"Depilsense Inhibidor de Vello Aspid Pro",precio:959,msi:[]},
+    {nombre:"Talco Líquido Despigmentante Aspid Pro",precio:819,msi:[]},
+    {nombre:"Moisten Crema",precio:1400,msi:[]},
+  ]},
+  {categoria:"Paquetes Especiales",items:[
+    {nombre:"Paquete de Bienestar (Masaje Relajante + Facial Skin Repair, 2h)",precio:1500,msi:[],sucursales:["Oriente","Polanco"]},
+  ]},
 ];
 const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Skin Renew",duracion:60,color:"#E67C73"},{id:"facial_full",label:"Skin Repair/Reset",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"Cire Lift",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"},{id:"valoracion",label:"Valoración",duracion:30,color:"#EAB308"}];
 // Tiempos reales por zona según tabla de tiempos (minutos)
@@ -446,9 +458,9 @@ const colorCita=(c)=>{
 const detectTipo=(n)=>{const l=(n||"").toLowerCase();if(l.includes("skin renew")||l.includes("baby"))return TIPOS_SVC[1];if(l.includes("skin repair")||l.includes("skin reset")||l.includes("fullface")||l.includes("facial"))return TIPOS_SVC[2];if(l.includes("cire lift")||l.includes("hifu"))return TIPOS_SVC[4];if(l.includes("post"))return TIPOS_SVC[5];if(l.includes("moldeo")||l.includes("cire body")||l.includes("cire sculpt")||l.includes("corporal")||l.includes("anticel")||l.includes("aparatol"))return TIPOS_SVC[3];if(l.includes("cera"))return TIPOS_SVC[6];if(l.includes("valor"))return TIPOS_SVC[7];return TIPOS_SVC[0];};
 const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);const f=hh*60+mm+dur;return`${String(Math.floor(f/60)).padStart(2,"0")}:${String(f%60).padStart(2,"0")}`;};
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
-const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","HIFU","Corporales","Mantenimiento","Personalizado","Cera"];
+const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","HIFU","Corporales","Mantenimiento","Personalizado","Cera","Productos"];
 const ZONAS_CERA=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","Ingles"];
-const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();const esCera=n.startsWith("cera ");if(f==="Cera")return esCera;if(esCera)return false;if(f==="Combos")return n.includes("combo")||n.includes("cuerpo completo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas")||n.includes("cuello")||n.includes("nuca")||n.includes("barba")||n.includes("contorno")||n.includes("mejillas")||n.includes("entreceja")||n.includes("frente")||n.includes("nariz")||n.includes("orejas")||n.includes("mentón");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","glúteos","zona interg","hombros","manos","pezones"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","coxis","pies"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french boy","sexy bikini","crack"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt","cire-na"].some(k=>n.includes(k));return true;};
+const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();const esCera=n.startsWith("cera ");if(f==="Cera")return esCera;if(esCera)return false;if(f==="Combos")return n.includes("combo")||n.includes("cuerpo completo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas")||n.includes("cuello")||n.includes("nuca")||n.includes("barba")||n.includes("contorno")||n.includes("mejillas")||n.includes("entreceja")||n.includes("frente")||n.includes("nariz")||n.includes("orejas")||n.includes("mentón");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","glúteos","zona interg","hombros","manos","pezones"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","coxis","pies"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french boy","sexy bikini","crack"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt","cire-na"].some(k=>n.includes(k));if(f==="Productos")return item.categoria==="Productos"||item.categoria==="Paquetes Especiales";return true;};
 const MESES_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Pezones","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
 const ZONAS_PACK=["Cuerpo Completo","Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Coxis","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico"];
@@ -2098,14 +2110,15 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const[usarPromo,setUsarPromo]=useState(true);
   const getPrecio=(item)=>(usarPromo&&item.precioPromo!==undefined)?item.precioPromo:item.precio;
-  const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria})));
+  const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria}))).filter(i=>!i.sucursales||i.sucursales.includes(session.nombre));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
   const sel=(item)=>{carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,precio:getPrecio(item),qty:1}]);};
   const total=carrito.reduce((s,i)=>s+i.precio,0);const totalCD=Math.round(total*(1-descuento/100));const msiD=[...new Set(carrito.flatMap(i=>i.msi||[]))].sort((a,b)=>a-b);
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
-  const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&(aOk||sinFechaOpt);
+  const soloProductos=carrito.length>0&&carrito.every(i=>i.categoria==="Productos");
+  const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&(soloProductos||aOk||sinFechaOpt);
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
   const fechaNacISO=nacAnio&&nacMes&&nacDia?`${nacAnio}-${nacMes}-${nacDia}`:null;
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
@@ -2132,6 +2145,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     for(const item of carrito){
+      if(item.categoria==="Productos")continue;
       let pId=null;
       if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
@@ -2160,6 +2174,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
     for(let idx=0;idx<carrito.length;idx++){
       const item=carrito[idx];const esPrimero=idx===0;
+      if(item.categoria==="Productos")continue;
       let pId=null;
       {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
@@ -2177,6 +2192,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     for(const item of carrito){
+      if(item.categoria==="Productos")continue;
       let pId=null;
       {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
@@ -2206,6 +2222,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       const tId=tD?.[0]?.id;
       for(let idx=0;idx<carrito.length;idx++){
         const item=carrito[idx];const esPrimero=idx===0;
+        if(item.categoria==="Productos")continue;
         let pId=null;
         {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
           const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true,es_preventa:true,preventa_monto_inicial:montoInicial,preventa_pendiente:montoPendiente,preventa_fecha_limite:"2025-05-31"}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
@@ -2475,7 +2492,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               </div>}
             </div>}
             {/* 3 Agendar */}
-            {pOk&&dOk&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(aOk||sinFechaOpt)?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(aOk||sinFechaOpt)?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(aOk||sinFechaOpt)?"#fff":T.faint,flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
+            {pOk&&dOk&&!soloProductos&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(aOk||sinFechaOpt)?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(aOk||sinFechaOpt)?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(aOk||sinFechaOpt)?"#fff":T.faint,flexShrink:0}}>3</div>AGENDAR 1ª SESIÓN</div>
               {!sinFechaOpt&&<input type="date" className="inp" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setHoraCita("");if(e.target.value)setShowAgenda(true);}} style={{fontSize:"13px",padding:"10px 14px",colorScheme:"light dark",marginBottom:"6px",cursor:"pointer"}}/>}
               {!sinFechaOpt&&fechaCita&&!esDom&&<div>
                 <button className="btn-ghost" style={{width:"100%",fontSize:"11px",marginBottom:"6px",borderColor:showAgenda?"#2721E8":"rgba(255,255,255,0.1)",color:showAgenda?(light?"#2721E8":"#fff"):T.faint}} onClick={()=>setShowAgenda(!showAgenda)}>{showAgenda?"📅 Viendo agenda":"📅 Ver agenda del día"}</button>
@@ -2487,7 +2504,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               {sinFechaOpt&&<div style={{padding:"8px 10px",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:"8px",marginTop:"6px",fontSize:"11px",color:"#f59e0b"}}>La sesión quedará pagada pero sin fecha. Podrás agendarla desde su ficha cuando regrese.</div>}
             </div>}
             {/* 4 Anticipo / Preventa */}
-            {(aOk||sinFechaOpt)&&!esDom&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(preventaOpt!=="no"||anticoOpt!=="no")?"#fff":T.faint,flexShrink:0}}>4</div>PAGO INICIAL</div>
+            {(aOk||sinFechaOpt)&&!esDom&&!soloProductos&&<div><div style={{fontSize:"9px",letterSpacing:"1px",color:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":T.faint,marginBottom:"6px",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"16px",height:"16px",borderRadius:"50%",background:(preventaOpt!=="no"||anticoOpt!=="no")?"#10b981":"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",fontWeight:700,color:(preventaOpt!=="no"||anticoOpt!=="no")?"#fff":T.faint,flexShrink:0}}>4</div>PAGO INICIAL</div>
               <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
                 {/* Preventa Hot Sale options */}
                 <div style={{fontSize:"9px",letterSpacing:"1px",color:"#f97316",marginBottom:"3px",fontWeight:600}}>🔥 PREVENTA HOT SALE</div>
@@ -2539,8 +2556,8 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               :anticoOpt!=="no"
               ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":anticoOpt==="otra"&&montoAnticipoCustom?`✓ Registrar anticipo $${montoAnticipoCustom} + cita`:"✓ Registrar anticipo $250 + cita"}</button></div>
               :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-                <button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>
-                <button className="btn-ghost" style={{width:"100%",padding:"10px",fontSize:"12px",color:T.muted}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(total)} ahora</button>
+                {!soloProductos&&<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>}
+                <button className={soloProductos?"btn-blue":"btn-ghost"} style={{width:"100%",padding:soloProductos?"13px":"10px",fontSize:soloProductos?"14px":"12px",color:soloProductos?undefined:T.muted}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(total)} ahora</button>
               </div>}
           </div>}
         </div>
@@ -2551,7 +2568,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",flexDirection:"column",gap:"12px",marginBottom:"18px"}}>
           <div style={{padding:"12px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
             {carrito.map((item,idx)=><div key={idx} style={{fontSize:"12px",fontWeight:600,marginBottom:idx<carrito.length-1?"4px":"0"}}>{item.nombre} — {fmt(item.precio)}</div>)}
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div>{sinFechaOpt?<div style={{fontSize:"11px",color:"#f59e0b"}}>🗓 Sin fecha — se agendará desde su ficha</div>:<div style={{fontSize:"11px",color:T.muted}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>}
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div>{soloProductos?<div style={{fontSize:"11px",color:T.muted}}>🛍 Venta de producto — sin cita</div>:sinFechaOpt?<div style={{fontSize:"11px",color:"#f59e0b"}}>🗓 Sin fecha — se agendará desde su ficha</div>:<div style={{fontSize:"11px",color:T.muted}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>}
           </div>
           <div style={{padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"10px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}</div>
           {/* Multi-pago */}
@@ -2589,7 +2606,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
         <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
       </div></div>}
 
-      {showExito&&<div className="overlay" style={{zIndex:300}}><div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div><div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ticket creado!</div><div style={{fontSize:"13px",color:T.muted}}>{tipoTicket==="recompra"?"Recompra":"Ficha"} de {nombreFinal} + cita agendada</div></div></div>}
+      {showExito&&<div className="overlay" style={{zIndex:300}}><div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div><div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ticket creado!</div><div style={{fontSize:"13px",color:T.muted}}>{tipoTicket==="recompra"?"Recompra":"Ficha"} de {nombreFinal}{soloProductos?"":" + cita agendada"}</div></div></div>}
     </div>
   );
 }
