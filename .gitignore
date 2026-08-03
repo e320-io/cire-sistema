@@ -4,3 +4,9 @@ node_modules
 .claude/
 dist/
 .vercel
+supabase/.temp/
+
+# Datos de clientas (PII) usados en migraciones puntuales — no van al repo
+calendario.json
+metepec-calendar.ics
+coapa-calendar.ics

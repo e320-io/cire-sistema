@@ -1,22 +1,15 @@
-import { useState, useEffect, useRef, useMemo, createContext, useContext } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useState, useEffect, useRef, useMemo, useContext, Fragment } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+import { SUPABASE_URL, SUPABASE_KEY, META_TOKEN, META_ACCOUNT, CLAUDE_KEY, supabase, BOT_SB_URL, BOT_SB_KEY, BOT_API_URL, botSB } from "./lib/supabase.js";
+import { ThemeCtx, mkT, useT } from "./lib/theme.jsx";
+import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES } from "./lib/constantes.js";
+import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
+import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
+import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
+import { marginBand } from "./components/finanzas/utilidad.js";
+import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
-const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
-const CLAUDE_KEY        = import.meta.env.VITE_CLAUDE_KEY;
-const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const BOT_SB_URL  = import.meta.env.VITE_BOT_SUPABASE_URL;
-const BOT_SB_KEY  = import.meta.env.VITE_BOT_SUPABASE_KEY;
-const BOT_API_URL = "https://whatsapp-lead-bot-three.vercel.app";
-const botSB = BOT_SB_URL && BOT_SB_KEY
-  ? createClient(BOT_SB_URL, BOT_SB_KEY, { auth: { persistSession: false } })
-  : null;
 
 // ─── Analítica: registrar evento de uso ───────────────────────────────────────
 async function logActividad(session,evento,detalle=null,duracion=null){
@@ -127,60 +120,8 @@ function useTema(){
   return{tema,toggleTema};
 }
 
-// ─── Contexto de tema global ───────────────────────────────────────────────────
-const ThemeCtx=createContext({light:false,acc:false});
-const mkT=(light,acc=false)=>({
-  sub:    light?(acc?"rgba(26,31,60,0.95)":"rgba(26,31,60,0.68)"):(acc?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.55)"),
-  faint:  light?(acc?"rgba(26,31,60,0.85)":"rgba(26,31,60,0.52)"):(acc?"rgba(255,255,255,0.80)":"rgba(255,255,255,0.35)"),
-  muted:  light?(acc?"rgba(26,31,60,0.95)":"rgba(26,31,60,0.78)"):(acc?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.35)"),
-  dim:    light?(acc?"rgba(26,31,60,0.80)":"rgba(26,31,60,0.42)"):(acc?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.25)"),
-  div:    light?"rgba(0,0,0,0.08)"   :"rgba(255,255,255,0.06)",
-  cardBg: light?"rgba(0,0,0,0.03)"   :"rgba(255,255,255,0.03)",
-  cardBdr:light?"rgba(0,0,0,0.09)"   :"rgba(255,255,255,0.08)",
-  hoverBg:light?"rgba(0,0,0,0.05)"   :"rgba(255,255,255,0.06)",
-  sideBg: light?"rgba(0,0,0,0.04)"   :"rgba(0,0,0,0.2)",
-  chipBdr:light?"rgba(0,0,0,0.14)"   :"rgba(255,255,255,0.12)",
-  dotBg:  light?"rgba(0,0,0,0.08)"   :"rgba(255,255,255,0.06)",
-  dropBg: light?"#eeebe3"            :"#22264A",
-  dropBdr:light?"rgba(0,0,0,0.1)"    :"rgba(255,255,255,0.1)",
-  cardWh: light?"rgba(0,0,0,0.025)"  :"rgba(255,255,255,0.04)",
-  navBg:  light?"rgba(242,239,232,0.97)":"rgba(0,0,0,0.4)",
-  pageBg: light?"#eeebe3"            :"#22264A",
-});
-function useT(){const{light,acc}=useContext(ThemeCtx);return{light,acc,T:mkT(light,acc)};}
-
-const USUARIOS=[
-  {id:1,nombre:"Coapa",usuario:"coapa",password:"cire2026",rol:"sucursal",color:"#2721E8",accesibilidad:true},
-  {id:2,nombre:"Valle",usuario:"valle",password:"cire2026",rol:"sucursal",color:"#49B8D3",sucursalesBot:["Coapa","Valle","Oriente","Polanco","Metepec","__sin_sucursal__"],sucursalesRecepcion:["Coapa","Valle","Oriente","Polanco","Metepec"]},
-  {id:3,nombre:"Oriente",usuario:"oriente",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
-  {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
-  {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
-  {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
-  {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
-  {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle","reparar"]},
-  {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
-  {id:13,nombre:"Marce Gallardo",usuario:"marce_gallardo",password:"cire2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true,passwordFinal:true},
-  {id:14,nombre:"Fer Ayala",usuario:"fer_ayala",password:"fer.cire2026",rol:"duena_general",color:"#a855f7"},
-];
-const SUCURSALES_NAMES=["Coapa","Valle","Oriente","Polanco","Metepec"];
-const COLORES={Coapa:"#2721E8",Valle:"#49B8D3",Oriente:"#a855f7",Polanco:"#f97316",Metepec:"#10b981"};
-const TERMINALES_DEFAULT=[
-  {nombre:"Zettle",comision:2.29,activa:true},
-  {nombre:"BBVA",comision:2.75,activa:true},
-  {nombre:"Banorte",comision:2.50,activa:true},
-  {nombre:"Mercado Pago",comision:2.99,activa:true},
-];
-const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
-const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
-const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
-const cdmx=(d=new Date())=>d.toLocaleDateString("en-CA",{timeZone:"America/Mexico_City"});
-const hoy=()=>cdmx();
-const ayer=()=>{const h=cdmx();const d=new Date(h+"T12:00:00");d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);};
 const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select("ticket_num").order("ticket_num",{ascending:false}).limit(1);return(parseInt(data?.[0]?.ticket_num)||0)+1;};
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
-const normName=n=>(n||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();
-const mesLabel=()=>new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-const defaultMes=()=>{const d=new Date();if(d.getDate()<=5){const p=new Date(d.getFullYear(),d.getMonth()-1,1);return`${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}`;}return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
 
 const PROMO_EXPIRY=new Date('2026-12-31T23:59:59');
 const getPrecioActual=(item)=>(item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY)?item.precioPromo:item.precio;
@@ -461,7 +402,6 @@ function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l
 const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","HIFU","Corporales","Mantenimiento","Personalizado","Cera","Productos"];
 const ZONAS_CERA=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","Ingles"];
 const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();const esCera=n.startsWith("cera ");if(f==="Cera")return esCera;if(esCera)return false;if(f==="Combos")return n.includes("combo")||n.includes("cuerpo completo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas")||n.includes("cuello")||n.includes("nuca")||n.includes("barba")||n.includes("contorno")||n.includes("mejillas")||n.includes("entreceja")||n.includes("frente")||n.includes("nariz")||n.includes("orejas")||n.includes("mentón");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","glúteos","zona interg","hombros","manos","pezones"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","coxis","pies"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french boy","sexy bikini","crack"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt","cire-na"].some(k=>n.includes(k));if(f==="Productos")return item.categoria==="Productos"||item.categoria==="Paquetes Especiales";return true;};
-const MESES_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Pezones","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
 const ZONAS_PACK=["Cuerpo Completo","Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Coxis","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico"];
 
@@ -4010,40 +3950,6 @@ function CombinedImport({session,useDST=true}){
 // ══════════════════════════════════════════════════════════════════════════════
 // ESTADO FINANCIERO — P&L mensual por sucursal con análisis IA
 // ══════════════════════════════════════════════════════════════════════════════
-function renderMarkdown(text,T,light){
-  if(!text)return null;
-  const lines=text.split("\n");
-  const elements=[];
-  let key=0;
-  const colorText=light?"rgba(26,31,60,0.92)":"rgba(255,255,255,0.90)";
-  const colorSub=light?"rgba(26,31,60,0.68)":"rgba(255,255,255,0.62)";
-  const inlineBold=(str)=>{
-    const parts=str.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((p,i)=>p.startsWith("**")&&p.endsWith("**")
-      ?<strong key={i} style={{fontWeight:700,color:colorText}}>{p.slice(2,-2)}</strong>
-      :<span key={i}>{p}</span>);
-  };
-  lines.forEach((line,i)=>{
-    const trimmed=line.trim();
-    if(!trimmed){elements.push(<div key={key++} style={{height:"10px"}}/>);return;}
-    if(trimmed.startsWith("### ")){
-      elements.push(<div key={key++} style={{fontSize:"14px",fontWeight:700,color:colorSub,letterSpacing:"0.4px",marginTop:"18px",marginBottom:"6px",textTransform:"uppercase"}}>{trimmed.slice(4)}</div>);
-    } else if(trimmed.startsWith("## ")){
-      elements.push(<div key={key++} style={{fontSize:"18px",fontWeight:700,color:colorText,marginTop:"24px",marginBottom:"8px",borderBottom:`1px solid ${light?"rgba(0,0,0,0.10)":"rgba(255,255,255,0.10)"}`,paddingBottom:"6px"}}>{trimmed.slice(3)}</div>);
-    } else if(trimmed.startsWith("# ")){
-      elements.push(<div key={key++} style={{fontSize:"22px",fontWeight:800,color:colorText,marginBottom:"12px",letterSpacing:"-0.3px"}}>{trimmed.slice(2)}</div>);
-    } else if(trimmed.startsWith("- ")||trimmed.startsWith("• ")){
-      const content=trimmed.startsWith("- ")?trimmed.slice(2):trimmed.slice(2);
-      elements.push(<div key={key++} style={{display:"flex",gap:"10px",fontSize:"15px",lineHeight:"1.7",color:colorSub,marginBottom:"6px"}}>
-        <span style={{color:light?"rgba(39,33,232,0.7)":"rgba(100,130,255,0.9)",marginTop:"2px",flexShrink:0}}>▸</span>
-        <span>{inlineBold(content)}</span>
-      </div>);
-    } else {
-      elements.push(<p key={key++} style={{fontSize:"15px",lineHeight:"1.8",color:colorSub,margin:"0 0 8px 0"}}>{inlineBold(trimmed)}</p>);
-    }
-  });
-  return elements;
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // BOT WHATSAPP — CRM de leads integrado
@@ -5079,1325 +4985,6 @@ function RepararImport({sucursalId,sucursalNombre}){
   );
 }
 
-function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=false}){
-  const{light,T}=useT();
-  const sucVisible=sucursalesFiltro||SUCURSALES_NAMES;
-  const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
-  const puedeMV=!esSocia;
-
-  const antYM=(ym)=>{const[y,m]=ym.split("-").map(Number);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,"0")}`;};
-  const rango=(ym)=>{const[y,m]=ym.split("-").map(Number);return{desde:`${ym}-01`,hasta:new Date(y,m,0).toISOString().slice(0,10)};};
-  const etiq=(ym)=>new Date(`${ym}-15`).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-  const hoyYM=()=>cdmx().slice(0,7);
-  const listaMeses=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});})();
-
-  const[periodo,setPeriodo]=useState(hoyYM());
-  const[vista,setVista]=useState("individual");
-  const[sucSel,setSucSel]=useState(sucVisible[0]);
-  const[sucMulti,setSucMulti]=useState(sucursalesPropias||sucVisible.slice(0,2));
-  const[ventas,setVentas]=useState({});
-  const[ventasAnt,setVentasAnt]=useState({});
-  const[metaGs,setMetaGs]=useState({});
-  const[gastos,setGastos]=useState([]);
-  const[loading,setLoading]=useState(false);
-  const[saving,setSaving]=useState(false);
-  const[aiTxt,setAiTxt]=useState("");
-  const[aiLoad,setAiLoad]=useState(false);
-  const[fSuc,setFSuc]=useState(sucVisible[0]);
-  const[fCat,setFCat]=useState("renta");
-  const[fConc,setFConc]=useState("");
-  const[fMonto,setFMonto]=useState("");
-  const[fMetodo,setFMetodo]=useState("Efectivo");
-  const[nomRows,setNomRows]=useState([{nombre:"",monto:""}]);
-  const[consRows,setConsRows]=useState([{nombre:"",monto:""}]);
-  const[fRecurrente,setFRecurrente]=useState(false);
-  const[fPeriodo,setFPeriodo]=useState(hoyYM);
-  const[historialVentas,setHistorialVentas]=useState([]);
-  const[historialCompleto,setHistorialCompleto]=useState([]);
-  const[loadingHistorial,setLoadingHistorial]=useState(false);
-  const[loadingHist,setLoadingHist]=useState(false);
-  const[tooltipBar,setTooltipBar]=useState(null);
-  const[rangoGrafico,setRangoGrafico]=useState("12m");
-  const[ventasSemanales,setVentasSemanales]=useState(null);
-  const[loadingSemanales,setLoadingSemanales]=useState(false);
-  const[proyeccion,setProyeccion]=useState(null);
-  const[loadingProy,setLoadingProy]=useState(false);
-  const[comData,setComData]=useState([]);
-  const[loadingCom,setLoadingCom]=useState(false);
-  const[comSubTab,setComSubTab]=useState("tabla");
-  const[comZettleTotal,setComZettleTotal]=useState(null);
-  const[loadingComZettle,setLoadingComZettle]=useState(false);
-  const[moverFila,setMoverFila]=useState(null);
-  const[buscarCom,setBuscarCom]=useState("");
-  const[editMontoCom,setEditMontoCom]=useState(null);
-  const[editMontoVal,setEditMontoVal]=useState("");
-  const[editTerminalCom,setEditTerminalCom]=useState(null);
-  const[editMsiCom,setEditMsiCom]=useState(null);
-  const[confirmDelCom,setConfirmDelCom]=useState(null);
-
-  // Trae tickets directamente de Supabase (más rápido que pasar por la Edge Function)
-  const fetchTicketsDB=async(desde,hasta)=>{
-    const{data}=await supabase.from("tickets").select("sucursal_nombre,total,fecha").gte("fecha",desde).lte("fecha",hasta);
-    return data||[];
-  };
-
-  const ZETTLE_CUENTAS_FIN=[
-    {key:"metepec",label:"Metepec"},
-    {key:"coapa",label:"Coapa"},
-    {key:"valle_polanco",label:"Valle + Polanco"},
-    {key:"oriente",label:"Oriente"},
-  ];
-
-  // Llama Zettle raw (sin escribir a Supabase) — usado solo en la tab de validación
-  const fetchZettleRaw=async(desde,hasta)=>{
-    const todas=[];
-    for(const cuenta of ZETTLE_CUENTAS_FIN){
-      try{
-        const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${desde}&raw=true`;
-        const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
-        const json=await res.json();
-        if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
-      }catch{}
-    }
-    return todas;
-  };
-
-  const fetchVentasDB=async(desde,hasta)=>{
-    const todas=await fetchZettleRaw(desde,hasta);
-    const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
-    todas.forEach(t=>{if(m[t.sucursal]!==undefined)m[t.sucursal]+=Number(t.total);});
-    return m;
-  };
-
-  // Fetch del mes corriente desde Zettle (para el gráfico histórico)
-  const fetchMesActualTickets=async()=>{
-    const ma=hoyYM();
-    const hoy=new Date().toISOString().slice(0,10);
-    const todas=await fetchZettleRaw(`${ma}-01`,hoy);
-    const row={mes:ma};SUCURSALES_NAMES.forEach(s=>{row[s]=0;});
-    todas.forEach(t=>{if(row[t.sucursal]!==undefined)row[t.sucursal]+=Number(t.total);});
-    return row;
-  };
-
-  const cargarHistorial=async()=>{
-    setLoadingHistorial(true);
-    const hoy=new Date();
-    const meses=Array.from({length:24},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i-1,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}).reverse();
-    const desde=`${meses[0]}-01`;
-    const[hy,hm]=meses[23].split("-").map(Number);
-    const hasta=new Date(hy,hm,0).toISOString().slice(0,10);
-    const[todas,mesActual]=await Promise.all([fetchZettleRaw(desde,hasta),fetchMesActualTickets()]);
-    const byMes={};
-    meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
-    todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
-    setHistorialVentas([...meses.map(m=>({mes:m,...byMes[m]})),mesActual]);
-    setLoadingHistorial(false);
-  };
-
-  const cargarHistorialCompleto=async()=>{
-    setLoadingHist(true);
-    const hFin=new Date();hFin.setDate(0);
-    const hastaStr=hFin.toISOString().slice(0,10);
-    const añoActual=new Date().getFullYear();
-    const todas=[];
-    for(let año=2021;año<=añoActual;año++){
-      const desde=`${año}-01-01`;
-      const hasta=año===añoActual?hastaStr:`${año}-12-31`;
-      const chunk=await fetchZettleRaw(desde,hasta);
-      todas.push(...chunk);
-    }
-    const mesActual=await fetchMesActualTickets();
-    const mesSet=new Set([...todas.map(t=>t.fecha.slice(0,7)),mesActual.mes]);
-    const meses=[...mesSet].sort();
-    const byMes={};
-    meses.forEach(m=>{byMes[m]={};SUCURSALES_NAMES.forEach(s=>{byMes[m][s]=0;});});
-    todas.forEach(t=>{const m=t.fecha.slice(0,7);if(byMes[m]&&byMes[m][t.sucursal]!==undefined)byMes[m][t.sucursal]+=Number(t.total);});
-    SUCURSALES_NAMES.forEach(s=>{byMes[mesActual.mes][s]=mesActual[s]||0;});
-    setHistorialCompleto(meses.map(m=>({mes:m,...byMes[m]})));
-    setLoadingHist(false);
-  };
-
-  const cargarVentasSemanales=async(ym)=>{
-    setLoadingSemanales(true);
-    const[y,m]=ym.split("-").map(Number);
-    const desde=`${ym}-01`;
-    const diasEnMes=new Date(y,m,0).getDate();
-    const hasta=`${ym}-${String(diasEnMes).padStart(2,"0")}`;
-    const tickets=await fetchZettleRaw(desde,hasta);
-    const semanas=[];
-    for(let ini=1;ini<=diasEnMes;ini+=7){
-      const fin=Math.min(ini+6,diasEnMes);
-      const row={semana:semanas.length+1,desde:`${ym}-${String(ini).padStart(2,"0")}`,hasta:`${ym}-${String(fin).padStart(2,"0")}`};
-      SUCURSALES_NAMES.forEach(s=>{row[s]=0;});
-      semanas.push(row);
-    }
-    tickets.forEach(t=>{
-      const dia=parseInt(t.fecha.slice(8,10));
-      const semIdx=Math.min(Math.floor((dia-1)/7),semanas.length-1);
-      if(semanas[semIdx]&&semanas[semIdx][t.sucursal]!==undefined)semanas[semIdx][t.sucursal]+=Number(t.total);
-    });
-    const totalMes={};SUCURSALES_NAMES.forEach(s=>{totalMes[s]=semanas.reduce((a,r)=>a+r[s],0);});
-    setVentasSemanales({semanas,totalMes});
-    setLoadingSemanales(false);
-  };
-
-  const proyectarIA=async()=>{
-    if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
-    setLoadingProy(true);setProyeccion(null);
-    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
-
-    // Solo meses COMPLETOS — excluir el mes actual porque está incompleto
-    const histCompleto=historialVentas.filter(r=>r.mes<periodo);
-
-    const[y,m]=periodo.split("-").map(Number);
-    const sigMes=m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`;
-    const targetMn=m===12?1:m+1;
-    const diasSigMes=new Date(y,targetMn,0).getDate();
-
-    // ── Helper: correr STL en un subconjunto de datos ─────────────────────────
-    const correrSTL=(datos,s,mnObj)=>{
-      if(datos.length<4)return 0;
-      const byMn={};
-      datos.forEach(r=>{const mn=parseInt(r.mes.slice(5));if(!byMn[mn])byMn[mn]=[];byMn[mn].push(r[s]||0);});
-      const avgG=datos.reduce((a,r)=>a+(r[s]||0),0)/datos.length;
-      if(avgG===0)return 0;
-      const idxEst={};
-      for(let mn=1;mn<=12;mn++)idxEst[mn]=byMn[mn]?(byMn[mn].reduce((a,b)=>a+b,0)/byMn[mn].length/avgG):1;
-      const desest=datos.map(r=>(r[s]||0)/(idxEst[parseInt(r.mes.slice(5))]||1));
-      const n=desest.length;
-      const w=desest.map((_,i)=>Math.exp((i-(n-1))*0.12));
-      const sW=w.reduce((a,b)=>a+b,0),sWX=w.reduce((a,wi,i)=>a+wi*i,0),sWY=w.reduce((a,wi,i)=>a+wi*desest[i],0);
-      const sWXY=w.reduce((a,wi,i)=>a+wi*i*desest[i],0),sWX2=w.reduce((a,wi,i)=>a+wi*i*i,0);
-      const den=sW*sWX2-sWX*sWX;
-      const slope=Math.abs(den)>1?(sW*sWXY-sWX*sWY)/den:0;
-      const intercept=(sWY-slope*sWX)/sW;
-      return Math.max(0,(intercept+slope*n)*(idxEst[mnObj]||1));
-    };
-
-    // ── Walk-forward validation: medir sesgo real del modelo ─────────────────
-    // Para cada mes en el historial (desde la posición 6), predecir con datos anteriores
-    // y comparar contra el real. Así detectamos si el modelo sistémicamente sobreestima.
-    const calibracionPorSuc=sucs.map(s=>{
-      const datos=histCompleto.filter(r=>(r[s]||0)>0);
-      const minTrain=5;
-      if(datos.length<minTrain+2)return{s,sesgo:0,mape:null,n:0,ultErrores:[]};
-      const errores=[];
-      for(let i=minTrain;i<datos.length;i++){
-        const train=datos.slice(0,i);
-        const obj=datos[i];
-        const mnObj=parseInt(obj.mes.slice(5));
-        const pred=correrSTL(train,s,mnObj);
-        if(obj[s]>0){
-          const errPct=(pred-obj[s])/obj[s];
-          errores.push({mes:obj.mes,pred:Math.round(pred),real:obj[s],errPct:+errPct.toFixed(3)});
-        }
-      }
-      if(errores.length===0)return{s,sesgo:0,mape:null,n:0,ultErrores:[]};
-      // Sesgo ponderado: errores recientes pesan más (decay 0.3)
-      const nE=errores.length;
-      const wE=errores.map((_,i)=>Math.exp((i-(nE-1))*0.3));
-      const sWE=wE.reduce((a,b)=>a+b,0);
-      const sesgo=errores.reduce((a,e,i)=>a+wE[i]*e.errPct,0)/sWE;
-      const mape=errores.reduce((a,e,i)=>a+wE[i]*Math.abs(e.errPct),0)/sWE*100;
-      return{s,sesgo:+sesgo.toFixed(3),mape:+mape.toFixed(1),n:errores.length,ultErrores:errores.slice(-4)};
-    });
-
-    // ── Modelo STL con corrección de sesgo ────────────────────────────────────
-    const modeloPorSuc=sucs.map(s=>{
-      const datos=histCompleto.filter(r=>(r[s]||0)>0);
-      if(datos.length<4)return{s,proyBase:0,proyCorregida:0,idxEst:1,tendMensual:0,meses:datos.length,sesgo:0,mape:null};
-
-      const byMn={};
-      datos.forEach(r=>{const mn=parseInt(r.mes.slice(5));if(!byMn[mn])byMn[mn]=[];byMn[mn].push(r[s]||0);});
-      const avgG=datos.reduce((a,r)=>a+(r[s]||0),0)/datos.length;
-      const idxEst={};
-      for(let mn=1;mn<=12;mn++)idxEst[mn]=byMn[mn]?(byMn[mn].reduce((a,b)=>a+b,0)/byMn[mn].length/avgG):1;
-      const desest=datos.map(r=>(r[s]||0)/(idxEst[parseInt(r.mes.slice(5))]||1));
-      const n=desest.length;
-      const w=desest.map((_,i)=>Math.exp((i-(n-1))*0.12));
-      const sW=w.reduce((a,b)=>a+b,0),sWX=w.reduce((a,wi,i)=>a+wi*i,0),sWY=w.reduce((a,wi,i)=>a+wi*desest[i],0);
-      const sWXY=w.reduce((a,wi,i)=>a+wi*i*desest[i],0),sWX2=w.reduce((a,wi,i)=>a+wi*i*i,0);
-      const den=sW*sWX2-sWX*sWX;
-      const slope=Math.abs(den)>1?(sW*sWXY-sWX*sWY)/den:0;
-      const intercept=(sWY-slope*sWX)/sW;
-      const proyBase=Math.max(0,Math.round((intercept+slope*n)*(idxEst[targetMn]||1)));
-
-      // Aplicar corrección de sesgo: si el modelo sobreestima 15%, dividir por 1.15
-      const cal=calibracionPorSuc.find(c=>c.s===s)||{sesgo:0};
-      const factorCorr=1/(1+cal.sesgo);
-      const proyCorregida=Math.max(0,Math.round(proyBase*factorCorr));
-      const tendMensual=avgG>0?Math.round(slope/avgG*100):0;
-
-      return{
-        s,proyBase,proyCorregida,
-        idxEst:+((idxEst[targetMn]||1).toFixed(2)),
-        tendMensual,meses:datos.length,
-        sesgo:cal.sesgo,mape:cal.mape,
-        factorCorr:+factorCorr.toFixed(3),
-        avgGlobal:Math.round(avgG),
-        histMesObj:byMn[targetMn]?byMn[targetMn].map(Math.round):null,
-      };
-    });
-
-    const totalBase=modeloPorSuc.reduce((a,r)=>a+r.proyBase,0);
-    const totalCorregido=modeloPorSuc.reduce((a,r)=>a+r.proyCorregida,0);
-
-    const distRef=[{sem:1,dias:"1-7",pctBase:22},{sem:2,dias:"8-14",pctBase:24},{sem:3,dias:"15-21",pctBase:28},{sem:4,dias:"22-28",pctBase:22}];
-    if(diasSigMes>28)distRef.push({sem:5,dias:"29+",pctBase:4});
-
-    const prompt=`Eres el analista de datos de CIRE (salones de depilación láser en México). Tienes el modelo estadístico YA calibrado con validación walk-forward. Tu tarea es solo ajustar por temporalidad y generar OKRs semanales para ${etiq(sigMes)}.
-
-MODELO STL CON CORRECCIÓN DE SESGO (walk-forward validation):
-${JSON.stringify(modeloPorSuc,null,2)}
-
-CONTEXTO:
-- ${etiq(periodo)} excluido del entrenamiento (mes incompleto).
-- ${etiq(sigMes)} (mes ${targetMn}): índice estacional promedio ${(modeloPorSuc.reduce((a,r)=>a+r.idxEst,0)/Math.max(modeloPorSuc.length,1)).toFixed(2)}.
-- En México, mayo impulsa servicios de belleza por Día de las Madres (10 mayo).
-- Quincenas (días 15 y fin de mes) → S3 y S4 suelen ser más fuertes.
-- Proyección base STL: ${fmt(totalBase)} | Proyección corregida (sesgo): ${fmt(totalCorregido)}.
-- El campo "sesgo" por sucursal: positivo = el modelo sobreestimaba, negativo = subestimaba.
-- El campo "mape" = error promedio histórico en % (ya ponderado por recencia).
-
-HISTORIAL COMPLETO (meses completos):
-${JSON.stringify(histCompleto.slice(-18).map(r=>({mes:r.mes,...Object.fromEntries(sucs.map(s=>[s,r[s]||0]))})),null,2)}
-
-Responde SOLO con JSON válido:
-{
-  "proyeccion_total": número (parte de la corregida, ajusta solo si la temporalidad lo justifica claramente),
-  "por_sucursal": {${sucs.map(s=>`"${s}":0`).join(",")}},
-  "semanas_okr": [
-    {"sem":1,"dias":"1-7","pct":número,"monto":número,"razon":"texto"},
-    {"sem":2,"dias":"8-14","pct":número,"monto":número,"razon":"texto"},
-    {"sem":3,"dias":"15-21","pct":número,"monto":número,"razon":"texto"},
-    {"sem":4,"dias":"22-28","pct":número,"monto":número,"razon":"texto"}${diasSigMes>28?',\n    {"sem":5,"dias":"29+","pct":número,"monto":número,"razon":"texto"}':''}
-  ],
-  "confianza": "alta|media|baja",
-  "ajuste_temporalidad": número (% de ajuste adicional al corregido, 0 si ninguno),
-  "insight": "2-3 oraciones: qué aprendió el modelo, dónde suele fallar, y recomendación"
-}`;
-
-    try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-        headers:{"x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","content-type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1400,messages:[{role:"user",content:prompt}]})});
-      const json=await res.json();
-      const txt=json.content?.[0]?.text||"{}";
-      const match=txt.match(/\{[\s\S]*\}/);
-      const proy=match?JSON.parse(match[0]):{};
-      setProyeccion({...proy,mes:sigMes,sucs,modeloPorSuc,totalModeloBase:totalBase,totalCorregido});
-    }catch{setProyeccion({error:"No se pudo generar la proyección. Verifica VITE_CLAUDE_KEY."});}
-    setLoadingProy(false);
-  };
-
-  const cargar=async()=>{
-    setLoading(true);
-    const{desde,hasta}=rango(periodo);
-    const{desde:dA,hasta:hA}=rango(antYM(periodo));
-    const[{data:g}]=await Promise.all([
-      supabase.from("gastos_operativos").select("*").eq("periodo",periodo),
-    ]);
-    const[ventasMap,ventasAntMap]=await Promise.all([
-      fetchVentasDB(desde,hasta),
-      fetchVentasDB(dA,hA),
-    ]);
-    setVentas(ventasMap);setVentasAnt(ventasAntMap);setGastos(g||[]);
-    if(META_TOKEN&&META_ACCOUNT){
-      try{
-        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-        const json=await(await fetch(url)).json();
-        const ms={};SUCURSALES_NAMES.forEach(s=>{ms[s]=0;});
-        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;const sp=Number(r.spend||0);const n=SUCURSALES_NAMES.length;if(comb.includes("coapa")){ms["Coapa"]+=sp;}else if(nm.includes("valle")){ms["Valle"]+=sp/2;ms["Polanco"]+=sp/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{ms[s]+=sp/n;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=sp;});}});
-        setMetaGs(ms);
-      }catch{}
-    }
-    setLoading(false);
-  };
-
-  useEffect(()=>{cargar();setAiTxt("");cargarVentasSemanales(periodo);},[periodo]);
-  useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
-
-  const TIERS_RECEP=[{desde:350000,pct:3.00},{desde:300000,pct:2.50},{desde:250000,pct:2.25},{desde:210000,pct:2.00},{desde:190000,pct:1.75},{desde:160000,pct:1.50},{desde:130000,pct:1.25},{desde:90000,pct:1.00},{desde:0,pct:0}];
-  const getTierRecep=(base)=>TIERS_RECEP.find(t=>base>=t.desde)||{desde:0,pct:0};
-  const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.99};
-  const TASAS_MSI_COM={
-    "Mercado Pago":{3:3.48,6:5.99,9:8.99,12:11.98},
-    Banorte:{3:3.5,6:5.50,9:8.5,12:11.5},
-    BBVA:{3:3,6:6,9:8,12:10},
-    Zettle:{3:4,6:7,9:9,12:12},
-  };
-  const calcCom=(t)=>{
-    const mp=t.metodo_pago||"";
-    const terminal=t.comision_terminal_override||(mp.includes(" · ")?mp.replace(/^.* · /,"").trim():null);
-    const msiM=(mp.match(/(\d+)MSI/)||[])[1];
-    const msiMeses=t.comision_msi_override!==undefined&&t.comision_msi_override!==null?t.comision_msi_override:(msiM?parseInt(msiM):null);
-    const tBase=TASAS_BASE_COM[terminal]||0;
-    const tMsi=(TASAS_MSI_COM[terminal]&&msiMeses&&TASAS_MSI_COM[terminal][msiMeses])||0;
-    const monto=Number(t.comision_monto??t.total)||0;
-    const cBase=Math.round(monto*(tBase*1.16/100)*100)/100;
-    const cMsi=Math.round(monto*(tMsi*1.16/100)*100)/100;
-    const cTotal=Math.round((cBase+cMsi)*100)/100;
-    const mRec=Math.round((monto-cTotal)*100)/100;
-    const esCera=(t.servicios||[]).some(s=>s.toLowerCase().includes("cera"));
-    const cCos=Math.round(mRec*(esCera?0.10:0.05)*100)/100;
-    const hora=t.created_at?new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"—";
-    const capturista=USUARIOS.find(u=>u.usuario===t.usuario)?.nombre||t.usuario||"Importado";
-    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos,usuario:capturista,hora};
-  };
-  const cargarComisiones=async()=>{
-    setLoadingCom(true);
-    try{
-      const{desde,hasta}=rango(periodo);
-      const[y,m]=desde.split("-").map(Number);
-      const desdeExt=new Date(y,m-1,0).toISOString().slice(0,10);
-      const colsExtra="comision_periodo,comision_monto,comision_terminal_override,comision_msi_override,";
-      const colsBase="id,fecha,ticket_zettle,sucursal_nombre,clienta_nombre,clienta,servicios,metodo_pago,total,usuario,created_at";
-      const applyFiltroSuc=(q)=>{
-        if(esSocia||vista==="individual"||vista==="comisiones")return q.ilike("sucursal_nombre",`%${sucSel}%`);
-        if(sucursalesFiltro)return q.in("sucursal_nombre",sucursalesFiltro);
-        return q;
-      };
-      // Intentar con columnas extra; si falla, usar solo columnas base
-      let r1,r2;
-      const q1Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).gte("fecha",desdeExt).lte("fecha",hasta).is("comision_periodo",null).neq("fuente","zettle")).order("fecha").order("created_at");
-      const q2Full=applyFiltroSuc(supabase.from("tickets").select(colsExtra+colsBase).eq("comision_periodo",periodo).neq("fuente","zettle")).order("fecha").order("created_at");
-      [r1,r2]=await Promise.all([q1Full,q2Full]);
-      if(r1.error||r2.error){
-        // Fallback sin columnas extra (migraciones pendientes)
-        const q1=applyFiltroSuc(supabase.from("tickets").select(colsBase).gte("fecha",desdeExt).lte("fecha",hasta).neq("fuente","zettle")).order("fecha").order("created_at");
-        [r1]= await Promise.all([q1]);
-        r2={data:[]};
-      }
-      const ids=new Set();
-      const data=[...(r1.data||[]),...(r2.data||[])].filter(t=>{if(ids.has(t.id))return false;ids.add(t.id);return true;});
-      data.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
-      setComData(data.map(calcCom));
-    }catch(e){console.error("cargarComisiones:",e);}
-    setLoadingCom(false);
-  };
-  const cargarComparativoZettle=async()=>{
-    setLoadingComZettle(true);
-    try{
-      const{desde,hasta}=rango(periodo);
-      let q=supabase.from("tickets").select("total,sucursal_nombre,fecha").eq("fuente","zettle").gte("fecha",desde).lte("fecha",hasta);
-      if(esSocia||vista==="individual"||vista==="comisiones")q=q.ilike("sucursal_nombre",`%${sucSel}%`);
-      else if(sucursalesFiltro)q=q.in("sucursal_nombre",sucursalesFiltro);
-      const{data,error}=await q;
-      if(error)throw error;
-      setComZettleTotal({total:(data||[]).reduce((s,t)=>s+Number(t.total||0),0),count:(data||[]).length});
-    }catch(e){console.error("cargarComparativoZettle:",e);setComZettleTotal(null);}
-    setLoadingComZettle(false);
-  };
-  useEffect(()=>{if(vista==="comisiones")cargarComisiones();},[vista,periodo,sucSel]);
-  useEffect(()=>{if(vista==="comisiones"&&comSubTab==="comparativo")cargarComparativoZettle();},[vista,comSubTab,periodo,sucSel]);
-  const exportarComPDF=()=>{
-    const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
-    const r2=v=>Math.round(v*100)/100;
-    const fmtP=v=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(v);
-    const baseRecepPDF=r2(tot.monto_recibido-tot.com_cosmetara);
-    const tierPDF=getTierRecep(baseRecepPDF);
-    const comRecepPDF=r2(baseRecepPDF*tierPDF.pct/100);
-    const nextTierPDF=TIERS_RECEP.filter(t=>t.desde>baseRecepPDF).at(-1);
-    const rows=comData.map((r,i)=>`<tr style="background:${i%2===0?"#fff":"#f9fafb"}">
-      <td>${r.fecha}</td><td style="font-size:10px;color:#555">${r.hora}</td><td style="font-family:monospace;font-size:10px">${r.recibo}</td>
-      <td style="font-weight:600">${r.nombre}</td><td style="font-size:10px;color:#555">${r.usuario}</td><td style="color:#555">${r.servicios}</td>
-      <td><span style="padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;background:${r.terminal==="Efectivo / Otro"?"#f3f4f6":r.terminal==="Mercado Pago"?"#e0f7ff":r.terminal==="Zettle"?"#e0f4ff":"#ede9fe"};color:${r.terminal==="Efectivo / Otro"?"#6b7280":r.terminal==="Mercado Pago"?"#0072a3":r.terminal==="Zettle"?"#0e6a8a":"#5b21b6"}">${r.terminal}</span></td>
-      <td style="text-align:center">${r.msi_meses||"—"}</td>
-      <td style="text-align:right;font-weight:600">${fmtP(r.monto)}</td>
-      <td style="text-align:right;color:#ea580c">${r.com_base>0?fmtP(r.com_base):"—"}</td>
-      <td style="text-align:right;color:#ea580c">${r.com_msi>0?fmtP(r.com_msi):"—"}</td>
-      <td style="text-align:right;font-weight:700;color:#ea580c">${r.com_terminal>0?fmtP(r.com_terminal):"—"}</td>
-      <td style="text-align:right;font-weight:600;color:#16a34a">${fmtP(r.monto_recibido)}</td>
-      <td style="text-align:right;font-weight:700;color:#0e6a8a">${r.com_cosmetara>0?fmtP(r.com_cosmetara):"—"}</td>
-    </tr>`).join("");
-    const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Comisiones ${sucSel} ${etiq(periodo)}</title>
-    <style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#111;padding:28px 32px}
-      h1{font-size:18px;font-weight:700;margin-bottom:2px}
-      .sub{font-size:12px;color:#555;margin-bottom:20px}
-      table{width:100%;border-collapse:collapse;margin-top:8px}
-      th{background:#1e1e3a;color:#fff;padding:8px 9px;text-align:left;font-size:9px;letter-spacing:1px;white-space:nowrap}
-      th.r{text-align:right}
-      td{padding:7px 9px;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:10.5px}
-      tfoot td{border-top:2px solid #1e1e3a;background:#f0f0f8;font-weight:700;font-size:11px;padding:9px}
-      tfoot td.r{text-align:right}
-      @media print{@page{margin:14mm 12mm;size:A4 landscape}body{padding:0}}
-    </style></head><body>
-    <h1>Comisiones Cosmetaras — ${sucSel}</h1>
-    <div class="sub">${etiq(periodo).toUpperCase()} · ${comData.length} registros</div>
-    <table>
-      <thead><tr>
-        <th>Fecha</th><th>Hora</th><th>Recibo</th><th>Nombre</th><th>Usuario</th><th>Servicios</th><th>Terminal</th>
-        <th style="text-align:center">MSI</th>
-        <th class="r">Monto</th><th class="r">Com. Base</th><th class="r">Com. MSI</th>
-        <th class="r">Com. Terminal</th><th class="r">Monto Recibido</th><th class="r">Com. Cosmetara</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr>
-        <td colspan="8">TOTAL</td>
-        <td class="r">${fmtP(r2(tot.monto))}</td>
-        <td class="r" style="color:#ea580c">${tot.com_base>0?fmtP(r2(tot.com_base)):"—"}</td>
-        <td class="r" style="color:#ea580c">${tot.com_msi>0?fmtP(r2(tot.com_msi)):"—"}</td>
-        <td class="r" style="color:#ea580c">${tot.com_terminal>0?fmtP(r2(tot.com_terminal)):"—"}</td>
-        <td class="r" style="color:#16a34a">${fmtP(r2(tot.monto_recibido))}</td>
-        <td class="r" style="color:#0e6a8a">${fmtP(r2(tot.com_cosmetara))}</td>
-      </tr></tfoot>
-    </table>
-    <div style="margin-top:28px;page-break-inside:avoid">
-      <div style="background:#1e1e3a;color:#fff;padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:2px;border-radius:8px 8px 0 0">COMISIÓN RECEPCIÓN</div>
-      <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:16px">
-        <table style="width:100%;border-collapse:collapse;margin:0">
-          <tr style="background:#f9fafb">
-            <td style="padding:8px 12px;font-size:11px;color:#555">Ventas brutas</td>
-            <td style="padding:8px 12px;text-align:right;font-weight:600">${fmtP(r2(tot.monto))}</td>
-            <td style="padding:8px 12px;font-size:11px;color:#555">− Comisión terminal</td>
-            <td style="padding:8px 12px;text-align:right;color:#ea580c;font-weight:600">-${fmtP(r2(tot.com_terminal))}</td>
-            <td style="padding:8px 12px;font-size:11px;color:#555">− Comisión cosmetaras</td>
-            <td style="padding:8px 12px;text-align:right;color:#0e6a8a;font-weight:600">-${fmtP(r2(tot.com_cosmetara))}</td>
-          </tr>
-          <tr>
-            <td style="padding:8px 12px;font-size:11px;color:#555">Base recepcionista</td>
-            <td style="padding:8px 12px;text-align:right;font-weight:700;color:#16a34a">${fmtP(baseRecepPDF)}</td>
-            <td style="padding:8px 12px;font-size:11px;color:#555">Nivel alcanzado</td>
-            <td style="padding:8px 12px;text-align:right;font-weight:700;color:#1e1e3a">${tierPDF.pct.toFixed(2)}%</td>
-            ${nextTierPDF?`<td style="padding:8px 12px;font-size:10px;color:#888">Siguiente nivel: ${nextTierPDF.pct.toFixed(2)}% desde ${fmtP(nextTierPDF.desde)}</td><td></td>`:`<td colspan="2"></td>`}
-          </tr>
-        </table>
-        <div style="margin-top:12px;padding:12px 16px;background:#f0f0f8;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:12px;color:#444">${fmtP(baseRecepPDF)} × ${tierPDF.pct.toFixed(2)}%</div>
-          <div style="font-size:22px;font-weight:800;color:${comRecepPDF>0?"#1e1e3a":"#999"}">${fmtP(comRecepPDF)}</div>
-        </div>
-      </div>
-    </div>
-    <script>window.onload=()=>{window.print();}<\/script>
-    </body></html>`;
-    const w=window.open("","_blank");w.document.write(html);w.document.close();
-  };
-  const moverComision=async(id,nuevoPeriodo)=>{
-    await supabase.from("tickets").update({comision_periodo:nuevoPeriodo||null}).eq("id",id);
-    setMoverFila(null);
-    await cargarComisiones();
-  };
-  const eliminarFilaCom=async(id)=>{
-    await supabase.from("tickets").delete().eq("id",id);
-    setConfirmDelCom(null);
-    await cargarComisiones();
-  };
-  const guardarMsiCom=async(id,val)=>{
-    await supabase.from("tickets").update({comision_msi_override:val?Number(val):null}).eq("id",id);
-    setEditMsiCom(null);
-    await cargarComisiones();
-  };
-  const guardarTerminalCom=async(id,val)=>{
-    await supabase.from("tickets").update({comision_terminal_override:val||null}).eq("id",id);
-    setEditTerminalCom(null);
-    await cargarComisiones();
-  };
-  const guardarMontoCom=async(id,val)=>{
-    const n=Number(val);
-    if(isNaN(n)||n<0)return;
-    await supabase.from("tickets").update({comision_monto:n||null}).eq("id",id);
-    setEditMontoCom(null);
-    await cargarComisiones();
-  };
-  const mesesOpciones=(()=>{const res=[];let[y,m]=periodo.split("-").map(Number);for(let i=6;i>=1;i--){let mm=m-i,yy=y;if(mm<1){mm+=12;yy--;}res.push(`${yy}-${String(mm).padStart(2,"0")}`);}for(let i=1;i<=6;i++){let mm=m+i,yy=y;if(mm>12){mm-=12;yy++;}res.push(`${yy}-${String(mm).padStart(2,"0")}`);}return res;})();
-  useEffect(()=>{cargarHistorial();},[]);
-
-  const CATS_FIJAS=new Set(["contenido_digital","plataforma_cire","nomina","renta","servicios","otro","consumibles"]);
-  const pl=(suc)=>{
-    const ing=ventas[suc]||0;
-    const g=gastos.filter(x=>x.sucursal_id===suc);
-    const cont=g.filter(x=>x.categoria==="contenido_digital").reduce((s,x)=>s+Number(x.monto),0);
-    const plt=g.filter(x=>x.categoria==="plataforma_cire").reduce((s,x)=>s+Number(x.monto),0);
-    const meta=metaGs[suc]||0;
-    const nom=g.filter(x=>x.categoria==="nomina").reduce((s,x)=>s+Number(x.monto),0);
-    const ren=g.filter(x=>x.categoria==="renta").reduce((s,x)=>s+Number(x.monto),0);
-    const svc=g.filter(x=>x.categoria==="servicios").reduce((s,x)=>s+Number(x.monto),0);
-    const otr=g.filter(x=>x.categoria==="otro").reduce((s,x)=>s+Number(x.monto),0);
-    const cons=g.filter(x=>x.categoria==="consumibles").reduce((s,x)=>s+Number(x.monto),0);
-    const customCats=[...new Set(g.filter(x=>!CATS_FIJAS.has(x.categoria)).map(x=>x.categoria))];
-    const customItems=customCats.map(cat=>{const items=g.filter(x=>x.categoria===cat);return{cat,label:cat,monto:items.reduce((s,x)=>s+Number(x.monto),0),items};});
-    const customTotal=customItems.reduce((s,c)=>s+c.monto,0);
-    const egr=cont+plt+meta+nom+ren+svc+otr+cons+customTotal;
-    const util=ing-egr;
-    return{ing,cont,plt,meta,nom,ren,svc,otr,cons,customItems,egr,util,mg:ing>0?(util/ing*100):null,nomItems:g.filter(x=>x.categoria==="nomina"),consItems:g.filter(x=>x.categoria==="consumibles")};
-  };
-
-  const plC=(sucs)=>{
-    const ps=sucs.map(s=>pl(s));const sm=k=>ps.reduce((a,p)=>a+p[k],0);
-    const customMap={};ps.forEach(p=>p.customItems.forEach(c=>{customMap[c.cat]=(customMap[c.cat]||0)+c.monto;}));
-    const customItems=Object.entries(customMap).map(([cat,monto])=>({cat,label:cat,monto,items:[]}));
-    const ing=sm("ing"),egr=sm("egr"),util=ing-egr;
-    return{ing,egr,util,mg:ing>0?(util/ing*100):null,cont:sm("cont"),plt:sm("plt"),meta:sm("meta"),nom:sm("nom"),ren:sm("ren"),svc:sm("svc"),otr:sm("otr"),cons:sm("cons"),customItems};
-  };
-
-  const nextPeriodos=(from,count)=>{
-    const[y,m]=from.split("-").map(Number);
-    return Array.from({length:count},(_,i)=>{const d=new Date(y,m-1+i+1,1);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
-  };
-
-  const guardar=async()=>{
-    setSaving(true);
-    const periodos=fRecurrente?[fPeriodo,...nextPeriodos(fPeriodo,11)]:[fPeriodo];
-    try{
-      if(fCat==="nomina"){
-        const validas=nomRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
-        for(const p of periodos){
-          const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria","nomina");
-          if(de)throw de;
-          if(validas.length){const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"nomina",concepto:n.nombre.trim(),monto:Number(n.monto),forma_pago:fMetodo})));if(ie)throw ie;}
-        }
-      }else if(fCat==="consumibles"){
-        const validas=consRows.filter(n=>n.nombre.trim()&&Number(n.monto)>0);
-        if(!validas.length){setSaving(false);return;}
-        for(const p of periodos){
-          const{error:ie}=await supabase.from("gastos_operativos").insert(validas.map(n=>({sucursal_id:fSuc,periodo:p,categoria:"consumibles",concepto:n.nombre.trim(),monto:Number(n.monto),forma_pago:fMetodo})));
-          if(ie)throw ie;
-        }
-        setConsRows([{nombre:"",monto:""}]);
-      }else if(fCat==="personalizado"){
-        if(!fConc.trim()||!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
-        const catPersonal=fConc.trim();
-        for(const p of periodos){
-          const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",catPersonal);
-          if(de)throw de;
-          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:catPersonal,concepto:catPersonal,monto:Number(fMonto),forma_pago:fMetodo}]);
-          if(ie)throw ie;
-        }
-      }else{
-        if(!fMonto||isNaN(Number(fMonto))||Number(fMonto)<=0){setSaving(false);return;}
-        for(const p of periodos){
-          if(fCat==="renta"||fCat==="servicios"||fCat==="contenido_digital"||fCat==="plataforma_cire"){const{error:de}=await supabase.from("gastos_operativos").delete().eq("sucursal_id",fSuc).eq("periodo",p).eq("categoria",fCat);if(de)throw de;}
-          const{error:ie}=await supabase.from("gastos_operativos").insert([{sucursal_id:fSuc,periodo:p,categoria:fCat,concepto:fConc.trim()||fCat,monto:Number(fMonto),forma_pago:fMetodo}]);
-          if(ie)throw ie;
-        }
-      }
-      setFMonto("");setFConc("");
-      if(fPeriodo===periodo)await cargar();
-      else{setPeriodo(fPeriodo);}
-    }catch(err){
-      alert(`Error al guardar: ${err.message||JSON.stringify(err)}`);
-    }finally{
-      setSaving(false);
-    }
-  };
-
-  const borrarGasto=async(id)=>{await supabase.from("gastos_operativos").delete().eq("id",id);await cargar();};
-  const borrarCategoria=async(suc,cat)=>{await supabase.from("gastos_operativos").delete().eq("sucursal_id",suc).eq("periodo",periodo).eq("categoria",cat);await cargar();};
-  const[editMetodoId,setEditMetodoId]=useState(null);
-  const actualizarFormaPago=async(id,val)=>{await supabase.from("gastos_operativos").update({forma_pago:val}).eq("id",id);setEditMetodoId(null);await cargar();};
-
-  const analizarIA=async()=>{
-    if(!CLAUDE_KEY){alert("Agrega VITE_CLAUDE_KEY en .env.local para usar la IA");return;}
-    setAiLoad(true);setAiTxt("");
-    const sucs=vista==="individual"?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
-    const data=sucs.map(s=>{
-      const p=pl(s);const vA=ventasAnt[s]||0;const delta=vA>0?((p.ing-vA)/vA*100):null;
-      return{sucursal:s,ventas:p.ing,contenido_digital:p.cont,meta_ads:p.meta,nominas:p.nom,renta:p.ren,servicios:p.svc,otros:p.otr,total_gastos:p.egr,utilidad:p.util,margen_pct:p.mg?.toFixed(1),cambio_vs_mes_anterior:delta?.toFixed(1)};
-    });
-    const prompt=`Eres asesor financiero de CIRE, salones de depilación láser en México. Analiza el período ${etiq(periodo)} e interpreta los resultados para las dueñas y gerentes del negocio de forma clara, directa y sin tecnicismos.\n\nDatos:\n${JSON.stringify(data,null,2)}\n\nResponde en español con:\n**Resumen del mes** (2-3 oraciones simples sobre cómo le fue al negocio)\n\n**Puntos clave** (3 bullets: qué salió bien, qué hay que atender, qué es urgente si aplica)\n\n**Recomendación concreta** (1 acción específica para el próximo mes)\n\nSé honesta y usa los nombres de las sucursales. Los montos son en pesos mexicanos.`;
-    try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-        headers:{"x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","content-type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:900,messages:[{role:"user",content:prompt}]})});
-      const json=await res.json();
-      if(!res.ok){setAiTxt(`Error de la IA (${res.status}): ${json.error?.message||JSON.stringify(json)}`);return;}
-      setAiTxt(json.content?.[0]?.text||"Sin respuesta de la IA.");
-    }catch(e){setAiTxt(`Error al conectar con la IA: ${e.message}. Verifica tu VITE_CLAUDE_KEY en .env.local`);}
-    setAiLoad(false);
-  };
-
-  const FilaGL=({l,v,c,neg=false,bold=false,indent=false,onDelete=null})=>(
-    <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.div}`}}>
-      <span style={{fontSize:"13px",color:bold?(light?"#1a1a2e":"#fff"):indent?T.faint:T.muted,fontWeight:bold?700:400,paddingLeft:indent?"14px":"0"}}>{l}</span>
-      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-        <span style={{fontSize:"13px",fontWeight:bold?700:500,color:c||(neg?"#f97316":T.muted)}}>{fmt(v)}</span>
-        {onDelete&&<button onClick={onDelete} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>}
-      </div>
-    </div>
-  );
-
-  const TarjetaPL=({suc,compact=false,showDelta=false})=>{
-    const p=pl(suc);const color=COLORES[suc]||"#2721E8";
-    const vA=ventasAnt[suc]||0;const delta=vA>0?((p.ing-vA)/vA*100):null;const pos=p.util>=0;
-    return(
-      <div className="glass" style={{padding:compact?"16px":"24px",borderLeft:`3px solid ${color}`}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
-          <span style={{fontSize:compact?14:16,fontWeight:700}}>{suc}</span>
-          {showDelta&&delta!==null&&<span style={{fontSize:"11px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:delta>=0?"rgba(16,185,129,0.15)":"rgba(255,80,80,0.15)",color:delta>=0?"#10b981":"#ff6b6b"}}>{delta>=0?"↑":"↓"}{Math.abs(delta).toFixed(1)}% vs mes ant.</span>}
-          {!showDelta&&<span style={{fontSize:"11px",color:T.sub}}>{etiq(periodo)}</span>}
-        </div>
-        <FilaGL l={`Ventas`} v={p.ing} c="#10b981" bold/>
-        <div style={{height:"8px"}}/>
-        {p.cont>0&&<FilaGL l="Contenido digital" v={p.cont} neg indent onDelete={!compact?()=>borrarCategoria(suc,"contenido_digital"):null}/>}
-        {p.plt>0&&<FilaGL l="Plataforma CIRE" v={p.plt} neg indent onDelete={!compact?()=>borrarCategoria(suc,"plataforma_cire"):null}/>}
-        <FilaGL l="Meta Ads" v={p.meta} neg indent/>
-        {p.nom>0&&<FilaGL l="Nóminas" v={p.nom} neg indent/>}
-        {p.ren>0&&<FilaGL l="Renta" v={p.ren} neg indent onDelete={!compact?()=>borrarCategoria(suc,"renta"):null}/>}
-        {p.svc>0&&<FilaGL l="Servicios" v={p.svc} neg indent onDelete={!compact?()=>borrarCategoria(suc,"servicios"):null}/>}
-        {p.otr>0&&<FilaGL l="Otros gastos" v={p.otr} neg indent onDelete={!compact?()=>borrarCategoria(suc,"otro"):null}/>}
-        {p.cons>0&&<FilaGL l="Consumibles" v={p.cons} neg indent/>}
-        {p.customItems.map(c=><div key={c.cat} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-          <span style={{fontSize:"13px",color:T.muted,paddingLeft:"14px"}}>{c.label}</span>
-          <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-            <span style={{fontSize:"13px",fontWeight:500,color:"#f97316"}}>{fmt(c.monto)}</span>
-            {!compact&&c.items.map(it=><span key={it.id} style={{display:"flex",gap:"6px",alignItems:"center"}}>
-              {editMetodoId===it.id
-                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={it.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(it.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Tarjeta crédito">Tarjeta crédito</option>
-                  <option value="Tarjeta débito">Tarjeta débito</option>
-                </select>
-                :<button onClick={()=>setEditMetodoId(it.id)} style={{background:it.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${it.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:it.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{it.forma_pago||"Sin método +"}</button>}
-              <button onClick={()=>borrarGasto(it.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
-            </span>)}
-          </div>
-        </div>)}
-        <FilaGL l="Total gastos" v={p.egr} neg bold/>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"10px",borderTop:"2px solid rgba(255,255,255,0.1)",marginTop:"4px"}}>
-          <span style={{fontSize:compact?14:16,fontWeight:700}}>{pos?"Utilidad":"Pérdida neta"}</span>
-          <span style={{fontSize:compact?20:26,fontWeight:800,color:pos?"#10b981":"#ff6b6b"}}>{fmt(Math.abs(p.util))}</span>
-        </div>
-        {p.mg!==null&&<div style={{textAlign:"right",fontSize:"12px",color:T.muted,marginTop:"2px"}}>Margen {p.mg.toFixed(1)}%</div>}
-        {!compact&&p.nomItems.length>0&&<div style={{marginTop:"14px",paddingTop:"12px",borderTop:`1px solid ${T.div}`}}>
-          <div style={{fontSize:"10px",letterSpacing:"2px",color:T.faint,marginBottom:"6px"}}>NÓMINA REGISTRADA</div>
-          {p.nomItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted,padding:"4px 0"}}>
-            <span>{n.concepto}</span>
-            <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-              <span>{fmt(n.monto)}</span>
-              {editMetodoId===n.id
-                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={n.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(n.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Tarjeta crédito">Tarjeta crédito</option>
-                  <option value="Tarjeta débito">Tarjeta débito</option>
-                </select>
-                :<button onClick={()=>setEditMetodoId(n.id)} style={{background:n.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${n.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:n.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{n.forma_pago||"Sin método +"}</button>}
-              <button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
-            </div>
-          </div>)}
-        </div>}
-        {!compact&&p.consItems&&p.consItems.length>0&&<div style={{marginTop:"14px",paddingTop:"12px",borderTop:`1px solid ${T.div}`}}>
-          <div style={{fontSize:"10px",letterSpacing:"2px",color:T.faint,marginBottom:"6px"}}>CONSUMIBLES</div>
-          {p.consItems.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted,padding:"4px 0"}}>
-            <span>{n.concepto}</span>
-            <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-              <span>{fmt(n.monto)}</span>
-              {editMetodoId===n.id
-                ?<select autoFocus style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid rgba(99,102,241,0.6)",background:"#1e1e3a",color:"#fff",outline:"none",cursor:"pointer"}} defaultValue={n.forma_pago||"Efectivo"} onChange={e=>actualizarFormaPago(n.id,e.target.value)} onBlur={()=>setEditMetodoId(null)}>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Tarjeta crédito">Tarjeta crédito</option>
-                  <option value="Tarjeta débito">Tarjeta débito</option>
-                </select>
-                :<button onClick={()=>setEditMetodoId(n.id)} style={{background:n.forma_pago?"rgba(255,255,255,0.07)":"rgba(251,146,60,0.12)",border:`1px ${n.forma_pago?"solid rgba(255,255,255,0.15)":"dashed rgba(251,146,60,0.6)"}`,borderRadius:"5px",color:n.forma_pago?"rgba(255,255,255,0.55)":"#fb923c",cursor:"pointer",fontSize:"10px",padding:"2px 7px",lineHeight:"16px",whiteSpace:"nowrap"}}>{n.forma_pago||"Sin método +"}</button>}
-              <button onClick={()=>borrarGasto(n.id)} style={{background:"none",border:"none",color:"rgba(255,80,80,0.5)",cursor:"pointer",fontSize:"14px",padding:"0",lineHeight:1}}>×</button>
-            </div>
-          </div>)}
-        </div>}
-      </div>
-    );
-  };
-
-  const GraficoVentas=()=>{
-    // Sucursales según la vista activa
-    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
-    // Filtro de rango temporal
-    const nMeses=rangoGrafico==="3m"?3:rangoGrafico==="12m"?12:24;
-    const datos=rangoGrafico==="hist"?historialCompleto:historialVentas.slice(-nMeses);
-    const fmtK=v=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:"$0";
-    const W=860,H=220,PL=68,PR=12,PT=14,PB=44;
-    const cW=W-PL-PR,cH=H-PT-PB;
-    const maxV=Math.max(...datos.flatMap(row=>sucs.map(s=>row[s]||0)),1);
-    const nM=datos.length||nMeses;
-    const gW=cW/nM;
-    const bW=Math.max(2,Math.min(20,(gW-6)/sucs.length));
-    const gOff=(gW-bW*sucs.length)/2;
-    const yTicks=[0,0.25,0.5,0.75,1];
-    // Promedio histórico por sucursal (sobre todos los 24 meses disponibles)
-    const promedioHist=sucs.reduce((acc,s)=>{
-      const vals=historialVentas.filter(r=>r[s]>0).map(r=>r[s]||0);
-      acc[s]=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
-      return acc;
-    },{});
-    const RANGOS=[["3m","Trim."],["12m","12 M"],["24m","24 M"],["hist","Histórico"]];
-    return(
-      <div className="glass" style={{padding:"22px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px",flexWrap:"wrap",gap:"10px"}}>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS MES A MES{sucs.length===1?` · ${sucs[0].toUpperCase()}`:""}</div>
-          <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
-            <div style={{display:"flex",border:`1px solid ${light?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",overflow:"hidden"}}>
-              {RANGOS.map(([v,l])=><button key={v} onClick={()=>{setRangoGrafico(v);if(v==="hist"&&historialCompleto.length===0)cargarHistorialCompleto();}} style={{padding:"4px 12px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:rangoGrafico===v?"#2721E8":"transparent",color:rangoGrafico===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
-            </div>
-            <button className="btn-ghost" style={{fontSize:"11px",padding:"4px 10px"}} onClick={rangoGrafico==="hist"?cargarHistorialCompleto:cargarHistorial} disabled={loadingHistorial||loadingHist}>↻</button>
-          </div>
-        </div>
-        {(loadingHistorial||(rangoGrafico==="hist"&&loadingHist))?(
-          <div style={{textAlign:"center",padding:"60px 0",color:T.faint,fontSize:"13px"}}>{loadingHist?"Cargando historial completo...":"Cargando datos..."}</div>
-        ):(
-          <>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",overflow:"visible"}}>
-              {yTicks.map(p=>{const y=PT+cH*(1-p);return(<g key={p}>
-                <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"} strokeWidth={1}/>
-                <text x={PL-6} y={y+4} textAnchor="end" fontSize={9} fill={T.faint}>{fmtK(maxV*p)}</text>
-              </g>);})}
-              {/* Líneas de promedio histórico por sucursal */}
-              {rangoGrafico!=="24m"&&sucs.map(suc=>{
-                const py=PT+cH-(promedioHist[suc]/maxV)*cH;
-                if(promedioHist[suc]<=0)return null;
-                return(<line key={`avg-${suc}`} x1={PL} y1={py} x2={W-PR} y2={py}
-                  stroke={COLORES[suc]} strokeWidth={1} strokeDasharray="4 3" opacity={0.45}/>);
-              })}
-              {datos.map((row,gi)=>{
-                const gx=PL+gi*gW;
-                const mesLabel=new Date(`${row.mes}-15`).toLocaleDateString("es-MX",{month:"short"}).replace(".","").toUpperCase().slice(0,3);
-                const esAnio=gi===0||row.mes.slice(5,7)==="01";
-                return(<g key={row.mes}>
-                  {sucs.map((suc,si)=>{
-                    const val=row[suc]||0;
-                    const bH=Math.max(val>0?2:0,(val/maxV)*cH);
-                    const x=gx+gOff+si*bW;
-                    const y=PT+cH-bH;
-                    return(<rect key={suc} x={x} y={y} width={Math.max(1,bW-1)} height={bH}
-                      fill={COLORES[suc]} opacity={0.85} rx={2}
-                      onMouseEnter={()=>setTooltipBar({suc,val,mes:row.mes,x:x+bW/2,y:Math.max(y,PT+10),prom:promedioHist[suc]})}
-                      onMouseLeave={()=>setTooltipBar(null)} style={{cursor:"default"}}/>);
-                  })}
-                  <text x={gx+gW/2} y={H-PB+14} textAnchor="middle" fontSize={9} fill={T.faint}>{mesLabel}</text>
-                  {esAnio&&<text x={gx+gW/2} y={H-PB+26} textAnchor="middle" fontSize={8} fill={T.faint} opacity={0.6}>{row.mes.slice(0,4)}</text>}
-                </g>);
-              })}
-              {tooltipBar&&(<g style={{pointerEvents:"none"}}>
-                <rect x={Math.min(tooltipBar.x-60,W-PR-120)} y={Math.max(tooltipBar.y-52,PT)} width={120} height={tooltipBar.prom>0?44:24} rx={4} fill="rgba(0,0,0,0.88)"/>
-                <text x={Math.min(tooltipBar.x,W-PR-60)} y={Math.max(tooltipBar.y-35,PT+16)} textAnchor="middle" fontSize={10} fill="#fff" fontWeight="700">{tooltipBar.suc}: {fmt(tooltipBar.val)}</text>
-                {tooltipBar.prom>0&&<text x={Math.min(tooltipBar.x,W-PR-60)} y={Math.max(tooltipBar.y-35,PT+16)+14} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.6)">Prom: {fmt(tooltipBar.prom)}</text>}
-              </g>)}
-            </svg>
-            <div style={{display:"flex",gap:"16px",justifyContent:"center",flexWrap:"wrap",marginTop:"10px",alignItems:"center"}}>
-              {sucs.map(s=><div key={s} style={{display:"flex",alignItems:"center",gap:"5px"}}>
-                <div style={{width:"10px",height:"10px",borderRadius:"2px",background:COLORES[s]}}/>
-                <span style={{fontSize:"11px",color:T.muted}}>{s}</span>
-              </div>)}
-              {rangoGrafico!=="24m"&&sucs.length>0&&<div style={{display:"flex",alignItems:"center",gap:"5px",marginLeft:"8px",paddingLeft:"8px",borderLeft:`1px solid ${T.div}`}}>
-                <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke={T.faint} strokeWidth="1" strokeDasharray="4 2"/></svg>
-                <span style={{fontSize:"11px",color:T.faint}}>Promedio histórico</span>
-              </div>}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  const AnalisisSemanal=()=>{
-    const sucs=(vista==="individual"||esSocia)?[sucSel]:vista==="consolidado"?sucMulti.filter(s=>sucVisible.includes(s)):sucVisible;
-    const[y,m]=periodo.split("-").map(Number);
-    const trimestre=Math.ceil(m/3);
-    const sigMes=m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`;
-
-    // ── Bloque semanal ────────────────────────────────────────────
-    const bloquesSemanal=()=>{
-      if(loadingSemanales)return(<div style={{textAlign:"center",padding:"40px 0",color:T.faint,fontSize:"13px"}}>Cargando semanas...</div>);
-      if(!ventasSemanales)return null;
-      const{semanas,totalMes}=ventasSemanales;
-      const totalGeneral=sucs.reduce((a,s)=>a+(totalMes[s]||0),0);
-      if(totalGeneral===0)return(<div style={{textAlign:"center",padding:"40px 0",color:T.faint,fontSize:"13px"}}>Sin datos para {etiq(periodo)}</div>);
-      const maxSemTotal=Math.max(...semanas.map(r=>sucs.reduce((a,s)=>a+r[s],0)),1);
-      return(
-        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-          {semanas.map(row=>{
-            const rowTotal=sucs.reduce((a,s)=>a+row[s],0);
-            const pct=totalGeneral>0?(rowTotal/totalGeneral*100):0;
-            const barW=rowTotal/maxSemTotal*100;
-            return(
-              <div key={row.semana} style={{background:light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)",borderRadius:"12px",padding:"16px 20px"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-                  <div style={{display:"flex",alignItems:"baseline",gap:"10px"}}>
-                    <span style={{fontSize:"18px",fontWeight:800,color:T.txt}}>S{row.semana}</span>
-                    <span style={{fontSize:"12px",color:T.faint}}>{row.desde.slice(8)} – {row.hasta.slice(8)} {new Date(`${row.desde}T12:00:00`).toLocaleDateString("es-MX",{month:"short"}).replace(".","")}</span>
-                  </div>
-                  <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
-                    <span style={{fontSize:"26px",fontWeight:800,color:T.txt,letterSpacing:"-0.5px"}}>{pct.toFixed(1)}%</span>
-                    <span style={{fontSize:"13px",color:T.faint,fontWeight:500}}>{fmt(rowTotal)}</span>
-                  </div>
-                </div>
-                {/* Barra principal */}
-                <div style={{height:"10px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",borderRadius:"6px",overflow:"hidden",marginBottom:"10px"}}>
-                  <div style={{height:"100%",width:`${barW}%`,background:"linear-gradient(90deg,#2721E8,#49B8D3)",borderRadius:"6px",transition:"width 0.6s ease"}}/>
-                </div>
-                {/* Desglose por sucursal */}
-                {sucs.length>1&&<div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
-                  {sucs.map(s=>{
-                    const pctS=totalMes[s]>0?(row[s]/totalMes[s]*100):0;
-                    return(<div key={s} style={{display:"flex",alignItems:"center",gap:"5px",minWidth:"100px"}}>
-                      <div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s],flexShrink:0}}/>
-                      <span style={{fontSize:"11px",color:T.muted}}>{s}</span>
-                      <span style={{fontSize:"12px",fontWeight:700,color:COLORES[s],marginLeft:"auto"}}>{pctS.toFixed(1)}%</span>
-                    </div>);
-                  })}
-                </div>}
-              </div>
-            );
-          })}
-          {/* Total del mes */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderTop:`1px solid ${T.div}`,marginTop:"4px"}}>
-            <span style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,fontWeight:700}}>TOTAL {etiq(periodo).toUpperCase()}</span>
-            <div style={{display:"flex",gap:"16px",flexWrap:"wrap",justifyContent:"flex-end"}}>
-              {sucs.length>1&&sucs.map(s=><span key={s} style={{fontSize:"13px",fontWeight:700,color:COLORES[s]}}>{s}: {fmt(totalMes[s]||0)}</span>)}
-              <span style={{fontSize:"16px",fontWeight:800,color:T.txt}}>{fmt(totalGeneral)}</span>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    // ── Bloque proyección IA ──────────────────────────────────────
-    const bloqueProyeccion=()=>(
-      <div style={{borderTop:`1px solid ${T.div}`,paddingTop:"24px",marginTop:"8px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"18px",flexWrap:"wrap",gap:"10px"}}>
-          <div>
-            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>PROYECCIÓN IA · {etiq(sigMes).toUpperCase()}</div>
-            <div style={{fontSize:"11px",color:T.faint,marginTop:"2px"}}>Descomposición estacional (STL) · regresión ponderada · validado por IA · excluye {etiq(periodo)} (mes incompleto)</div>
-          </div>
-          <button className="btn-blue" style={{fontSize:"12px",padding:"7px 16px"}} onClick={proyectarIA} disabled={loadingProy||historialVentas.filter(r=>r.mes<periodo).length<4}>
-            {loadingProy?"Analizando...":proyeccion?"Recalcular":"Proyectar con IA"}
-          </button>
-        </div>
-        {loadingProy&&<div style={{textAlign:"center",padding:"30px 0",color:T.faint,fontSize:"13px",fontStyle:"italic"}}>Corriendo modelo STL + consultando IA para ajuste estacional...</div>}
-        {proyeccion&&!proyeccion.error&&<>
-          {/* Pipeline: STL base → corrección sesgo → ajuste temporada → final */}
-          <div style={{display:"flex",gap:"8px",marginBottom:"16px",flexWrap:"wrap",alignItems:"stretch"}}>
-            <div style={{flex:1,minWidth:"120px",background:light?"rgba(0,0,0,0.04)":"rgba(255,255,255,0.05)",borderRadius:"10px",padding:"12px 14px"}}>
-              <div style={{fontSize:"10px",letterSpacing:"1px",color:T.faint,marginBottom:"4px"}}>STL BASE</div>
-              <div style={{fontSize:"17px",fontWeight:700,color:T.muted}}>{fmt(proyeccion.totalModeloBase||0)}</div>
-              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>sin corregir</div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div>
-            <div style={{flex:1,minWidth:"130px",background:light?"rgba(249,115,22,0.07)":"rgba(249,115,22,0.12)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(249,115,22,0.2)"}}>
-              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#f97316",marginBottom:"4px"}}>CORRECCIÓN SESGO</div>
-              <div style={{fontSize:"17px",fontWeight:700,color:T.txt}}>{fmt(proyeccion.totalCorregido||0)}</div>
-              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>walk-forward validation</div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div>
-            {(proyeccion.ajuste_temporalidad||0)!==0&&<><div style={{flex:1,minWidth:"120px",background:light?"rgba(16,185,129,0.07)":"rgba(16,185,129,0.12)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(16,185,129,0.2)"}}>
-              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#10b981",marginBottom:"4px"}}>AJUSTE TEMPORADA</div>
-              <div style={{fontSize:"17px",fontWeight:700,color:"#10b981"}}>{proyeccion.ajuste_temporalidad>0?"+":""}{proyeccion.ajuste_temporalidad}%</div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",color:T.faint,fontSize:"14px"}}>→</div></>}
-            <div style={{flex:2,minWidth:"160px",background:light?"rgba(39,33,232,0.07)":"rgba(39,33,232,0.18)",borderRadius:"10px",padding:"12px 14px",border:"1px solid rgba(39,33,232,0.3)"}}>
-              <div style={{fontSize:"10px",letterSpacing:"1px",color:"#a5b4fc",marginBottom:"4px"}}>PROYECCIÓN FINAL</div>
-              <div style={{fontSize:"26px",fontWeight:800,color:T.txt}}>{fmt(proyeccion.proyeccion_total||0)}</div>
-              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>Confianza: <span style={{color:proyeccion.confianza==="alta"?"#10b981":proyeccion.confianza==="media"?"#f0c040":"#f97316",fontWeight:700}}>{proyeccion.confianza||"—"}</span></div>
-            </div>
-          </div>
-          {/* Por sucursal con métricas del modelo */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:"10px",marginBottom:"20px"}}>
-            {sucs.map(s=>{
-              const mod=proyeccion.modeloPorSuc?.find(x=>x.s===s);
-              const sesgoPct=mod?Math.round(mod.sesgo*100):0;
-              return(<div key={s} style={{background:light?`${COLORES[s]}0d`:`${COLORES[s]}18`,borderRadius:"10px",padding:"12px 14px",border:`1px solid ${COLORES[s]}35`}}>
-                <div style={{fontSize:"10px",letterSpacing:"1px",color:COLORES[s],marginBottom:"6px"}}>{s.toUpperCase()}</div>
-                <div style={{fontSize:"20px",fontWeight:800,color:T.txt,marginBottom:"6px"}}>{fmt(proyeccion.por_sucursal?.[s]||0)}</div>
-                {mod&&<div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                  <span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:mod.idxEst>=1?"rgba(16,185,129,0.15)":"rgba(249,115,22,0.15)",color:mod.idxEst>=1?"#10b981":"#f97316",fontWeight:700}}>
-                    {mod.idxEst}x estacional
-                  </span>
-                  {mod.mape!=null&&<span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:"rgba(255,255,255,0.08)",color:T.faint}}>
-                    MAPE {mod.mape}%
-                  </span>}
-                  {sesgoPct!==0&&<span style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",background:sesgoPct>0?"rgba(249,115,22,0.12)":"rgba(16,185,129,0.12)",color:sesgoPct>0?"#f97316":"#10b981",fontWeight:600}}>
-                    sesgo {sesgoPct>0?"+":""}{sesgoPct}% → corregido
-                  </span>}
-                  {mod.tendMensual!==0&&<span style={{fontSize:"10px",color:T.faint}}>{mod.tendMensual>0?"↑":"↓"}{Math.abs(mod.tendMensual)}%/mes</span>}
-                </div>}
-              </div>);
-            })}
-          </div>
-          {/* OKRs semanales */}
-          {proyeccion.semanas_okr&&<>
-            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"12px"}}>OKRs SEMANALES — {etiq(sigMes).toUpperCase()}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-              {proyeccion.semanas_okr.map(s=>{
-                const monto=s.monto||Math.round((proyeccion.proyeccion_total||0)*s.pct/100);
-                return(
-                  <div key={s.sem} style={{background:light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)",borderRadius:"10px",padding:"14px 18px"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-                      <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
-                        <span style={{fontSize:"16px",fontWeight:800,color:T.txt}}>S{s.sem}</span>
-                        <span style={{fontSize:"11px",color:T.faint}}>{s.dias}</span>
-                      </div>
-                      <div style={{display:"flex",alignItems:"baseline",gap:"8px"}}>
-                        <span style={{fontSize:"22px",fontWeight:800,color:"#a5b4fc"}}>{s.pct}%</span>
-                        <span style={{fontSize:"14px",color:T.muted,fontWeight:700}}>{fmt(monto)}</span>
-                      </div>
-                    </div>
-                    <div style={{height:"6px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",borderRadius:"4px",overflow:"hidden",marginBottom:"8px"}}>
-                      <div style={{height:"100%",width:`${Math.min(s.pct*3,100)}%`,background:"linear-gradient(90deg,#a5b4fc,#2721E8)",borderRadius:"4px"}}/>
-                    </div>
-                    {s.razon&&<div style={{fontSize:"11px",color:T.faint,fontStyle:"italic"}}>{s.razon}</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </>}
-          {proyeccion.insight&&<div style={{marginTop:"16px",padding:"14px 16px",background:light?"rgba(39,33,232,0.05)":"rgba(39,33,232,0.12)",borderRadius:"10px",borderLeft:"3px solid #2721E8"}}>
-            <div style={{fontSize:"10px",letterSpacing:"1px",color:"#a5b4fc",marginBottom:"6px"}}>INSIGHT DEL MODELO</div>
-            <div style={{fontSize:"13px",color:T.muted,lineHeight:"1.6"}}>{proyeccion.insight}</div>
-          </div>}
-        </>}
-        {proyeccion?.error&&<div style={{color:"#f97316",fontSize:"13px",padding:"12px 0"}}>{proyeccion.error}</div>}
-      </div>
-    );
-
-    return(
-      <div className="glass" style={{padding:"22px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px",flexWrap:"wrap",gap:"8px"}}>
-          <div>
-            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS SEMANALES · {etiq(periodo).toUpperCase()}</div>
-            <div style={{fontSize:"11px",color:T.faint,marginTop:"2px"}}>Q{trimestre} {y} · % del total mensual por semana</div>
-          </div>
-        </div>
-        {bloquesSemanal()}
-        {bloqueProyeccion()}
-      </div>
-    );
-  };
-
-  const actSucMulti=sucMulti.filter(s=>sucVisible.includes(s));
-  const pc=actSucMulti.length>0?plC(actSucMulti):null;
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-    {/* Controles */}
-    <div style={{display:"flex",alignItems:"flex-end",gap:"16px",flexWrap:"wrap"}}>
-      <div>
-        <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>PERÍODO</div>
-        <select className="inp" style={{width:"160px"}} value={periodo} onChange={e=>setPeriodo(e.target.value)}>
-          {listaMeses.map(m=><option key={m} value={m}>{etiq(m)}</option>)}
-        </select>
-      </div>
-      <div>
-        <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>VISTA</div>
-        <div style={{display:"flex",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",overflow:"hidden"}}>
-          {([["individual","Individual"],["consolidado","Consolidado"],["comparativa","Comparativa"],["comisiones","Comisiones"]]).map(([v,l])=><button key={v} onClick={()=>{setVista(v);setAiTxt("");}} style={{padding:"7px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:"none",background:vista===v?"#2721E8":"transparent",color:vista===v?"#fff":T.sub,fontFamily:"'Albert Sans',sans-serif"}}>{l}</button>)}
-        </div>
-      </div>
-      {(vista==="individual"||vista==="comisiones"||esSocia)&&<div>
-        <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>SUCURSAL</div>
-        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-          {sucVisible.map(s=><button key={s} onClick={()=>{setSucSel(s);setAiTxt("");}} style={{padding:"6px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${sucSel===s?COLORES[s]:"rgba(255,255,255,0.1)"}`,borderRadius:"8px",background:sucSel===s?`${COLORES[s]}22`:"transparent",color:sucSel===s?(light?COLORES[s]:"#fff"):T.faint,fontFamily:"'Albert Sans',sans-serif",transition:"all 0.15s"}}>{s}</button>)}
-        </div>
-      </div>}
-      {vista==="consolidado"&&<div>
-        <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"4px"}}>SELECCIONAR SUCURSALES</div>
-        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-          {sucVisible.map(s=>{const on=sucMulti.includes(s);return<button key={s} onClick={()=>setSucMulti(on?sucMulti.filter(x=>x!==s):[...sucMulti,s])} style={{padding:"6px 14px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${on?COLORES[s]:"rgba(255,255,255,0.1)"}`,borderRadius:"8px",background:on?`${COLORES[s]}22`:"transparent",color:on?(light?COLORES[s]:"#fff"):T.faint,fontFamily:"'Albert Sans',sans-serif",transition:"all 0.15s"}}>{s}</button>;})}
-        </div>
-      </div>}
-      <button className="btn-ghost" onClick={cargar} style={{marginLeft:"auto"}} disabled={loading}>↻</button>
-      {loading&&<span style={{fontSize:"11px",color:T.sub}}>Cargando...</span>}
-    </div>
-
-    {/* Gráfico histórico de ventas */}
-    {vista!=="comisiones"&&<GraficoVentas/>}
-
-    {/* Análisis semanal + proyección IA */}
-    {vista!=="comisiones"&&<AnalisisSemanal/>}
-
-    {/* Vistas P&L — overlay mientras carga para no ver cambios bruscos */}
-    {vista!=="comisiones"&&<div style={{position:"relative",opacity:loading?0.45:1,transition:"opacity 0.2s",pointerEvents:loading?"none":"auto"}}>
-      {loading&&<div style={{position:"absolute",inset:0,zIndex:10,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"40px"}}>
-        <div style={{background:light?"rgba(255,255,255,0.9)":"rgba(20,20,40,0.85)",borderRadius:"20px",padding:"8px 20px",fontSize:"12px",fontWeight:600,color:T.muted,backdropFilter:"blur(4px)",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>Cargando datos...</div>
-      </div>}
-
-      {/* Vista individual */}
-      {vista==="individual"&&<TarjetaPL suc={sucSel}/>}
-
-      {/* Vista consolidada */}
-      {vista==="consolidado"&&pc&&<>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-          {[{l:"INGRESOS",v:fmt(pc.ing),c:"#10b981"},{l:"GASTOS",v:fmt(pc.egr),c:"#f97316"},{l:pc.util>=0?"UTILIDAD":"PÉRDIDA",v:fmt(Math.abs(pc.util)),c:pc.util>=0?"#10b981":"#ff6b6b"},{l:"MARGEN",v:pc.mg!==null?`${pc.mg.toFixed(1)}%`:"—",c:pc.mg>=20?"#10b981":pc.mg>=0?"#f0c040":"#ff6b6b"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"8px"}}>{k.l}</div><div style={{fontSize:"26px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${actSucMulti.length},1fr)`,gap:"14px"}}>
-          {actSucMulti.map(s=><TarjetaPL key={s} suc={s} compact/>)}
-        </div>
-      </>}
-
-      {/* Vista comparativa */}
-      {vista==="comparativa"&&<>
-        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>{etiq(periodo).toUpperCase()} VS {etiq(antYM(periodo)).toUpperCase()}</div>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(sucVisible.length,5)},1fr)`,gap:"14px"}}>
-          {sucVisible.map(s=><TarjetaPL key={s} suc={s} compact showDelta/>)}
-        </div>
-      </>}
-    </div>}
-
-    {/* Panel comisiones */}
-    {vista==="comisiones"&&<div className="glass" style={{padding:"22px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
-        <div>
-          <div style={{fontSize:"14px",fontWeight:700}}>Comisiones cosmetaras</div>
-          <div style={{fontSize:"11px",color:T.sub}}>{sucSel} · {etiq(periodo)}</div>
-        </div>
-        <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-          {comSubTab==="tabla"&&<input className="inp" placeholder="Buscar por nombre…" value={buscarCom} onChange={e=>setBuscarCom(e.target.value)} style={{width:"200px",fontSize:"12px"}}/>}
-          {comSubTab==="tabla"&&<button className="btn-ghost" onClick={cargarComisiones} disabled={loadingCom} style={{fontSize:"12px"}}>↻ {loadingCom?"Cargando...":"Actualizar"}</button>}
-          {comSubTab==="tabla"&&<button className="btn-blue" onClick={exportarComPDF} disabled={!comData.length} style={{fontSize:"12px"}}>⬇ Exportar PDF</button>}
-          {comSubTab==="comparativo"&&<button className="btn-ghost" onClick={cargarComparativoZettle} disabled={loadingComZettle} style={{fontSize:"12px"}}>↻ {loadingComZettle?"Cargando...":"Actualizar"}</button>}
-        </div>
-      </div>
-      <div style={{display:"flex",gap:"6px",marginBottom:"16px"}}>
-        {[["tabla","Plataforma"],["comparativo","Comparativo Zettle"]].map(([v,l])=><button key={v} onClick={()=>setComSubTab(v)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:600,cursor:"pointer",background:comSubTab===v?"rgba(39,33,232,0.15)":"transparent",borderColor:comSubTab===v?"#2721E8":T.dim,color:comSubTab===v?"#2721E8":T.muted}}>{l}</button>)}
-      </div>
-      {comSubTab==="comparativo"&&(()=>{
-        const totalPlataforma=comData.reduce((s,r)=>s+r.monto,0);
-        const totalZettle=comZettleTotal?.total??0;
-        const diff=totalZettle-totalPlataforma;
-        const pct=totalZettle>0?Math.round(totalPlataforma/totalZettle*100):0;
-        const color=p=>p>=90?"#10b981":p>=70?"#f59e0b":"#ef4444";
-        return<div>
-          <div style={{fontSize:"11px",color:T.sub,marginBottom:"14px"}}>Total mensual capturado en Zettle vs. total registrado en plataforma · {sucSel} · {etiq(periodo)}</div>
-          {loadingComZettle&&<div style={{textAlign:"center",padding:"30px",color:T.muted,fontSize:"13px"}}>Cargando datos de Zettle...</div>}
-          {!loadingComZettle&&<div style={{display:"grid",gridTemplateColumns:"1fr 140px 1fr",gap:"24px",alignItems:"center",padding:"18px 20px",background:light?"#f8f9ff":"rgba(39,33,232,0.06)",borderRadius:"12px",border:`1px solid ${T.div}`}}>
-            <div>
-              <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"10px"}}>💳 ZETTLE (MES)</div>
-              <div style={{fontSize:"28px",fontWeight:800,color:"#49B8D3"}}>{fmt(totalZettle)}</div>
-              <div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>{comZettleTotal?.count??0} ventas</div>
-            </div>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:"22px",fontWeight:800,color:color(pct)}}>{pct}%</div>
-              <div style={{fontSize:"10px",color:T.faint,marginTop:"4px"}}>capturado</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"10px"}}>🖥 PLATAFORMA (MES)</div>
-              <div style={{fontSize:"28px",fontWeight:800,color:"#10b981"}}>{fmt(totalPlataforma)}</div>
-              <div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>{comData.length} registros</div>
-            </div>
-          </div>}
-          {!loadingComZettle&&diff>0&&<div style={{marginTop:"12px",fontSize:"12px",color:"#ef4444",fontWeight:600}}>Faltan {fmt(diff)} por capturar en plataforma este mes.</div>}
-        </div>;
-      })()}
-      {comSubTab==="tabla"&&<>
-      {loadingCom&&<div style={{textAlign:"center",padding:"30px",color:T.muted,fontSize:"13px"}}>Cargando datos...</div>}
-      {!loadingCom&&comData.length===0&&<div style={{textAlign:"center",padding:"30px",color:T.faint,fontSize:"13px"}}>Sin registros para este período</div>}
-      {!loadingCom&&comData.length>0&&(()=>{const comFiltrado=buscarCom.trim()?comData.filter(r=>r.nombre.toLowerCase().includes(buscarCom.toLowerCase())):comData;return(<div style={{overflowX:"auto"}}>
-        {buscarCom.trim()&&<div style={{fontSize:"11px",color:T.sub,marginBottom:"8px"}}>{comFiltrado.length} resultado{comFiltrado.length!==1?"s":""} para "{buscarCom}"</div>}
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
-          <thead>
-            <tr style={{borderBottom:`2px solid ${T.div}`}}>
-              {["Fecha","Hora","Recibo","Nombre","Usuario","Servicios","Terminal","MSI","Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:["Monto","Com. Base","Com. MSI","Com. Terminal","Monto Recibido","Com. Cosmetara"].includes(h)?"right":"left",fontSize:"10px",letterSpacing:"1px",color:T.faint,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {comFiltrado.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${T.div}`,background:i%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
-              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.muted}}>{r.fecha}</td>
-              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.faint,fontSize:"11px"}}>{r.hora}</td>
-              <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:"11px",color:T.faint,whiteSpace:"nowrap"}}>{r.recibo}</td>
-              <td style={{padding:"7px 10px",fontWeight:500,whiteSpace:"nowrap"}}>{r.nombre}</td>
-              <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:T.muted,fontSize:"11px"}}>{r.usuario}</td>
-              <td style={{padding:"7px 10px",color:T.muted,maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.servicios}</td>
-              <td style={{padding:"4px 10px",whiteSpace:"nowrap"}}>
-                {editTerminalCom===r.id
-                  ?<select autoFocus value={r.terminal} onChange={e=>guardarTerminalCom(r.id,e.target.value==="Efectivo / Otro"?null:e.target.value)} onBlur={()=>setEditTerminalCom(null)} style={{fontSize:"11px",padding:"4px 6px",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
-                    {["Efectivo / Otro","Mercado Pago","Zettle","BBVA","Banorte"].map(t=><option key={t} value={t}>{t}</option>)}
-                  </select>
-                  :<div style={{display:"flex",alignItems:"center",gap:"5px",cursor:"pointer"}} onClick={()=>setEditTerminalCom(r.id)}>
-                    <span style={{padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:600,background:r.terminal==="Efectivo / Otro"?"rgba(255,255,255,0.06)":r.terminal==="Mercado Pago"?"rgba(0,174,239,0.12)":r.terminal==="Zettle"?"rgba(73,184,211,0.12)":"rgba(99,102,241,0.12)",color:r.terminal==="Efectivo / Otro"?T.faint:r.terminal==="Mercado Pago"?"#00aeef":r.terminal==="Zettle"?"#49B8D3":"#a5b4fc"}}>{r.terminal}</span>
-                    {r.comision_terminal_override&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
-                    <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✎</span>
-                  </div>}
-              </td>
-              <td style={{padding:"4px 10px",textAlign:"center"}}>
-                {editMsiCom===r.id
-                  ?<select autoFocus value={r.msi_meses||""} onChange={e=>guardarMsiCom(r.id,e.target.value||null)} onBlur={()=>setEditMsiCom(null)} style={{fontSize:"11px",padding:"4px 6px",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",cursor:"pointer",fontFamily:"inherit",width:"70px"}}>
-                    <option value="">—</option>
-                    {[3,6,9,12].map(m=><option key={m} value={m}>{m} MSI</option>)}
-                  </select>
-                  :<div style={{display:"inline-flex",alignItems:"center",gap:"4px",cursor:"pointer"}} onClick={()=>setEditMsiCom(r.id)}>
-                    <span style={{color:T.faint}}>{r.msi_meses?`${r.msi_meses}`:""}</span>
-                    {r.comision_msi_override!==null&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
-                    <span style={{fontSize:"10px",color:T.faint,opacity:0.4}}>✎</span>
-                  </div>}
-              </td>
-              <td style={{padding:"4px 10px",textAlign:"right"}}>
-                {editMontoCom===r.id
-                  ?<div style={{display:"flex",alignItems:"center",gap:"4px",justifyContent:"flex-end"}}>
-                    <input autoFocus type="number" value={editMontoVal} onChange={e=>setEditMontoVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")guardarMontoCom(r.id,editMontoVal);if(e.key==="Escape")setEditMontoCom(null);}} style={{width:"90px",padding:"4px 6px",fontSize:"12px",textAlign:"right",borderRadius:"6px",border:"1px solid rgba(39,33,232,0.6)",background:light?"#fff":"#1e1e3a",color:light?"#111":"#fff",outline:"none",fontFamily:"inherit"}}/>
-                    <button onClick={()=>guardarMontoCom(r.id,editMontoVal)} style={{background:"#2721E8",border:"none",borderRadius:"5px",color:"#fff",cursor:"pointer",fontSize:"11px",padding:"4px 7px"}}>✓</button>
-                    <button onClick={()=>setEditMontoCom(null)} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"5px",color:"#888",cursor:"pointer",fontSize:"11px",padding:"4px 7px"}}>✕</button>
-                  </div>
-                  :<div style={{display:"flex",alignItems:"center",gap:"6px",justifyContent:"flex-end",cursor:"pointer"}} onClick={()=>{setEditMontoCom(r.id);setEditMontoVal(r.monto);}}>
-                    <span style={{fontWeight:600}}>{fmt(r.monto)}</span>
-                    {r.comision_monto!=null&&<span style={{fontSize:"9px",background:"rgba(39,33,232,0.15)",color:"#818cf8",borderRadius:"4px",padding:"1px 5px"}}>adj</span>}
-                    <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✎</span>
-                  </div>}
-              </td>
-              <td style={{padding:"7px 10px",textAlign:"right",color:"#f97316"}}>{r.com_base>0?`-${fmt(r.com_base)}`:"—"}</td>
-              <td style={{padding:"7px 10px",textAlign:"right",color:"#f97316"}}>{r.com_msi>0?`-${fmt(r.com_msi)}`:"—"}</td>
-              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{r.com_terminal>0?`-${fmt(r.com_terminal)}`:"—"}</td>
-              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#10b981"}}>{fmt(r.monto_recibido)}</td>
-              <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#49B8D3"}}>{r.com_cosmetara>0?fmt(r.com_cosmetara):"—"}</td>
-              <td style={{padding:"7px 10px",position:"relative"}}>
-                {r.comision_periodo&&<span style={{fontSize:"9px",background:"rgba(251,146,60,0.15)",color:"#f97316",border:"1px solid rgba(251,146,60,0.4)",borderRadius:"10px",padding:"1px 6px",marginRight:"4px",whiteSpace:"nowrap"}}>{etiq(r.comision_periodo).split(" ")[0]}</span>}
-                <div style={{display:"flex",gap:"4px",alignItems:"center"}}>
-                  {confirmDelCom!==r.id&&<button onClick={()=>setMoverFila(moverFila===r.id?null:r.id)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",color:T.muted,cursor:"pointer",fontSize:"11px",padding:"3px 8px",fontFamily:"inherit",whiteSpace:"nowrap"}}>→ Mover</button>}
-                  {confirmDelCom===r.id
-                    ?<div style={{display:"flex",gap:"4px",whiteSpace:"nowrap"}}>
-                        <button onClick={()=>setConfirmDelCom(null)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"6px",color:T.muted,cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit"}}>No</button>
-                        <button onClick={()=>eliminarFilaCom(r.id)} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:"6px",color:"#ef4444",cursor:"pointer",padding:"3px 8px",fontSize:"11px",fontFamily:"inherit",fontWeight:700}}>¿Sí?</button>
-                      </div>
-                    :<button onClick={()=>setConfirmDelCom(r.id)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.35)",cursor:"pointer",fontSize:"15px",padding:"2px 4px",lineHeight:1}} title="Eliminar">🗑</button>}
-                </div>
-                {moverFila===r.id&&<div style={{position:"absolute",right:0,top:"100%",zIndex:50,background:light?"#fff":"#1e1e3a",border:`1px solid ${T.div}`,borderRadius:"10px",padding:"8px",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",minWidth:"150px"}}>
-                  <div style={{fontSize:"10px",letterSpacing:"1px",color:T.faint,marginBottom:"6px",padding:"0 4px"}}>MOVER A</div>
-                  {mesesOpciones.map((mes,i)=><button key={mes} onClick={()=>moverComision(r.id,mes)} style={{display:"block",width:"100%",textAlign:"left",padding:"7px 10px",background:"none",border:i===5?"1px solid rgba(255,255,255,0.08)":"none",borderLeft:"none",borderRight:"none",borderTop:i===6?"1px solid rgba(255,255,255,0.08)":"none",borderBottom:"none",borderRadius:"0",color:i<6?T.faint:T.text,cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}} onMouseEnter={e=>e.target.style.background="rgba(39,33,232,0.1)"} onMouseLeave={e=>e.target.style.background="none"}>{i===5?"── ":i===6?"→ ":i<6?"← ":""}{etiq(mes)}</button>)}
-                  {r.comision_periodo&&<><div style={{height:"1px",background:T.div,margin:"4px 0"}}/>
-                  <button onClick={()=>moverComision(r.id,null)} style={{display:"block",width:"100%",textAlign:"left",padding:"7px 10px",background:"none",border:"none",borderRadius:"6px",color:"#f97316",cursor:"pointer",fontSize:"11px",fontFamily:"inherit"}}>↩ Restaurar fecha original</button></>}
-                </div>}
-              </td>
-            </tr>)}
-          </tbody>
-          <tfoot>{(()=>{const tot=comFiltrado.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});const r2=v=>Math.round(v*100)/100;return(<tr style={{borderTop:`2px solid ${T.div}`,background:"rgba(255,255,255,0.04)"}}>
-            <td colSpan={8} style={{padding:"10px",fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:T.sub}}>TOTAL · {comFiltrado.length} registros{buscarCom.trim()?` (filtrado de ${comData.length})`:""}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px"}}>{fmt(r2(tot.monto))}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_base>0?`-${fmt(r2(tot.com_base))}`:"—"}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_msi>0?`-${fmt(r2(tot.com_msi))}`:"—"}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_terminal>0?`-${fmt(r2(tot.com_terminal))}`:"—"}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px",color:"#10b981"}}>{fmt(r2(tot.monto_recibido))}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px",color:"#49B8D3"}}>{fmt(r2(tot.com_cosmetara))}</td>
-          </tr>);})()}</tfoot>
-        </table>
-      </div>);})()}
-
-    {/* Resumen comisión recepcionista */}
-    {!loadingCom&&comData.length>0&&(()=>{
-      const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
-      const r2=v=>Math.round(v*100)/100;
-      const baseRecep=r2(tot.monto_recibido-tot.com_cosmetara);
-      const tier=getTierRecep(baseRecep);
-      const comRecep=r2(baseRecep*tier.pct/100);
-      return(
-        <div style={{marginTop:"16px",padding:"18px 20px",background:light?"#f8f9ff":"rgba(39,33,232,0.06)",border:`1px solid ${light?"rgba(39,33,232,0.15)":"rgba(39,33,232,0.25)"}`,borderRadius:"12px"}}>
-          <div style={{fontSize:"11px",letterSpacing:"2px",color:"#2721E8",fontWeight:700,marginBottom:"14px"}}>COMISIÓN RECEPCIONISTA</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"12px",marginBottom:"14px"}}>
-            {[["Ventas brutas",fmt(r2(tot.monto)),T.text],["− Com. terminal",`-${fmt(r2(tot.com_terminal))}`,"#f97316"],["− Com. cosmetaras",`-${fmt(r2(tot.com_cosmetara))}`,"#49B8D3"],["Base recepcionista",fmt(baseRecep),"#10b981"],["Nivel alcanzado",`${tier.pct.toFixed(2)}%`,tier.pct>0?"#2721E8":T.faint]].map(([l,v,c])=>(
-              <div key={l} style={{padding:"12px 14px",background:light?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.04)",borderRadius:"8px",border:`1px solid ${T.div}`}}>
-                <div style={{fontSize:"10px",color:T.faint,marginBottom:"4px"}}>{l}</div>
-                <div style={{fontSize:"16px",fontWeight:700,color:c}}>{v}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",background:tier.pct>0?(light?"rgba(39,33,232,0.07)":"rgba(39,33,232,0.15)"):"rgba(255,255,255,0.03)",borderRadius:"10px",border:`1px solid ${tier.pct>0?"rgba(39,33,232,0.3)":T.div}`}}>
-            <div>
-              <div style={{fontSize:"12px",color:T.sub,marginBottom:"2px"}}>Comisión recepcionista · {fmt(baseRecep)} × {tier.pct.toFixed(2)}%</div>
-              {tier.pct===0&&<div style={{fontSize:"11px",color:T.faint}}>Se requieren al menos $100,000 para generar comisión</div>}
-              {tier.pct>0&&(()=>{const nextTier=TIERS_RECEP.filter(t=>t.desde>baseRecep).at(-1);return nextTier?<div style={{fontSize:"11px",color:T.faint}}>Siguiente nivel: {nextTier.pct.toFixed(2)}% al llegar a {fmt(nextTier.desde)}</div>:null;})()}
-            </div>
-            <div style={{fontSize:"28px",fontWeight:800,color:tier.pct>0?"#2721E8":T.faint}}>{fmt(comRecep)}</div>
-          </div>
-        </div>
-      );
-    })()}
-    </>}
-    </div>}
-
-    {/* Formulario gastos */}
-    {vista!=="comisiones"&&<div className="glass" style={{padding:"22px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
-        <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>REGISTRAR GASTO · <span style={{color:T.muted}}>{etiq(fPeriodo).toUpperCase()}</span></div>
-        <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",userSelect:"none"}}>
-          <div onClick={()=>setFRecurrente(v=>!v)} style={{width:"36px",height:"20px",borderRadius:"10px",background:fRecurrente?"#2721E8":"rgba(255,255,255,0.12)",transition:"background 0.2s",position:"relative",flexShrink:0}}>
-            <div style={{position:"absolute",top:"3px",left:fRecurrente?"19px":"3px",width:"14px",height:"14px",borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
-          </div>
-          <span style={{fontSize:"12px",color:fRecurrente?"#a5b4fc":T.faint}}>
-            {fRecurrente?"Gasto fijo mensual (se guardará en los próximos 12 meses)":"Solo este mes"}
-          </span>
-        </label>
-      </div>
-      <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"flex-end"}}>
-        <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Sucursal</div>
-          <select className="inp" style={{width:"140px"}} value={fSuc} onChange={e=>setFSuc(e.target.value)}>
-            {sucVisible.map(s=><option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Mes</div>
-          <select className="inp" style={{width:"150px"}} value={fPeriodo} onChange={e=>setFPeriodo(e.target.value)}>
-            {listaMeses.map(m=><option key={m} value={m}>{etiq(m)}</option>)}
-          </select>
-        </div>
-        <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Categoría</div>
-          <select className="inp" style={{width:"190px"}} value={fCat} onChange={e=>setFCat(e.target.value)}>
-            <option value="contenido_digital">Contenido digital</option>
-            <option value="plataforma_cire">Plataforma CIRE</option>
-            <option value="renta">Renta</option>
-            <option value="servicios">Servicios (agua/luz/internet)</option>
-            <option value="nomina">Nómina</option>
-            <option value="consumibles">Consumibles</option>
-            <option value="otro">Otro gasto</option>
-            <option value="personalizado">＋ Concepto personalizado</option>
-          </select>
-        </div>
-        {fCat!=="nomina"&&fCat!=="consumibles"&&<><div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>{fCat==="personalizado"?"Nombre del concepto *":"Concepto"}</div>
-          <input className="inp" style={{width:"180px",borderColor:fCat==="personalizado"?"rgba(39,33,232,0.6)":"undefined"}} placeholder={fCat==="personalizado"?"Ej: Software CRM":"Descripción (opcional)"} value={fConc} onChange={e=>setFConc(e.target.value)}/></div>
-          <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Monto</div>
-          <input className="inp" style={{width:"130px"}} type="number" placeholder="$0" value={fMonto} onChange={e=>setFMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/></div>
-          <div><div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>Forma de pago</div>
-          <select className="inp" style={{width:"160px"}} value={fMetodo} onChange={e=>setFMetodo(e.target.value)}>
-            <option value="Efectivo">Efectivo</option>
-            <option value="Transferencia">Transferencia</option>
-            <option value="Tarjeta crédito">Tarjeta crédito</option>
-            <option value="Tarjeta débito">Tarjeta débito</option>
-          </select></div>
-          <button className="btn-blue" onClick={guardar} disabled={saving}>{saving?(fRecurrente?"Guardando 12 meses...":"Guardando..."):"Guardar"}</button>
-        </>}
-      </div>
-      {fCat==="nomina"&&<div style={{marginTop:"14px"}}>
-        <div style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Colaboradoras de {fSuc} · {etiq(fPeriodo)} <span style={{color:T.faint}}>(reemplaza lo anterior{fRecurrente?" en los próximos 12 meses":""})</span></div>
-        {nomRows.map((n,i)=><div key={i} style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
-          <input className="inp" style={{flex:2}} placeholder="Nombre" value={n.nombre} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],nombre:e.target.value};return c;})}/>
-          <input className="inp" style={{width:"130px"}} type="number" placeholder="$ Monto" value={n.monto} onChange={e=>setNomRows(r=>{const c=[...r];c[i]={...c[i],monto:e.target.value};return c;})}/>
-          {nomRows.length>1&&<button className="btn-ghost" style={{padding:"8px 12px"}} onClick={()=>setNomRows(r=>r.filter((_,j)=>j!==i))}>×</button>}
-        </div>)}
-        <div style={{display:"flex",gap:"8px",marginTop:"6px"}}>
-          <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setNomRows(r=>[...r,{nombre:"",monto:""}])}>+ Agregar</button>
-          <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar nóminas"}</button>
-        </div>
-      </div>}
-      {fCat==="consumibles"&&<div style={{marginTop:"14px"}}>
-        <div style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Consumibles de {fSuc} · {etiq(fPeriodo)} <span style={{color:T.faint}}>(se agregan al mes, no reemplazan)</span></div>
-        {consRows.map((n,i)=><div key={i} style={{display:"flex",gap:"8px",marginBottom:"6px",alignItems:"center"}}>
-          <input className="inp" style={{flex:2}} placeholder="Ej: Mascarilla facial, Cartucho HIFU…" value={n.nombre} onChange={e=>setConsRows(r=>{const c=[...r];c[i]={...c[i],nombre:e.target.value};return c;})}/>
-          <input className="inp" style={{width:"130px"}} type="number" placeholder="$ Monto" value={n.monto} onChange={e=>setConsRows(r=>{const c=[...r];c[i]={...c[i],monto:e.target.value};return c;})}/>
-          {consRows.length>1&&<button className="btn-ghost" style={{padding:"8px 12px"}} onClick={()=>setConsRows(r=>r.filter((_,j)=>j!==i))}>×</button>}
-        </div>)}
-        <div style={{display:"flex",gap:"8px",marginTop:"6px",alignItems:"center"}}>
-          <button className="btn-ghost" style={{fontSize:"11px"}} onClick={()=>setConsRows(r=>[...r,{nombre:"",monto:""}])}>+ Agregar ítem</button>
-          <select className="inp" style={{width:"160px",fontSize:"12px"}} value={fMetodo} onChange={e=>setFMetodo(e.target.value)}>
-            <option value="Efectivo">Efectivo</option>
-            <option value="Transferencia">Transferencia</option>
-            <option value="Tarjeta crédito">Tarjeta crédito</option>
-            <option value="Tarjeta débito">Tarjeta débito</option>
-          </select>
-          <button className="btn-blue" style={{fontSize:"12px"}} onClick={guardar} disabled={saving}>{saving?"Guardando...":"Guardar consumibles"}</button>
-        </div>
-      </div>}
-    </div>}
-
-    {/* Bloque IA */}
-    {vista!=="comisiones"&&<div className="glass" style={{padding:"22px",borderColor:aiTxt?"rgba(39,33,232,0.4)":"rgba(255,255,255,0.08)"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:aiTxt||aiLoad?"16px":"0"}}>
-        <div>
-          <div style={{fontSize:"14px",fontWeight:700,marginBottom:"2px"}}>Análisis con IA</div>
-          <div style={{fontSize:"11px",color:T.sub}}>Claude interpreta tus resultados en lenguaje claro, sin tecnicismos</div>
-        </div>
-        <button className="btn-blue" onClick={analizarIA} disabled={aiLoad} style={{padding:"10px 22px",fontSize:"12px"}}>{aiLoad?"Analizando...":"✦ Analizar"}</button>
-      </div>
-      {aiLoad&&<div style={{color:T.muted,fontSize:"13px",fontStyle:"italic"}}>Analizando resultados de {etiq(periodo)}...</div>}
-      {aiTxt&&<div style={{paddingTop:"4px"}}>{renderMarkdown(aiTxt,T,light)}</div>}
-    </div>}
-  </div>);}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD — Vista ejecutiva para dueño de negocio
@@ -6847,22 +5434,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const WHATS_NEW_KEY=`whats_new_finanzas_v2_${session?.usuario||""}`;
   const[showWhatsNew,setShowWhatsNew]=useState(()=>!localStorage.getItem(WHATS_NEW_KEY));
   const dismissWhatsNew=()=>{localStorage.setItem(WHATS_NEW_KEY,"1");setShowWhatsNew(false);};
-  const[zettleLoading,setZettleLoading]=useState(false);
-  const[zettleLogs,setZettleLogs]=useState([]);// [{key,label,status,count,error}]
-  const[zettleData,setZettleData]=useState([]);// ventas crudas de Zettle, estado aislado
   const[ventasZettle,setVentasZettle]=useState({});
-  const[zettleCitas,setZettleCitas]=useState([]);// cobros de recepción con ticket_zettle
-  const[zettleSucFiltro,setZettleSucFiltro]=useState(null);
-  const[zettleVista,setZettleVista]=useState("ventas");// "ventas" | "comparativo"
-  const[editZettle,setEditZettle]=useState(null);// {id, value} — ticket POS en edición
-  const[savingZettle,setSavingZettle]=useState(false);
-  const[confirmDeleteTicket,setConfirmDeleteTicket]=useState(null);// ticket POS pendiente de borrar
   const[importType,setImportType]=useState("combinado"); // "combinado" | "ics" | "csv"
   const[importSuc,setImportSuc]=useState(USUARIOS.find(u=>u.rol==="sucursal")||null);
   const[repararSuc,setRepararSuc]=useState(()=>sucursalesFiltro?USUARIOS.find(u=>u.rol==="sucursal"&&sucursalesFiltro.includes(u.nombre))||null:USUARIOS.find(u=>u.nombre==="Coapa")||null);
   const[importDST,setImportDST]=useState(true); // true = con horario de verano (CDT UTC-5)
   const[soloMias,setSoloMias]=useState(false);
   const[mesSel,setMesSel]=useState(()=>defaultMes());
+  const[ventasMesAnteriorPorSuc,setVentasMesAnteriorPorSuc]=useState(null);
+  const[filasFinancieras,setFilasFinancieras]=useState([]);
   const[customDesde,setCustomDesde]=useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;});
   const[customHasta,setCustomHasta]=useState(()=>ayer());
 
@@ -6880,28 +5460,38 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const cargarDatos=async()=>{
     setLoadingDB(true);
     const ZETTLE_CUENTAS_DASH=[{key:"metepec"},{key:"coapa"},{key:"valle_polanco"},{key:"oriente"}];
-    const fetchZettleTotales=async()=>{
+    const fetchZettleTotalesRango=async(desde_,hasta_)=>{
       const todas=[];
       for(const c of ZETTLE_CUENTAS_DASH){
         try{
-          const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${c.key}&startDate=${desde}&raw=true`;
+          const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${c.key}&startDate=${desde_}&raw=true`;
           const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
           const json=await res.json();
-          if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde&&t.fecha<=hasta));
+          if(res.ok&&Array.isArray(json))todas.push(...json.filter(t=>t.fecha>=desde_&&t.fecha<=hasta_));
         }catch{}
       }
       const m={};SUCURSALES_NAMES.forEach(s=>{m[s]=0;});
       todas.forEach(t=>{if(m[t.sucursal]!==undefined)m[t.sucursal]+=Number(t.total);});
       return m;
     };
-    const[{data:tData},{data:cData},zMap]=await Promise.all([
+    // Mes anterior al seleccionado — solo tiene sentido comparar cuando el periodo es un mes
+    // calendario completo, no un rango personalizado arbitrario.
+    const promesaMesAnterior=periodo==="mes"?(()=>{
+      const antY=mesM===1?mesY-1:mesY,antM=mesM===1?12:mesM-1;
+      const antYM=`${antY}-${String(antM).padStart(2,"0")}`;
+      const antDesde=`${antYM}-01`,antHasta=`${antYM}-${new Date(antY,antM,0).getDate()}`;
+      return fetchZettleTotalesRango(antDesde,antHasta);
+    })():Promise.resolve(null);
+    const[{data:tData},{data:cData},zMap,zMapAnt]=await Promise.all([
       (hasta>="2026-04-01"?supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta).is("zettle_uuid",null):supabase.from("tickets").select("*").gte("fecha",desde).lte("fecha",hasta)).order("created_at",{ascending:false}),
       supabase.from("citas").select("*").gte("fecha",desde).lte("fecha",hasta),
-      fetchZettleTotales(),
+      fetchZettleTotalesRango(desde,hasta),
+      promesaMesAnterior,
     ]);
     if(tData)setTickets(tData);
     if(cData)setCitas(cData);
     setVentasZettle(zMap);
+    setVentasMesAnteriorPorSuc(zMapAnt);
     setUltimaActualizacion(new Date());
     setLoadingDB(false);
   };
@@ -7294,6 +5884,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   // ─── Filtrado por rol ──────────────────────────────────────────────────────
   const filtro=sucursalesFiltro||(soloMias?sucursalesPropias:null);
   const sucNames=filtro?SUCURSALES_NAMES.filter(s=>filtro.includes(s)):SUCURSALES_NAMES;
+
+  // Histórico mensual para la tabla de presupuesto de Meta Ads del Resumen —
+  // cacheado en Supabase (ver fetchHistorialMensualCacheado), así que no repite
+  // la carga pesada contra Zettle que antes solo pasaba en Finanzas > Proyección.
+  const[historialMensual,setHistorialMensual]=useState([]);
+  useEffect(()=>{fetchHistorialMensualCacheado(sucNames).then(setHistorialMensual);},[]);
+
   const tksF=filtro?tickets.filter(t=>filtro.includes(t.sucursal_nombre)):tickets;
   const ctsF=filtro?citas.filter(c=>filtro.includes(c.sucursal_nombre)):citas;
   const metaDiarioF=filtro?metaDiario.filter(d=>filtro.includes(d.sucursal)):metaDiario;
@@ -7308,8 +5905,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const esDuenaGeneral=!!sucursalesPropias;
-  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","reparar","analitica","zettle","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","zettle","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
-  const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>!tabsBase.includes(t))]:tabsBase;
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","reparar","analitica","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
+  const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>t!=="zettle"&&!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
   // ─── Métricas globales ─────────────────────────────────────────────────────
@@ -7327,6 +5924,14 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const convMsgVenta=msgs>0?((totalVentas/msgs)*100).toFixed(1):"—";
   const convMsgNueva=msgs>0?((nuevas/msgs)*100).toFixed(1):"—";
   const recompRatio=totalVentas>0?((recompras/totalVentas)*100).toFixed(0):"0";
+  const pctOcupacion=(sesionesComp+sesionesAg)>0?(sesionesComp/(sesionesComp+sesionesAg)*100):null;
+  const ventasMesAnteriorTotal=ventasMesAnteriorPorSuc?sucNames.reduce((s,n)=>s+(ventasMesAnteriorPorSuc[n]||0),0):null;
+  const crecimientoIngresosPct=(periodo==="mes"&&ventasMesAnteriorTotal>0)?((ventasTotal-ventasMesAnteriorTotal)/ventasMesAnteriorTotal*100):null;
+  const crecimientoPorSuc=(suc)=>{
+    if(periodo!=="mes"||!ventasMesAnteriorPorSuc)return null;
+    const ant=ventasMesAnteriorPorSuc[suc];
+    return ant>0?((ventasZettle[suc]-ant)/ant*100):null;
+  };
 
   // ─── Por sucursal ──────────────────────────────────────────────────────────
   const porSuc=sucNames.map(n=>{
@@ -7410,7 +6015,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],zettle:["💳","Zettle"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -7419,110 +6024,108 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ RESUMEN ═══ */}
         {tab==="resumen"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-          {/* KPIs fila 1 */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>
-            {[
-              {l:"VENTAS TOTALES",v:fmt(ventasTotal),s:`${fmtN(tickets.length)} tickets`,cls:"hi",cl:light?"#2721E8":"#fff"},
-              {l:"CLIENTAS NUEVAS",v:nuevas,s:`${nuevas>0?Math.round(nuevas/tickets.length*100):0}% del total`,cls:"green",cl:"#10b981"},
-              {l:"RECOMPRAS",v:recompras,s:`${recompRatio}% recompra`,cls:"",cl:"#49B8D3"},
-              {l:"SESIONES",v:sesionesComp,s:`${sesionesAg} por atender`,cls:"",cl:light?"#1a1a2e":"#fff"},
-              {l:"TICKET PROMEDIO",v:fmt(ticketProm),s:"por venta",cls:"",cl:light?"#1a1a2e":"#fff"},
-            ].map(k=><div key={k.l} className={`kpi ${k.cls}`}><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.cl}}>{k.v}</div><div style={{fontSize:"12px",color:T.sub,marginTop:"4px"}}>{k.s}</div></div>)}
+          {/* ═══ SECCIÓN A — Cierre y desempeño del mes seleccionado ═══ */}
+          <div style={{fontSize:"12px",fontWeight:700,letterSpacing:"1px",color:light?"#1a1a2e":"#fff",paddingBottom:"2px",borderBottom:`2px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.1)"}`}}>
+            📅 CIERRE Y DESEMPEÑO · {periodoLabel.toUpperCase()}
           </div>
-          {/* KPIs fila 2 — Meta Ads */}
-          {metaData&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
-            {[
-              {l:"INVERSIÓN ADS",v:fmt(inv),s:`${periodoLabel}`,cl:"#f97316",cls:"orange"},
-              {l:"MENSAJES",v:fmtN(msgs),s:`${msgs>0&&totalVentas>0?`1 venta cada ${Math.round(msgs/totalVentas)} msgs`:"—"}`,cl:"#a855f7",cls:""},
-              {l:"CPA (nuevas)",v:cpa>0?fmt(cpa):"—",s:cpa>0&&cpa<40?"Excelente":cpa<60?"Aceptable":cpa>0?"Revisar":"Sin datos",cl:cpa>0&&cpa<40?"#10b981":cpa<60?"#f0c040":"#ff6b6b",cls:""},
-              {l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",s:roas>=3?"Excelente":roas>=1?"Aceptable":"Revisar",cl:"#10b981",cls:"green"},
-            ].map(k=><div key={k.l} className={`kpi ${k.cls}`}><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.cl}}>{k.v}</div><div style={{fontSize:"12px",color:T.sub,marginTop:"4px"}}>{k.s}</div></div>)}
-          </div>}
-          {/* Conversión msg→venta */}
-          {metaData&&msgs>0&&<div className="glass" style={{padding:"20px 24px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"6px"}}>CONVERSIÓN MENSAJE → VENTA</div><div style={{display:"flex",alignItems:"baseline",gap:"16px"}}><div><div style={{fontSize:"11px",color:T.sub}}>Total (nueva+recompra)</div><div style={{fontSize:"24px",fontWeight:700,color:parseFloat(convMsgVenta)>=10?"#10b981":"#f0c040"}}>{convMsgVenta}%</div></div><div><div style={{fontSize:"11px",color:T.sub}}>Solo nuevas</div><div style={{fontSize:"24px",fontWeight:700,color:parseFloat(convMsgNueva)>=8?"#10b981":"#f0c040"}}>{convMsgNueva}%</div></div></div></div>
-              <div style={{textAlign:"right"}}><div style={{fontSize:"11px",color:T.faint}}>De {fmtN(msgs)} mensajes</div><div style={{fontSize:"11px",color:T.faint}}>{fmtN(totalVentas)} ventas cerradas</div></div>
-            </div>
-          </div>}
-          {/* ── Esta semana + Por sucursal ── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
-            {/* Esta semana por sucursal (con desglose por día al hacer clic) */}
-            <div className="glass" style={{padding:"22px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"14px"}}>
-                <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS ESTA SEMANA</div>
-                <div style={{fontSize:"15px",fontWeight:700,color:"#49B8D3"}}>{fmt(totalSemana)}</div>
+          {/* ═══ BLOQUE 1 — KPIs Master ═══ */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"14px"}}>
+            <div className="kpi hi">
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>INGRESOS TOTALES</div>
+              <div style={{fontSize:"28px",fontWeight:700,color:light?"#2721E8":"#fff"}}>{fmt(ventasTotal)}</div>
+              <div style={{fontSize:"12px",color:crecimientoIngresosPct==null?T.sub:crecimientoIngresosPct>=0?"#10b981":"#ff6b6b",marginTop:"4px",fontWeight:crecimientoIngresosPct==null?400:700}}>
+                {crecimientoIngresosPct==null?`${fmtN(tickets.length)} tickets`:`${crecimientoIngresosPct>=0?"↑":"↓"} ${Math.abs(crecimientoIngresosPct).toFixed(1)}% vs mes anterior`}
               </div>
-              {porSucSemana.slice().sort((a,b)=>b.total-a.total).map(s=>{const pct=maxVSem>0?s.total/maxVSem:0;const isOpen=expandedSucSem===s.nombre;const maxDiaSuc=Math.max(...s.dias.map(d=>d.total),1);return(
-                <div key={s.nombre} style={{marginBottom:"10px"}}>
-                  <div onClick={()=>setExpandedSucSem(isOpen?null:s.nombre)} style={{display:"grid",gridTemplateColumns:"auto 1fr 90px",gap:"8px",alignItems:"center",marginBottom:"5px",padding:"7px 10px",borderRadius:"8px",background:isOpen?"rgba(39,33,232,0.12)":"transparent",border:`1px solid ${isOpen?"rgba(39,33,232,0.3)":"transparent"}`,cursor:"pointer"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"7px",height:"7px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600,color:isOpen?(light?"#1a1a2e":"#fff"):T.muted}}>{s.nombre}</span><span style={{fontSize:"9px",color:T.faint}}>{isOpen?"▲":"▼"}</span></div>
-                    <div style={{height:"4px",background:T.div,borderRadius:"2px"}}><div style={{width:`${pct*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"2px",transition:"width 0.3s"}}/></div>
-                    <div style={{fontSize:"13px",fontWeight:700,color:COLORES[s.nombre],textAlign:"right"}}>{s.total>0?fmt(s.total):"—"}</div>
-                  </div>
-                  {isOpen&&s.dias.map(d=>{const esHoy=d.fecha===hoy();const pctD=maxDiaSuc>0?d.total/maxDiaSuc:0;const dow=new Date(d.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short"});const dayNum=d.fecha.slice(8);return(
-                    <div key={d.fecha} style={{display:"grid",gridTemplateColumns:"52px 1fr 80px 22px",gap:"6px",alignItems:"center",marginBottom:"4px",padding:"6px 10px 6px 22px",borderRadius:"6px",background:esHoy?"rgba(39,33,232,0.08)":T.cardBg}}>
-                      <div style={{fontSize:"11px",fontWeight:esHoy?700:400,color:esHoy?(light?"#1a1a2e":"#fff"):T.faint,textTransform:"capitalize"}}>{dow} {dayNum}</div>
-                      <div style={{height:"3px",background:T.div,borderRadius:"2px"}}><div style={{width:`${pctD*100}%`,height:"100%",background:esHoy?COLORES[s.nombre]:`${COLORES[s.nombre]}66`,borderRadius:"2px",transition:"width 0.3s"}}/></div>
-                      <div style={{fontSize:"12px",fontWeight:esHoy?700:400,color:esHoy?COLORES[s.nombre]:T.muted,textAlign:"right"}}>{d.total>0?fmt(d.total):"—"}</div>
-                      <div style={{fontSize:"10px",color:T.faint,textAlign:"right"}}>{d.count>0?d.count:""}</div>
-                    </div>);})}
-                </div>);})}
             </div>
-            {/* Por sucursal */}
-            <div className="glass" style={{padding:"22px"}}>
-              <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>POR SUCURSAL · {periodoLabel.toUpperCase()}</div>
-              {porSuc.slice().sort((a,b)=>b.ventas-a.ventas).map(s=>(
-                <div key={s.nombre} style={{marginBottom:"12px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
-                    <div style={{display:"flex",gap:"12px",alignItems:"baseline"}}>
-                      <span style={{fontSize:"10px",color:T.sub}}><span style={{color:"#10b981"}}>{s.nuevas}</span> nv · <span style={{color:"#49B8D3"}}>{s.recompras}</span> rc</span>
-                      <span style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</span>
-                    </div>
-                  </div>
-                  <div style={{height:"4px",background:T.div,borderRadius:"2px"}}><div style={{width:`${maxV>0?(s.ventas/maxV)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"2px"}}/></div>
-                </div>))}
-              <div style={{borderTop:`1px solid ${T.div}`,paddingTop:"10px",display:"flex",justifyContent:"space-between",fontSize:"12px"}}>
-                <span style={{color:T.muted}}>Total {periodoLabel}</span>
-                <span style={{fontWeight:700,color:"#49B8D3"}}>{fmt(ventasTotal)}</span>
+            <div className="kpi">
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>TICKET PROMEDIO</div>
+              <div style={{fontSize:"28px",fontWeight:700,color:light?"#1a1a2e":"#fff"}}>{fmt(ticketProm)}</div>
+              <div style={{fontSize:"12px",color:T.sub,marginTop:"4px"}}>{fmtN(tksF.length)} tickets</div>
+            </div>
+            <div className="kpi">
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>COMPOSICIÓN DE CLIENTES</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",fontWeight:700,marginBottom:"6px"}}>
+                <span style={{color:"#10b981"}}>Nuevas {100-Number(recompRatio)}%</span>
+                <span style={{color:"#49B8D3"}}>Recompras {recompRatio}%</span>
               </div>
+              <div style={{height:"10px",borderRadius:"5px",overflow:"hidden",display:"flex"}}>
+                <div style={{width:`${100-Number(recompRatio)}%`,background:"#10b981"}}/>
+                <div style={{width:`${recompRatio}%`,background:"#49B8D3"}}/>
+              </div>
+              <div style={{fontSize:"12px",color:T.sub,marginTop:"6px"}}>{nuevas} nuevas · {recompras} recompras</div>
+            </div>
+            <div className="kpi">
+              <div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>SESIONES ATENDIDAS</div>
+              <div style={{fontSize:"28px",fontWeight:700,color:light?"#1a1a2e":"#fff"}}>{sesionesComp}</div>
+              <div style={{fontSize:"12px",color:T.sub,marginTop:"4px"}}>{pctOcupacion!=null?`${pctOcupacion.toFixed(0)}% ocupación · `:""}{sesionesAg} por atender</div>
             </div>
           </div>
 
-          {/* ── Métodos de pago + Top servicios ── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
-            {/* Métodos de pago */}
-            <div className="glass" style={{padding:"22px"}}>
-              <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>MÉTODOS DE PAGO · {periodoLabel.toUpperCase()}</div>
-              {topMet.length===0&&<div style={{fontSize:"12px",color:T.faint,textAlign:"center",padding:"16px"}}>Sin datos</div>}
-              {topMet.map(([m,v])=>(
-                <div key={m} style={{marginBottom:"10px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"4px"}}>
-                    <span style={{fontSize:"13px",fontWeight:500}}>{m}</span>
-                    <div style={{display:"flex",gap:"10px",alignItems:"baseline"}}>
-                      <span style={{fontSize:"10px",color:T.sub}}>{ventasTotal>0?Math.round(v/ventasTotal*100):0}%</span>
-                      <span style={{fontSize:"14px",fontWeight:700,color:"#49B8D3"}}>{fmt(v)}</span>
-                    </div>
+          {/* ═══ BLOQUE 2 — Embudo Meta Ads ═══ */}
+          {metaData&&(()=>{
+            const cpaColor=cpa===0?T.faint:cpa<40?"#10b981":cpa<60?"#f0c040":"#ff6b6b";
+            const cpaLabel=cpa===0?"Sin datos":cpa<40?"Excelente":cpa<60?"Aceptable":"⚠ CPA alto";
+            const etapas=[
+              {l:"INVERSIÓN",v:fmt(inv),cl:"#f97316"},
+              {l:"MENSAJES",v:fmtN(msgs),cl:"#a855f7"},
+              {l:"CONVERSIÓN",v:`${convMsgVenta}%`,sub:`${convMsgNueva}% nuevas`,cl:"#49B8D3"},
+              {l:"CPA",v:cpa>0?fmt(cpa):"—",sub:cpaLabel,cl:cpaColor},
+              {l:"ROAS",v:roas>0?`${roas.toFixed(1)}x`:"—",cl:"#10b981"},
+            ];
+            return<div className="glass" style={{padding:"20px 24px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"16px"}}>EMBUDO DE ADQUISICIÓN · META ADS</div>
+              <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+                {etapas.map((e,i)=><Fragment key={e.l}>
+                  <div style={{flex:1,textAlign:"center"}}>
+                    <div style={{fontSize:"10px",letterSpacing:"1px",color:T.faint,marginBottom:"6px"}}>{e.l}</div>
+                    <div style={{fontSize:"22px",fontWeight:700,color:e.cl}}>{e.v}</div>
+                    {e.sub&&<div style={{fontSize:"11px",color:e.cl===cpaColor&&cpa>=60?"#ff6b6b":T.sub,fontWeight:e.cl===cpaColor&&cpa>=60?700:400,marginTop:"3px"}}>{e.sub}</div>}
                   </div>
-                  <div style={{height:"4px",background:T.div,borderRadius:"2px"}}><div style={{width:`${(v/maxMet)*100}%`,height:"100%",background:"linear-gradient(90deg,#2721E8,#49B8D3)",borderRadius:"2px"}}/></div>
-                </div>))}
+                  {i<etapas.length-1&&<div style={{color:T.faint,fontSize:"16px",flexShrink:0}}>→</div>}
+                </Fragment>)}
+              </div>
+            </div>;
+          })()}
+
+          {/* ═══ BLOQUE 3 — Comparativo de sucursales ═══ */}
+          {/* "Ingreso" respeta el selector de periodo de arriba (Mes/Personalizado); "Proyección"
+              siempre es del mes calendario siguiente al último mes cerrado — son dos relojes
+              distintos a propósito, igual que en Finanzas > Proyección. Estado y proyección vienen
+              de ResumenFinanciero (más abajo) vía el prop onFilas, para no duplicar ese cálculo. */}
+          <div className="glass" style={{padding:"22px"}}>
+            <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>COMPARATIVO DE SUCURSALES</div>
+            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>
+              <span>SUCURSAL</span><span style={{textAlign:"right"}}>INGRESO</span><span style={{textAlign:"right"}}>MARGEN NETO</span><span style={{textAlign:"right"}}>VS. MES ANT.</span><span style={{textAlign:"right"}}>META DEL MES</span><span style={{textAlign:"center"}}>ESTADO</span><span/>
             </div>
-            {/* Top servicios */}
-            <div className="glass" style={{padding:"22px"}}>
-              <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>TOP SERVICIOS · {periodoLabel.toUpperCase()}</div>
-              {topS.length===0&&<div style={{fontSize:"12px",color:T.faint,textAlign:"center",padding:"16px"}}>Sin datos</div>}
-              {topS.map(([svc,cnt],i)=>(
-                <div key={svc} style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
-                  <div style={{fontSize:"11px",fontWeight:700,color:T.faint,width:"16px",flexShrink:0}}>{i+1}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"12px",fontWeight:500,marginBottom:"3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{svc}</div>
-                    <div style={{height:"3px",background:T.div,borderRadius:"2px"}}><div style={{width:`${(cnt/maxSvc)*100}%`,height:"100%",background:"#2721E8",borderRadius:"2px"}}/></div>
-                  </div>
-                  <div style={{fontSize:"14px",fontWeight:700,color:T.muted,flexShrink:0}}>{cnt}</div>
-                </div>))}
-            </div>
+            {porSuc.slice().sort((a,b)=>b.ventas-a.ventas).map(s=>{
+              const crecSuc=crecimientoPorSuc(s.nombre);
+              const creciendoSuc=crecSuc!=null&&crecSuc>=0;
+              const fin=filasFinancieras.find(f=>f.sucursal===s.nombre);
+              const band=fin?marginBand(fin.margenPct):null;
+              const enAlerta=band?.key==="riesgo";
+              const estadoLabel=band?({sano:"Sano",ajustado:"Atención",riesgo:"Alerta",sin_datos:"—"}[band.key]):"—";
+              const estadoColor=band?({sano:"#10b981",ajustado:"#f0c040",riesgo:"#ff6b6b",sin_datos:T.faint}[band.key]):T.faint;
+              return(
+                <div key={s.nombre} style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",alignItems:"center",padding:"9px 4px",borderTop:`1px solid ${T.div}`,background:enAlerta?"rgba(255,107,107,0.05)":"transparent"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
+                  <div style={{textAlign:"right",fontSize:"13px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</div>
+                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:fin?.margenPct>=0?"#10b981":"#ff6b6b"}}>{fin?.margenPct!=null?`${fin.margenPct>=0?"+":""}${fin.margenPct.toFixed(1)}%`:"—"}</div>
+                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:crecSuc==null?T.faint:creciendoSuc?"#10b981":"#ff6b6b"}}>{crecSuc==null?"—":`${creciendoSuc?"↑":"↓"} ${Math.abs(crecSuc).toFixed(1)}%`}</div>
+                  <div style={{textAlign:"right",fontSize:"11.5px",fontWeight:600,color:T.muted}}>{fin?`${fmt(fin.puntoProyRealista)} – ${fmt(fin.puntoProyOptimista)}`:"—"}</div>
+                  <div style={{textAlign:"center"}}><span style={{fontSize:"10px",fontWeight:700,color:estadoColor,background:`${estadoColor}22`,padding:"2px 9px",borderRadius:"99px"}}>{estadoLabel}</span></div>
+                  <div style={{textAlign:"right"}}>{enAlerta&&<button className="btn-ghost" style={{fontSize:"10px",padding:"4px 8px",color:"#ff6b6b",borderColor:"rgba(255,107,107,0.4)"}} onClick={()=>setTab("sucursales")}>Ver →</button>}</div>
+                </div>
+              );
+            })}
           </div>
+
+          {historialMensual.length>0&&<MetaAdsBudget historial={historialMensual} sucVisible={sucNames} periodo={mesSel}/>}
+
+          {/* ═══ SECCIÓN B — Ritmo operativo y pacing en tiempo real ═══ */}
+          <div style={{fontSize:"12px",fontWeight:700,letterSpacing:"1px",color:light?"#1a1a2e":"#fff",paddingBottom:"2px",marginTop:"4px",borderBottom:`2px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.1)"}`}}>
+            ⏱ RITMO OPERATIVO Y PACING · MES EN CURSO
+          </div>
+          <ResumenFinanciero sucNames={sucNames} mesFiltro={mesSel} onVerDetalle={()=>setTab("finanzas")} onFilas={setFilasFinancieras}/>
 
           {/* Gráfica mensajes recibidos por día */}
           {metaDiarioF.length>0&&(()=>{
@@ -7558,6 +6161,28 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ SUCURSALES — tabla expandida ═══ */}
         {tab==="sucursales"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          {/* Ventas esta semana */}
+          <div className="glass" style={{padding:"22px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"14px"}}>
+              <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>VENTAS ESTA SEMANA</div>
+              <div style={{fontSize:"15px",fontWeight:700,color:"#49B8D3"}}>{fmt(totalSemana)}</div>
+            </div>
+            {porSucSemana.slice().sort((a,b)=>b.total-a.total).map(s=>{const pct=maxVSem>0?s.total/maxVSem:0;const isOpen=expandedSucSem===s.nombre;const maxDiaSuc=Math.max(...s.dias.map(d=>d.total),1);return(
+              <div key={s.nombre} style={{marginBottom:"10px"}}>
+                <div onClick={()=>setExpandedSucSem(isOpen?null:s.nombre)} style={{display:"grid",gridTemplateColumns:"auto 1fr 90px",gap:"8px",alignItems:"center",marginBottom:"5px",padding:"7px 10px",borderRadius:"8px",background:isOpen?"rgba(39,33,232,0.12)":"transparent",border:`1px solid ${isOpen?"rgba(39,33,232,0.3)":"transparent"}`,cursor:"pointer"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"7px",height:"7px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600,color:isOpen?(light?"#1a1a2e":"#fff"):T.muted}}>{s.nombre}</span><span style={{fontSize:"9px",color:T.faint}}>{isOpen?"▲":"▼"}</span></div>
+                  <div style={{height:"4px",background:T.div,borderRadius:"2px"}}><div style={{width:`${pct*100}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"2px",transition:"width 0.3s"}}/></div>
+                  <div style={{fontSize:"13px",fontWeight:700,color:COLORES[s.nombre],textAlign:"right"}}>{s.total>0?fmt(s.total):"—"}</div>
+                </div>
+                {isOpen&&s.dias.map(d=>{const esHoy=d.fecha===hoy();const pctD=maxDiaSuc>0?d.total/maxDiaSuc:0;const dow=new Date(d.fecha+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short"});const dayNum=d.fecha.slice(8);return(
+                  <div key={d.fecha} style={{display:"grid",gridTemplateColumns:"52px 1fr 80px 22px",gap:"6px",alignItems:"center",marginBottom:"4px",padding:"6px 10px 6px 22px",borderRadius:"6px",background:esHoy?"rgba(39,33,232,0.08)":T.cardBg}}>
+                    <div style={{fontSize:"11px",fontWeight:esHoy?700:400,color:esHoy?(light?"#1a1a2e":"#fff"):T.faint,textTransform:"capitalize"}}>{dow} {dayNum}</div>
+                    <div style={{height:"3px",background:T.div,borderRadius:"2px"}}><div style={{width:`${pctD*100}%`,height:"100%",background:esHoy?COLORES[s.nombre]:`${COLORES[s.nombre]}66`,borderRadius:"2px",transition:"width 0.3s"}}/></div>
+                    <div style={{fontSize:"12px",fontWeight:esHoy?700:400,color:esHoy?COLORES[s.nombre]:T.muted,textAlign:"right"}}>{d.total>0?fmt(d.total):"—"}</div>
+                    <div style={{fontSize:"10px",color:T.faint,textAlign:"right"}}>{d.count>0?d.count:""}</div>
+                  </div>);})}
+              </div>);})}
+          </div>
           <div className="glass" style={{overflow:"hidden"}}>
             <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`}}><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>RENDIMIENTO POR SUCURSAL · {periodoLabel}</div></div>
             <div style={{overflowX:"auto"}}>
@@ -7774,266 +6399,24 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         {/* ═══ VER POS ═══ */}
         {tab==="pos"&&<div style={{display:"flex",flexDirection:"column",gap:"16px"}}><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>SELECCIONA SUCURSAL</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"14px"}}>{USUARIOS_DASH.map(s=><div key={s.id} className="glass" style={{padding:"24px 20px",cursor:"pointer",borderColor:`${s.color}44`,textAlign:"center"}} onClick={()=>setPosSuc(s)} onMouseEnter={e=>e.currentTarget.style.borderColor=s.color} onMouseLeave={e=>e.currentTarget.style.borderColor=`${s.color}44`}><div style={{width:"40px",height:"40px",borderRadius:"12px",background:`${s.color}22`,border:`1px solid ${s.color}44`,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px"}}>🖥</div><div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>{s.nombre}</div><div style={{fontSize:"11px",color:T.sub}}>Ver POS →</div></div>)}</div></div>}
 
-        {/* ═══ VENTAS ZETTLE ═══ */}
-        {tab==="zettle"&&(()=>{
-          // Cuentas Zettle: Valle y Polanco comparten una sola cuenta (valle_polanco)
-          const ZETTLE_CUENTAS_ALL=[
-            {key:"metepec",label:"Metepec"},
-            {key:"coapa",label:"Coapa"},
-            {key:"valle_polanco",label:"Valle + Polanco"},
-            {key:"oriente",label:"Oriente"},
-          ];
-          const ZETTLE_LABEL_MAP={"Coapa":"coapa","Metepec":"metepec","Oriente":"oriente","Valle":"valle_polanco","Polanco":"valle_polanco"};
-          const ZETTLE_CUENTAS=filtro?ZETTLE_CUENTAS_ALL.filter(c=>filtro.some(s=>ZETTLE_LABEL_MAP[s]===c.key)):ZETTLE_CUENTAS_ALL;
-          // Carga datos SOLO en estado local — no toca tickets ni el dashboard
-          const cargarZettle=async()=>{
-            setZettleLoading(true);
-            setZettleData([]);
-            setZettleLogs(ZETTLE_CUENTAS.map(c=>({...c,status:"pending"})));
-            const todas=[];
-            for(const cuenta of ZETTLE_CUENTAS){
-              setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"loading"}:l));
-              try{
-                const url=`${SUPABASE_URL}/functions/v1/sync-zettle?sucursal=${cuenta.key}&startDate=${mesDesde}&raw=true`;
-                const res=await fetch(url,{headers:{Authorization:`Bearer ${SUPABASE_KEY}`}});
-                const json=await res.json();
-                if(!res.ok||!Array.isArray(json)){
-                  setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"error",error:json.error||`HTTP ${res.status}`}:l));
-                }else{
-                  todas.push(...json);
-                  setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"ok",count:json.length}:l));
-                }
-              }catch(e){
-                setZettleLogs(prev=>prev.map(l=>l.key===cuenta.key?{...l,status:"error",error:e.message}:l));
-              }
-            }
-            setZettleData(todas);
-            // Cargar cobros de recepción con ticket_zettle registrado en el mismo período
-            const{data:citasZ}=await supabase
-              .from("citas")
-              .select("id,fecha,sucursal_nombre,servicio,total_pagado,ticket_zettle,clienta_nombre")
-              .gte("fecha",mesDesde).lte("fecha",mesHasta)
-              .eq("es_cobro",true)
-              .not("ticket_zettle","is",null);
-            setZettleCitas(citasZ||[]);
-            setZettleLoading(false);
-          };
-          const tksZ=(zettleSucFiltro
-            ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
-            :zettleData
-          ).filter(t=>t.fecha>=mesDesde&&t.fecha<=mesHasta)
-           .sort((a,b)=>b.fecha.localeCompare(a.fecha));
-          const totalZ=tksZ.reduce((s,t)=>s+Number(t.total),0);
-          const porSucZ={};tksZ.forEach(t=>{const n=t.sucursal||"—";porSucZ[n]=(porSucZ[n]||0)+Number(t.total);});
-          const exportCSV=()=>{
-            const header="# Ticket Zettle,Fecha,Sucursal,Concepto,Método de Pago,Total";
-            const rows=tksZ.map(t=>`${t.ticket_num??""}, ${t.fecha},"${t.sucursal||""}","${(t.servicios||[]).join("; ")}","${t.metodo_pago||""}",${t.total}`);
-            const blob=new Blob([[header,...rows].join("\n")],{type:"text/csv;charset=utf-8;"});
-            const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`zettle-${mesDesde}-${mesHasta}.csv`;a.click();URL.revokeObjectURL(url);
-          };
-          return<div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-            {/* Header + descripción */}
-            <div className="glass" style={{padding:"20px 24px"}}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
-                <div style={{display:"flex",gap:"14px",alignItems:"flex-start"}}>
-                  <div style={{fontSize:"22px",marginTop:"2px"}}>💳</div>
-                  <div>
-                    <div style={{fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>Seguimiento de ventas — Zettle vs POS</div>
-                    <div style={{fontSize:"12px",color:T.muted,lineHeight:1.6,maxWidth:"580px"}}>
-                      Compara las ventas cobradas en Zettle (la terminal física) contra lo que cada recepcionista registró en el sistema. El objetivo es detectar ventas faltantes de captura, montos incorrectos o bugs en el flujo. Usa el filtro por sucursal para darle seguimiento individual a cada equipo.
-                    </div>
-                    <div style={{marginTop:"8px",fontSize:"11px",color:T.sub}}>{mesSelLabel}</div>
-                  </div>
-                </div>
-                <button className="btn-primary" style={{fontSize:"12px",opacity:zettleLoading?0.6:1,cursor:zettleLoading?"not-allowed":"pointer",flexShrink:0}} onClick={cargarZettle} disabled={zettleLoading}>
-                  {zettleLoading?"Cargando...":"🔄 Cargar Zettle"}
-                </button>
-              </div>
-              {/* Logs */}
-              {zettleLogs.length>0&&<div style={{marginTop:"16px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
-                {zettleLogs.map(l=><div key={l.key} style={{padding:"6px 12px",borderRadius:"8px",fontSize:"11px",fontWeight:600,display:"flex",alignItems:"center",gap:"6px",
-                  background:l.status==="ok"?"rgba(16,185,129,0.1)":l.status==="error"?"rgba(239,68,68,0.1)":l.status==="loading"?"rgba(73,184,211,0.1)":"rgba(255,255,255,0.05)",
-                  border:`1px solid ${l.status==="ok"?"rgba(16,185,129,0.3)":l.status==="error"?"rgba(239,68,68,0.3)":l.status==="loading"?"rgba(73,184,211,0.3)":"rgba(255,255,255,0.1)"}`,
-                  color:l.status==="ok"?"#10b981":l.status==="error"?"#ef4444":l.status==="loading"?"#49B8D3":T.faint}}>
-                  <span>{l.status==="ok"?"✓":l.status==="error"?"✗":l.status==="loading"?"⋯":"·"}</span>
-                  <span>{l.label}</span>
-                  {l.status==="ok"&&<span style={{opacity:0.7}}>({l.count} registros)</span>}
-                  {l.status==="error"&&<span style={{opacity:0.7,fontSize:"10px"}}>{l.error}</span>}
-                </div>)}
-              </div>}
-            </div>
-            {/* Filtro por sucursal */}
-            {(()=>{const sucs=[...new Set(zettleData.map(t=>t.sucursal).filter(Boolean))].sort();return sucs.length>1&&<div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
-              <button onClick={()=>setZettleSucFiltro(null)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:!zettleSucFiltro?"rgba(39,33,232,0.15)":"transparent",borderColor:!zettleSucFiltro?"#2721E8":T.dim,color:!zettleSucFiltro?"#fff":T.muted}}>Todas</button>
-              {sucs.map(n=>{const u=USUARIOS_DASH.find(u=>u.nombre===n);return<button key={n} onClick={()=>setZettleSucFiltro(n===zettleSucFiltro?null:n)} style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid",fontSize:"12px",fontWeight:600,cursor:"pointer",background:zettleSucFiltro===n?`${u?.color||"#49B8D3"}22`:"transparent",borderColor:zettleSucFiltro===n?(u?.color||"#49B8D3"):T.dim,color:zettleSucFiltro===n?(u?.color||"#49B8D3"):T.muted}}>{n}</button>;})}
-            </div>;})()}
-            {/* Estado vacío */}
-            {zettleData.length===0&&zettleLogs.length===0&&<div className="glass" style={{padding:"48px",textAlign:"center",color:T.faint,fontSize:"13px"}}>
-              Presiona "Cargar Zettle" para obtener las ventas de {mesSelLabel}
-            </div>}
-            {zettleData.length===0&&zettleLogs.length>0&&!zettleLoading&&<div style={{textAlign:"center",padding:"40px",color:T.faint,fontSize:"13px"}}>Sin ventas Zettle en {mesSelLabel}</div>}
-
-            {/* ── COMPARATIVO ── */}
-            {zettleData.length>0&&(()=>{
-              // Zettle: filtrado por sucursal y período seleccionado
-              const filasZ=(zettleSucFiltro
-                ?zettleData.filter(t=>t.sucursal===zettleSucFiltro)
-                :zettleData
-              ).filter(t=>t.fecha>=mesDesde&&t.fecha<=mesHasta)
-               .sort((a,b)=>b.fecha.localeCompare(a.fecha));
-              const totalZ=filasZ.reduce((s,t)=>s+Number(t.total),0);
-              // POS: tickets manuales del estado global del dashboard, mismo período y sucursal
-              const filasPOS=(zettleSucFiltro
-                ?tickets.filter(t=>t.sucursal_nombre===zettleSucFiltro)
-                :tickets
-              ).filter(t=>!t.zettle_uuid&&t.fuente!=="zettle"&&t.fecha>=mesDesde&&t.fecha<=mesHasta)
-               .sort((a,b)=>b.fecha.localeCompare(a.fecha));
-              const totalPOS=filasPOS.reduce((s,t)=>s+Number(t.total),0);
-              // Métricas de brecha
-              const pctTickets=filasZ.length>0?Math.round(filasPOS.length/filasZ.length*100):0;
-              const pctMonto=totalZ>0?Math.round(totalPOS/totalZ*100):0;
-              const color=p=>p>=90?"#10b981":p>=70?"#f59e0b":"#ef4444";
-              // Tabla helper
-              const TablaComp=({filas,cols,footer,rowStyle})=><div className="glass" style={{padding:0,overflow:"hidden"}}>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
-                    <thead><tr style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`}}>
-                      {cols.map(h=><th key={h.k} style={{padding:"10px 14px",textAlign:h.r?"right":"left",fontWeight:600,fontSize:"10px",letterSpacing:"1px",color:T.sub}}>{h.k.toUpperCase()}</th>)}
-                    </tr></thead>
-                    <tbody>{filas.map((row,i)=>{const extraStyle=rowStyle?rowStyle(row,i):{};return<tr key={i} style={{borderBottom:`1px solid ${light?"rgba(0,0,0,0.03)":"rgba(255,255,255,0.04)"}`,background:i%2===0?"transparent":(light?"rgba(0,0,0,0.015)":"rgba(255,255,255,0.015)"),...extraStyle}}>
-                      {cols.map(h=><td key={h.k} style={{padding:"8px 14px",textAlign:h.r?"right":"left",...(h.style||{})}}>{h.render(row)}</td>)}
-                    </tr>;})}</tbody>
-                    {footer&&<tfoot><tr style={{borderTop:`2px solid ${light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}`}}>{footer}</tr></tfoot>}
-                  </table>
-                </div>
-              </div>;
-              return<>
-                {/* ── Panel comparativo ── */}
-                <div className="glass" style={{padding:"20px 24px"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 180px 1fr",gap:"32px",alignItems:"center"}}>
-                    {/* Zettle */}
-                    <div>
-                      <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"14px"}}>💳 ZETTLE — REFERENCIA (100%)</div>
-                      <div style={{display:"flex",gap:"32px"}}>
-                        <div><div style={{fontSize:"32px",fontWeight:800,color:"#49B8D3",lineHeight:1}}>{filasZ.length}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>transacciones</div></div>
-                        <div><div style={{fontSize:"32px",fontWeight:800,color:"#49B8D3",lineHeight:1}}>{fmt(totalZ)}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>total</div></div>
-                      </div>
-                    </div>
-                    {/* Barras centrales */}
-                    <div style={{display:"flex",flexDirection:"column",gap:"12px",alignItems:"center"}}>
-                      {[{label:"tickets",pct:pctTickets},{label:"monto",pct:pctMonto}].map(({label,pct})=><div key={label} style={{width:"100%",textAlign:"center"}}>
-                        <div style={{fontSize:"22px",fontWeight:800,color:color(pct),lineHeight:1}}>{pct}%</div>
-                        <div style={{margin:"6px 0",height:"6px",borderRadius:"3px",background:light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${Math.min(pct,100)}%`,borderRadius:"3px",background:color(pct),transition:"width 0.4s"}}/>
-                        </div>
-                        <div style={{fontSize:"10px",color:T.faint}}>{label}</div>
-                      </div>)}
-                    </div>
-                    {/* POS */}
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"14px"}}>🖥 POS — LO QUE SUBIERON</div>
-                      <div style={{display:"flex",gap:"32px",justifyContent:"flex-end"}}>
-                        <div style={{textAlign:"right"}}><div style={{fontSize:"32px",fontWeight:800,color:color(pctTickets),lineHeight:1}}>{filasPOS.length}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>transacciones</div></div>
-                        <div style={{textAlign:"right"}}><div style={{fontSize:"32px",fontWeight:800,color:color(pctMonto),lineHeight:1}}>{fmt(totalPOS)}</div><div style={{fontSize:"11px",color:T.sub,marginTop:"4px"}}>total</div></div>
-                      </div>
-                      {(filasZ.length-filasPOS.length>0||totalZ-totalPOS>0)&&<div style={{marginTop:"10px",fontSize:"12px",color:"#ef4444",fontWeight:600}}>
-                        faltan {filasZ.length-filasPOS.length} tickets · {fmt(totalZ-totalPOS)}
-                      </div>}
-                    </div>
-                  </div>
-                </div>
-                {/* ── Dos tablas lado a lado ── */}
-                {(()=>{
-                  // Mapa ticket_zettle → clienta_nombre desde el POS para enriquecer la tabla Zettle
-                  const posClientaMap={};
-                  filasPOS.forEach(t=>{if(t.ticket_zettle&&t.clienta_nombre)posClientaMap[t.ticket_zettle]=t.clienta_nombre;});
-                  // También incluir citas con ticket_zettle (cobros vía agenda) para sucursal/período activos
-                  const citasFiltradas=(zettleSucFiltro?zettleCitas.filter(c=>c.sucursal_nombre===zettleSucFiltro):zettleCitas).filter(c=>c.fecha>=mesDesde&&c.fecha<=mesHasta);
-                  citasFiltradas.forEach(c=>{if(c.ticket_zettle&&c.clienta_nombre)posClientaMap[c.ticket_zettle]=c.clienta_nombre;});
-                  // Set de tickets Zettle que ya están capturados en POS o citas
-                  const posTicketSet=new Set([...filasPOS.map(t=>t.ticket_zettle),...citasFiltradas.map(c=>c.ticket_zettle)].filter(Boolean));
-                  return<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",alignItems:"start"}}>
-                  {/* Tabla Zettle */}
-                  <div>
-                    <div style={{fontSize:"10px",letterSpacing:"2px",color:"#49B8D3",fontWeight:700,marginBottom:"8px",paddingLeft:"4px"}}>ZETTLE</div>
-                    <TablaComp filas={filasZ}
-                      rowStyle={row=>{const key=row.ticket_num?`#${row.ticket_num}`:null;return key&&posTicketSet.has(key)?{background:light?"rgba(16,185,129,0.08)":"rgba(16,185,129,0.1)",borderLeft:"3px solid #10b981"}:{};}}
-                      cols={[
-                        {k:"# Ticket",render:t=>{const key=t.ticket_num?`#${t.ticket_num}`:null;const captured=key&&posTicketSet.has(key);return<span style={{fontFamily:"monospace",color:captured?"#10b981":T.muted,fontSize:"11px",fontWeight:captured?700:400}}>{t.ticket_num??<span style={{color:T.faint}}>—</span>}</span>;}},
-                        {k:"Fecha",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.fecha}</span>},
-                        {k:"Clienta",render:t=>{const n=t.ticket_num?posClientaMap[`#${t.ticket_num}`]||posClientaMap[String(t.ticket_num)]:null;return<span style={{fontSize:"11px",color:n?T.muted:T.faint,fontStyle:n?"normal":"italic"}}>{n||"—"}</span>;}},
-                        {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
-                        {k:"Total",r:true,render:t=><span style={{fontWeight:700,fontFamily:"monospace"}}>{fmt(t.total)}</span>},
-                      ]}
-                      footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasZ.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:"#49B8D3"}}>{fmt(totalZ)}</td></>}
-                    />
-                  </div>
-                  {/* Tabla POS */}
-                  <div>
-                    <div style={{fontSize:"10px",letterSpacing:"2px",color:"#10b981",fontWeight:700,marginBottom:"8px",paddingLeft:"4px"}}>POS — RECEPCIÓN</div>
-                    {filasPOS.length===0
-                      ?<div className="glass" style={{padding:"40px",textAlign:"center",color:T.faint,fontSize:"13px"}}>Sin tickets en el sistema{zettleSucFiltro?` para ${zettleSucFiltro}`:""}</div>
-                      :<TablaComp filas={filasPOS}
-                        cols={[
-                          {k:"# Zettle",render:t=>{
-                            const isEditing=editZettle?.id===t.id;
-                            const guardarZettle=async()=>{
-                              if(savingZettle)return;
-                              const raw=(editZettle.value||"").trim();
-                              const val=raw?(raw.startsWith("#")?raw:"#"+raw):null;
-                              setSavingZettle(true);
-                              await supabase.from("tickets").update({ticket_zettle:val}).eq("id",t.id);
-                              // Actualizar también la cita vinculada (mismo clienta_id + fecha)
-                              if(val&&t.clienta_id){
-                                await supabase.from("citas").update({ticket_zettle:val})
-                                  .eq("clienta_id",t.clienta_id).eq("fecha",t.fecha).eq("es_cobro",true);
-                              }
-                              // Reflejar en estado local sin recargar todo
-                              setTickets(prev=>prev.map(tk=>tk.id===t.id?{...tk,ticket_zettle:val}:tk));
-                              setSavingZettle(false);setEditZettle(null);
-                            };
-                            if(isEditing)return<div style={{display:"flex",gap:"4px",alignItems:"center"}}>
-                              <input autoFocus value={editZettle.value} onChange={e=>setEditZettle({...editZettle,value:e.target.value})}
-                                onKeyDown={e=>{if(e.key==="Enter")guardarZettle();if(e.key==="Escape")setEditZettle(null);}}
-                                placeholder="#123" style={{width:"72px",fontSize:"11px",padding:"3px 6px",borderRadius:"6px",border:"1px solid #49B8D3",background:light?"rgba(0,0,0,0.04)":"transparent",color:light?"#1a1a2e":"#fff",fontFamily:"monospace",outline:"none"}}/>
-                              <button onClick={guardarZettle} disabled={savingZettle} style={{fontSize:"11px",padding:"3px 8px",borderRadius:"6px",background:"#49B8D3",border:"none",color:"#fff",cursor:"pointer",fontWeight:600}}>{savingZettle?"...":"✓"}</button>
-                              <button onClick={()=>setEditZettle(null)} style={{fontSize:"11px",padding:"3px 6px",borderRadius:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.15)",color:T.faint,cursor:"pointer"}}>✕</button>
-                            </div>;
-                            return<div style={{display:"flex",alignItems:"center",gap:"6px",cursor:"pointer"}} onClick={()=>setEditZettle({id:t.id,value:t.ticket_zettle||""})}>
-                              <span style={{fontFamily:"monospace",color:t.ticket_zettle?"#49B8D3":T.faint,fontSize:"11px",fontWeight:600}}>{t.ticket_zettle||"—"}</span>
-                              <span style={{fontSize:"10px",color:T.faint,opacity:0.5}}>✏</span>
-                            </div>;
-                          }},
-                          {k:"Fecha",render:t=><span style={{fontFamily:"monospace",color:T.muted,fontSize:"11px"}}>{t.fecha}</span>},
-                          {k:"Clienta",render:t=><span style={{fontSize:"11px",color:t.clienta_nombre?T.muted:T.faint,fontStyle:t.clienta_nombre?"normal":"italic"}}>{t.clienta_nombre||"—"}</span>},
-                          {k:"Concepto",render:t=><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"140px",fontSize:"11px",color:T.muted}}>{(t.servicios||[]).join(", ")||"—"}</div>},
-                          {k:"Método",render:t=><span style={{fontSize:"11px",color:T.faint}}>{(t.metodo_pago||"").split(" ")[0]}</span>},
-                          {k:"Total",r:true,render:t=><span style={{fontWeight:700,fontFamily:"monospace"}}>{fmt(t.total)}</span>},
-                          {k:"",render:t=>{
-                            const isPending=confirmDeleteTicket?.id===t.id;
-                            if(isPending)return<div style={{display:"flex",gap:"4px",alignItems:"center"}}>
-                              <button onClick={async()=>{
-                                await supabase.from("tickets").delete().eq("id",t.id);
-                                setTickets(prev=>prev.filter(tk=>tk.id!==t.id));
-                                setConfirmDeleteTicket(null);
-                              }} style={{fontSize:"10px",padding:"3px 8px",borderRadius:"6px",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",color:"#ef4444",cursor:"pointer",fontWeight:700,whiteSpace:"nowrap"}}>Sí, borrar</button>
-                              <button onClick={()=>setConfirmDeleteTicket(null)} style={{fontSize:"10px",padding:"3px 6px",borderRadius:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.15)",color:T.faint,cursor:"pointer"}}>✕</button>
-                            </div>;
-                            return<button onClick={()=>setConfirmDeleteTicket(t)} title="Eliminar ticket" style={{background:"transparent",border:"none",cursor:"pointer",color:T.faint,fontSize:"13px",padding:"2px 4px",opacity:0.5,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>🗑</button>;
-                          }},
-                        ]}
-                        footer={<><td colSpan={4} style={{padding:"10px 14px",fontSize:"11px",fontWeight:600,color:T.sub}}>{filasPOS.length} transacciones</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:color(pctMonto)}}>{fmt(totalPOS)}</td><td/></>}
-                      />
-                    }
-                  </div>
-                </div>;})()}
-              </>;
-            })()}
-          </div>;
-        })()}
-
         {/* ═══ FINANZAS ═══ */}
-        {tab==="finanzas"&&<EstadoFinanciero sucursalesFiltro={sucursalesFiltro} sucursalesPropias={sucursalesPropias} esAdmin={!sucursalesFiltro&&!sucursalesPropias}/>}
+        {tab==="finanzas"&&<EstadoFinanciero
+          sucursalesFiltro={sucursalesFiltro}
+          sucursalesPropias={sucursalesPropias}
+          esAdmin={!sucursalesFiltro&&!sucursalesPropias}
+          mesSel={mesSel}
+          onCambiarMes={setMesSel}
+          mesDesde={mesDesde}
+          mesHasta={mesHasta}
+          mesSelLabel={mesSelLabel}
+          periodoLabel={periodoLabel}
+          filtro={filtro}
+          tickets={tickets}
+          setTickets={setTickets}
+          topMet={topMet}
+          ventasTotal={ventasTotal}
+          maxMet={maxMet}
+        />}
 
         {/* ═══ PREVENTA ═══ */}
         {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro} session={session}/>}
