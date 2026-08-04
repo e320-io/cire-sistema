@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase, META_TOKEN, META_ACCOUNT, CLAUDE_KEY } from "../../lib/supabase.js";
 import { useT } from "../../lib/theme.jsx";
-import { USUARIOS, SUCURSALES_NAMES, COLORES, fmt, cdmx } from "../../lib/constantes.js";
+import { USUARIOS, SUCURSALES_NAMES, COLORES, fmt, cdmx, normName } from "../../lib/constantes.js";
+import { getCatalogo } from "../../lib/catalogo.js";
 import { renderMarkdown } from "../../lib/markdown.jsx";
 import { fetchZettleRaw, fetchHistorialMensualCacheado } from "../../lib/zettle.js";
 import { indiceEstacionalPooled, backtestWalkForward, proyectar, siguienteMes } from "./forecast.js";
@@ -168,7 +169,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   useEffect(()=>{cargar();setAiTxt("");cargarVentasSemanales(periodo);},[periodo]);
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
 
-  const PRODUCTOS_FISICOS=["Inhibidor de vello Beautive","Exfoliante corporal Beautive","Moisten Ácido Hialurónico","Moisten PDRN","Depilsense Inhibidor de Vello Aspid Pro","Talco Líquido Despigmentante Aspid Pro","Moisten Crema"];
+  const PRODUCTOS_FISICOS_LEGACY=["Inhibidor de vello Beautive","Exfoliante corporal Beautive","Moisten Ácido Hialurónico","Moisten PDRN","Depilsense Inhibidor de Vello Aspid Pro","Talco Líquido Despigmentante Aspid Pro","Moisten Crema"];
+  const productosFisicosNorm=new Set([...PRODUCTOS_FISICOS_LEGACY,...getCatalogo().filter(i=>i.tipo==="producto").map(i=>i.nombre)].map(normName));
   const TIERS_RECEP=[{desde:350000,pct:3.00},{desde:300000,pct:2.50},{desde:250000,pct:2.25},{desde:210000,pct:2.00},{desde:190000,pct:1.75},{desde:160000,pct:1.50},{desde:130000,pct:1.25},{desde:90000,pct:1.00},{desde:0,pct:0}];
   const getTierRecep=(base)=>TIERS_RECEP.find(t=>base>=t.desde)||{desde:0,pct:0};
   const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.99};
@@ -191,7 +193,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     const cTotal=Math.round((cBase+cMsi)*100)/100;
     const mRec=Math.round((monto-cTotal)*100)/100;
     const serviciosArr=t.servicios||[];
-    const esSoloProductos=serviciosArr.length>0&&serviciosArr.every(s=>PRODUCTOS_FISICOS.includes(s));
+    const esSoloProductos=serviciosArr.length>0&&serviciosArr.every(s=>productosFisicosNorm.has(normName(s)));
     const esCera=serviciosArr.some(s=>s.toLowerCase().includes("cera"));
     const cCos=esSoloProductos?null:Math.round(mRec*(esCera?0.10:0.05)*100)/100;
     const hora=t.created_at?new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"—";
@@ -233,12 +235,13 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     setLoadingComZettle(true);
     try{
       const{desde,hasta}=rango(periodo);
-      let q=supabase.from("tickets").select("total,sucursal_nombre,fecha").eq("fuente","zettle").gte("fecha",desde).lte("fecha",hasta);
-      if(esSocia||subtab==="comisiones")q=q.ilike("sucursal_nombre",`%${sucSel}%`);
-      else if(sucursalesFiltro)q=q.in("sucursal_nombre",sucursalesFiltro);
-      const{data,error}=await q;
-      if(error)throw error;
-      setComZettleTotal({total:(data||[]).reduce((s,t)=>s+Number(t.total||0),0),count:(data||[]).length});
+      const todas=await fetchZettleRaw(desde,hasta);
+      const filtradas=(esSocia||subtab==="comisiones")
+        ?todas.filter(t=>(t.sucursal||"").toUpperCase().includes(sucSel.toUpperCase()))
+        :sucursalesFiltro
+          ?todas.filter(t=>sucursalesFiltro.includes(t.sucursal))
+          :todas;
+      setComZettleTotal({total:filtradas.reduce((s,t)=>s+Number(t.total||0),0),count:filtradas.length});
     }catch(e){console.error("cargarComparativoZettle:",e);setComZettleTotal(null);}
     setLoadingComZettle(false);
   };

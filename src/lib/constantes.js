@@ -5,7 +5,7 @@ export const USUARIOS=[
   {id:4,nombre:"Polanco",usuario:"polanco",password:"cire2026",rol:"sucursal",color:"#49B8D3"},
   {id:5,nombre:"Metepec",usuario:"metepec",password:"cire2026",rol:"sucursal",color:"#2721E8",noBot:true},
   {id:0,nombre:"Admin",usuario:"cire.admin",password:"cire.admin2026",rol:"admin",color:"#a855f7"},
-  {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"]},
+  {id:10,nombre:"Jaz Vázquez",usuario:"jaz_vazquez",password:"jaz.cire2026",rol:"duena_general",color:"#f0c040",sucursalesPropias:["Polanco","Valle"],catalogo:true},
   {id:11,nombre:"Fabiola Tinoco",usuario:"fabiola_tinoco",password:"fabiola2026",rol:"socia",color:"#2721E8",sucursales:["Coapa"],accesibilidad:true,tabsExtra:["pos","zettle","reparar"]},
   {id:12,nombre:"Gerencia Metepec",usuario:"gerencia_metepec",password:"metepec2026",rol:"socia",color:"#10b981",sucursales:["Metepec"],noBot:true},
   {id:13,nombre:"Marce Gallardo",usuario:"marce_gallardo",password:"cire2026",rol:"socia",color:"#a855f7",sucursales:["Oriente"],noBot:true,passwordFinal:true},
@@ -19,6 +19,7 @@ export const TERMINALES_DEFAULT=[
   {nombre:"Banorte",comision:2.50,activa:true},
   {nombre:"Mercado Pago",comision:2.99,activa:true},
 ];
+export const puedeEditarCatalogo=(s)=>s?.rol==="admin"||s?.catalogo===true;
 export const netoTarjeta=(monto,comision)=>Math.round(monto*(1-(comision*1.16/100)));
 export const fmt=(n)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(n||0);
 export const fmtN=(n)=>new Intl.NumberFormat("es-MX").format(n||0);

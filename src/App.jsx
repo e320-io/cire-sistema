@@ -3,12 +3,14 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { SUPABASE_URL, SUPABASE_KEY, META_TOKEN, META_ACCOUNT, CLAUDE_KEY, supabase, BOT_SB_URL, BOT_SB_KEY, BOT_API_URL, botSB } from "./lib/supabase.js";
 import { ThemeCtx, mkT, useT } from "./lib/theme.jsx";
-import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES } from "./lib/constantes.js";
+import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES, puedeEditarCatalogo } from "./lib/constantes.js";
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
 import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
+import { getCatalogo, getCatalogoPorCategoria, cargarCatalogo, recargarCatalogo, asegurarCatalogo, useCatalogo } from "./lib/catalogo.js";
+import { CATALOGO_SEED } from "./lib/catalogoSeed.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // ─── Analítica: registrar evento de uso ───────────────────────────────────────
@@ -124,229 +126,15 @@ const nextTicketNum=async()=>{const{data}=await supabase.from("tickets").select(
 const inicioMes=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;};
 
 const PROMO_EXPIRY=new Date('2026-12-31T23:59:59');
-const getPrecioActual=(item)=>(item.precioPromo!==undefined&&new Date()<=PROMO_EXPIRY)?item.precioPromo:item.precio;
-const CATALOGO=[
-  {categoria:"Láser Mujer - Zona Íntima",items:[
-    {nombre:"Bikini Básico Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
-    {nombre:"Sexy Bikini Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
-    {nombre:"French Bikini Mujer (8 ses)",precio:3500,precioPromo:3000,msi:[3]},
-    {nombre:"Bikini Brazilian Mujer (8 ses)",precio:4000,precioPromo:3500,msi:[3]},
-    {nombre:"Crack Mujer (8 ses)",precio:1800,precioPromo:1625,msi:[]},
-  ]},
-  {categoria:"Láser Mujer - Cuerpo Inferior",items:[
-    {nombre:"Coxis Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
-    {nombre:"Glúteos Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
-    {nombre:"Medias Piernas Mujer (8 ses)",precio:3500,precioPromo:3000,msi:[3]},
-    {nombre:"Piernas Completas Mujer (8 ses)",precio:5000,precioPromo:4500,msi:[3]},
-    {nombre:"Pies Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
-  ]},
-  {categoria:"Láser Mujer - Cuerpo Superior",items:[
-    {nombre:"Brazos Completos Mujer (8 ses)",precio:4000,precioPromo:3750,msi:[3]},
-    {nombre:"Medios Brazos Mujer (8 ses)",precio:2800,precioPromo:2500,msi:[3]},
-    {nombre:"Axilas Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
-    {nombre:"Manos Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
-    {nombre:"Espalda Completa Mujer (8 ses)",precio:4800,precioPromo:4500,msi:[3]},
-    {nombre:"Media Espalda Mujer (8 ses)",precio:2500,precioPromo:2250,msi:[3]},
-    {nombre:"Hombros Mujer (8 ses)",precio:2000,precioPromo:1750,msi:[]},
-    {nombre:"Abdomen Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
-    {nombre:"Línea de Abdomen Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
-    {nombre:"Pecho Mujer (8 ses)",precio:2250,precioPromo:2500,msi:[3]},
-    {nombre:"Pezones Mujer (8 ses)",precio:1500,precioPromo:1250,msi:[]},
-  ]},
-  {categoria:"Láser Mujer - Rostro",items:[
-    {nombre:"Rostro Completo Mujer (8 ses)",precio:2750,precioPromo:2500,msi:[3]},
-    {nombre:"Medio Rostro Mujer (8 ses)",precio:2250,precioPromo:2000,msi:[3]},
-    {nombre:"Cuello Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
-    {nombre:"Nuca Mujer (8 ses)",precio:1800,precioPromo:1500,msi:[]},
-    {nombre:"Bigote Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Entreceja Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Frente Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Mejillas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Mentón Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Patillas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Nariz Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-    {nombre:"Orejas Mujer (8 ses)",precio:1250,precioPromo:1000,msi:[]},
-  ]},
-  {categoria:"Combos Láser Mujer",items:[
-    {nombre:"Combo Abdomen Mujer (8 ses)",precio:4500,msi:[3]},
-    {nombre:"Combo Axilas Mujer (8 ses)",precio:5000,precioPromo:5500,msi:[3]},
-    {nombre:"Combo Glúteos Mujer (8 ses)",precio:5500,msi:[3]},
-    {nombre:"Combo Bikini Mujer (8 ses)",precio:5000,precioPromo:4500,msi:[3]},
-    {nombre:"Combo Piernas Mujer (8 ses)",precio:6500,precioPromo:7000,msi:[3,6]},
-    {nombre:"Combo Brazos Mujer (8 ses)",precio:5500,precioPromo:6000,msi:[3]},
-    {nombre:"Combo Playa Básico Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
-    {nombre:"Combo Playa Sexy Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
-    {nombre:"Combo Playa French Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
-    {nombre:"Combo Playa Brazilian Mujer (8 ses)",precio:6750,precioPromo:7000,msi:[3,6]},
-    {nombre:"Combo Sexy Básico Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
-    {nombre:"Combo Sexy Sexy Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
-    {nombre:"Combo Sexy French Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
-    {nombre:"Combo Sexy Brazilian Mujer (8 ses)",precio:7750,precioPromo:8000,msi:[3,6]},
-    {nombre:"Combo Rostro Mujer (8 ses)",precio:8500,precioPromo:9000,msi:[3,6]},
-    {nombre:"Cuerpo Completo Mujer (8 ses)",precio:10500,precioPromo:9500,msi:[3,6,9]},
-  ]},
-  {categoria:"Láser Hombre - Zona Íntima",items:[
-    {nombre:"Classic Boy Bikini (8 ses)",precio:2750,msi:[3]},
-    {nombre:"Classic Boy Bikini Plus (8 ses)",precio:3750,msi:[3]},
-    {nombre:"French Boy Bikini (8 ses)",precio:4250,msi:[3]},
-    {nombre:"Boy Bikini Brazilian (8 ses)",precio:6000,msi:[3,6]},
-    {nombre:"Crackman (8 ses)",precio:1875,precioPromo:1300,msi:[]},
-  ]},
-  {categoria:"Láser Hombre - Cuerpo Inferior",items:[
-    {nombre:"Coxis Hombre (8 ses)",precio:1800,msi:[]},
-    {nombre:"Glúteos con Crack Hombre (8 ses)",precio:2500,precioPromo:1600,msi:[3]},
-    {nombre:"Glúteos sin Crack Hombre (8 ses)",precio:2500,precioPromo:1600,msi:[3]},
-    {nombre:"Medias Piernas Abajo Hombre (8 ses)",precio:3500,precioPromo:2400,msi:[3]},
-    {nombre:"Medias Piernas Arriba Hombre (8 ses)",precio:3500,precioPromo:2400,msi:[3]},
-    {nombre:"Piernas Completas Hombre (8 ses)",precio:5000,msi:[3]},
-    {nombre:"Pies Hombre (8 ses)",precio:1800,msi:[]},
-  ]},
-  {categoria:"Láser Hombre - Cuerpo Superior",items:[
-    {nombre:"Brazos Completos Hombre (8 ses)",precio:4000,precioPromo:3000,msi:[3]},
-    {nombre:"Medios Brazos Hombre (8 ses)",precio:2800,precioPromo:2000,msi:[3]},
-    {nombre:"Axilas Hombre (8 ses)",precio:1800,precioPromo:1200,msi:[]},
-    {nombre:"Manos Hombre (8 ses)",precio:1800,msi:[]},
-    {nombre:"Espalda Completa Hombre (8 ses)",precio:5250,precioPromo:3600,msi:[3]},
-    {nombre:"Media Espalda Abajo Hombre (8 ses)",precio:2750,msi:[3]},
-    {nombre:"Media Espalda Arriba Hombre (8 ses)",precio:2750,msi:[3]},
-    {nombre:"Hombros Hombre (8 ses)",precio:2000,msi:[]},
-    {nombre:"Abdomen Hombre (8 ses)",precio:2250,precioPromo:1600,msi:[3]},
-    {nombre:"Línea de Abdomen Hombre (8 ses)",precio:1800,precioPromo:1000,msi:[]},
-    {nombre:"Pecho Hombre (8 ses)",precio:3550,msi:[3]},
-    {nombre:"Pezones Hombre (8 ses)",precio:1800,msi:[]},
-  ]},
-  {categoria:"Láser Hombre - Rostro",items:[
-    {nombre:"Rostro Completo Hombre (8 ses)",precio:3250,precioPromo:2000,msi:[3]},
-    {nombre:"Barba Hombre (8 ses)",precio:2750,msi:[3]},
-    {nombre:"Cuello Hombre (8 ses)",precio:2750,msi:[]},
-    {nombre:"Nuca Hombre (8 ses)",precio:2750,msi:[]},
-    {nombre:"Bigote Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Contorno de Ojos Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Entreceja Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Frente Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Mejillas Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Mentón Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Patillas Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Nariz Hombre (8 ses)",precio:1500,msi:[]},
-    {nombre:"Orejas Hombre (8 ses)",precio:1500,msi:[]},
-  ]},
-  {categoria:"Combos Láser Hombre",items:[
-    {nombre:"Combo Pecho Hombre (8 ses)",precio:5250,msi:[3]},
-    {nombre:"Combo Men (8 ses)",precio:8250,msi:[3,6]},
-    {nombre:"Combo Espalda Hombre (8 ses)",precio:7250,msi:[3,6]},
-    {nombre:"Combo Glúteos Hombre (8 ses)",precio:7750,msi:[3,6]},
-    {nombre:"Combo Pride (8 ses)",precio:10250,msi:[3,6]},
-    {nombre:"Cuerpo Completo Hombre (8 ses)",precio:11000,precioPromo:8500,msi:[3,6,9]},
-  ]},
-  {categoria:"Faciales",items:[
-    {nombre:"Skin Renew (1 ses)",precio:649,msi:[]},
-    {nombre:"Skin Renew (3 ses)",precio:1799,msi:[]},
-    {nombre:"Skin Renew (5 ses)",precio:2945,msi:[]},
-    {nombre:"Skin Renew (10 ses)",precio:5000,msi:[3]},
-    {nombre:"Skin Repair (1 ses)",precio:949,msi:[]},
-    {nombre:"Skin Repair (3 ses)",precio:2547,msi:[]},
-    {nombre:"Skin Repair (5 ses)",precio:3745,msi:[]},
-    {nombre:"Skin Repair (10 ses)",precio:6490,precioPromo:5100,msi:[3]},
-    {nombre:"Skin Reset (1 ses)",precio:949,msi:[]},
-    {nombre:"Skin Reset (3 ses)",precio:2547,msi:[]},
-    {nombre:"Skin Reset (5 ses)",precio:3745,msi:[]},
-    {nombre:"Skin Reset (10 ses)",precio:6490,msi:[3]},
-  ]},
-  {categoria:"Cire Lift (HIFU 4D)",items:[
-    {nombre:"Cire Lift 1 sesión",precio:3250,precioPromo:2500,msi:[3]},
-    {nombre:"Cire Lift 2 sesiones",precio:5500,msi:[3]},
-  ]},
-  {categoria:"Cire Body (Moldeo Corporal)",items:[
-    {nombre:"Cire Body 1 sesión",precio:749,precioPromo:625,msi:[]},
-    {nombre:"Cire Body 6 sesiones",precio:3500,precioPromo:3399,msi:[3]},
-    {nombre:"Cire Body 12 sesiones",precio:6290,precioPromo:5949,msi:[3]},
-  ]},
-  {categoria:"Moldeo Cire-Na",items:[
-    {nombre:"Moldeo Cire-Na 1 ses",precio:749,precioPromo:625,msi:[]},
-    {nombre:"Moldeo Cire-Na 6 ses",precio:3500,precioPromo:3399,msi:[3]},
-    {nombre:"Moldeo Cire-Na 12 ses",precio:6290,precioPromo:5949,msi:[3]},
-  ]},
-  {categoria:"Cire Sculpt Anticelulítico",items:[
-    {nombre:"Cire Sculpt Anti 1 ses",precio:749,precioPromo:625,msi:[]},
-    {nombre:"Cire Sculpt Anti 6 ses",precio:3500,precioPromo:3399,msi:[3]},
-    {nombre:"Cire Sculpt Anti 12 ses",precio:6290,precioPromo:5949,msi:[3]},
-  ]},
-  {categoria:"Cire Sculpt Post Operatorio",items:[
-    {nombre:"Post Op 1 ses",precio:899,precioPromo:899,msi:[]},
-    {nombre:"Post Op 6 ses",precio:4000,msi:[3]},
-    {nombre:"Post Op 12 ses",precio:7490,msi:[3]},
-  ]},
-  {categoria:"Cera",items:[
-    {nombre:"Cera Bikini Básico",precio:390,msi:[]},
-    {nombre:"Cera Sexy Bikini",precio:460,msi:[]},
-    {nombre:"Cera French Bikini",precio:520,msi:[]},
-    {nombre:"Cera Bikini Brazilian",precio:590,msi:[]},
-    {nombre:"Cera Crack",precio:200,msi:[]},
-    {nombre:"Cera Coxis",precio:130,msi:[]},
-    {nombre:"Cera Glúteos con Crack",precio:320,msi:[]},
-    {nombre:"Cera Glúteos sin Crack",precio:240,msi:[]},
-    {nombre:"Cera Medias Piernas Arriba",precio:410,msi:[]},
-    {nombre:"Cera Medias Piernas Abajo",precio:430,msi:[]},
-    {nombre:"Cera Piernas Completas",precio:690,msi:[]},
-    {nombre:"Cera Pies",precio:130,msi:[]},
-    {nombre:"Cera Abdomen",precio:240,msi:[]},
-    {nombre:"Cera Combo Abdomen + Pecho",precio:550,msi:[]},
-    {nombre:"Cera Axilas",precio:150,msi:[]},
-    {nombre:"Cera Brazos Completos",precio:410,msi:[]},
-    {nombre:"Cera Espalda Completa",precio:550,msi:[]},
-    {nombre:"Cera Hombros",precio:200,msi:[]},
-    {nombre:"Cera Línea de Abdomen",precio:130,msi:[]},
-    {nombre:"Cera Manos",precio:130,msi:[]},
-    {nombre:"Cera Media Espalda Superior",precio:280,msi:[]},
-    {nombre:"Cera Media Espalda Inferior",precio:300,msi:[]},
-    {nombre:"Cera Medios Brazos",precio:340,msi:[]},
-    {nombre:"Cera Pecho",precio:280,msi:[]},
-    {nombre:"Cera Pezones",precio:130,msi:[]},
-    {nombre:"Cera Barba",precio:330,msi:[]},
-    {nombre:"Cera Bigote",precio:110,msi:[]},
-    {nombre:"Cera Diseño de Cejas",precio:300,msi:[]},
-    {nombre:"Cera Entreceja",precio:70,msi:[]},
-    {nombre:"Cera Frente",precio:130,msi:[]},
-    {nombre:"Cera Mantenimiento de Cejas",precio:260,msi:[]},
-    {nombre:"Cera Medio Rostro",precio:460,msi:[]},
-    {nombre:"Cera Mejillas",precio:130,msi:[]},
-    {nombre:"Cera Mentón",precio:130,msi:[]},
-    {nombre:"Cera Patillas",precio:130,msi:[]},
-    {nombre:"Cera Rostro Completo con Diseño de Ceja",precio:780,msi:[]},
-    {nombre:"Cera Rostro Completo con Mantenimiento de Ceja",precio:720,msi:[]},
-    {nombre:"Cera Rostro Completo sin Cejas",precio:590,msi:[]},
-    {nombre:"Cera Nariz",precio:100,msi:[]},
-    {nombre:"Cera Nuca",precio:130,msi:[]},
-    {nombre:"Cera Orejas",precio:130,msi:[]},
-    {nombre:"Cera Combo Sexy Básico",precio:1170,msi:[]},
-    {nombre:"Cera Combo Sexy Sexy Bikini",precio:1300,msi:[]},
-    {nombre:"Cera Combo Sexy French",precio:1370,msi:[]},
-    {nombre:"Cera Combo Sexy Brazilian",precio:1410,msi:[]},
-    {nombre:"Cera Combo Playa Básico",precio:980,msi:[]},
-    {nombre:"Cera Combo Playa Sexy Bikini",precio:1040,msi:[]},
-    {nombre:"Cera Combo Playa French",precio:1110,msi:[]},
-    {nombre:"Cera Combo Playa Brazilian",precio:1170,msi:[]},
-    {nombre:"Cera Combo Piernas French",precio:1170,msi:[]},
-    {nombre:"Cera Combo Piernas Brazilian",precio:1240,msi:[]},
-    {nombre:"Cera Cuerpo Completo con Rostro",precio:3250,msi:[]},
-    {nombre:"Cera Cuerpo Completo sin Rostro",precio:2930,msi:[]},
-  ]},
-  {categoria:"Aparatología",items:[
-    {nombre:"Aparatología 1 zona",precio:649,msi:[]},
-  ]},
-  {categoria:"Productos",items:[
-    {nombre:"Inhibidor de vello Beautive",precio:500,msi:[]},
-    {nombre:"Exfoliante corporal Beautive",precio:500,msi:[]},
-    {nombre:"Moisten Ácido Hialurónico",precio:1200,msi:[]},
-    {nombre:"Moisten PDRN",precio:1200,msi:[]},
-    {nombre:"Depilsense Inhibidor de Vello Aspid Pro",precio:959,msi:[]},
-    {nombre:"Talco Líquido Despigmentante Aspid Pro",precio:819,msi:[]},
-    {nombre:"Moisten Crema",precio:1400,msi:[]},
-  ]},
-  {categoria:"Paquetes Especiales",items:[
-    {nombre:"Paquete de Bienestar (Masaje Relajante + Facial Skin Repair, 2h)",precio:1500,msi:[],sucursales:["Oriente","Polanco"]},
-  ]},
-];
+const getPrecioActual=(item)=>{
+  const limite=item.promoHasta?new Date(item.promoHasta+"T23:59:59"):PROMO_EXPIRY;
+  return(item.precioPromo!=null&&new Date()<=limite)?item.precioPromo:item.precio;
+};
+const catalogoOptGroups=(valorActual)=>{
+  const grupos=getCatalogoPorCategoria();
+  if(!valorActual||grupos.some(g=>g.items.some(it=>it.nombre===valorActual)))return grupos;
+  return[{categoria:"Fuera de catálogo",items:[{nombre:valorActual,fueraDeCatalogo:true}]},...grupos];
+};
 const TIPOS_SVC=[{id:"laser",label:"Láser",duracion:60,color:"#039BE5"},{id:"facial_baby",label:"Skin Renew",duracion:60,color:"#E67C73"},{id:"facial_full",label:"Skin Repair/Reset",duracion:90,color:"#E67C73"},{id:"corporal",label:"Corporal/Moldeo",duracion:60,color:"#8E24AA"},{id:"hifu",label:"Cire Lift",duracion:90,color:"#3F51B5"},{id:"post_op",label:"Post operatorio",duracion:60,color:"#10b981"},{id:"cera",label:"Cera",duracion:45,color:"#33B679"},{id:"valoracion",label:"Valoración",duracion:30,color:"#EAB308"}];
 // Tiempos reales por zona según tabla de tiempos (minutos)
 const TIEMPOS_ZONA={
@@ -401,7 +189,7 @@ const horaFin=(h,dur)=>{if(!h)return"";const[hh,mm]=h.split(":").map(Number);con
 function semanaD(f){const b=new Date(f+"T12:00:00"),d=b.getDay(),l=new Date(b);l.setDate(b.getDate()-(d===0?6:d-1));return Array.from({length:6},(_,i)=>{const x=new Date(l);x.setDate(l.getDate()+i);return x.toISOString().slice(0,10);});}
 const FILTROS=["Todos","Combos","Rostro","Superior","Inferior","Bikini","Faciales","HIFU","Corporales","Mantenimiento","Personalizado","Cera","Productos"];
 const ZONAS_CERA=["Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico","Ingles"];
-const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();const esCera=n.startsWith("cera ");if(f==="Cera")return esCera;if(esCera)return false;if(f==="Combos")return n.includes("combo")||n.includes("cuerpo completo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas")||n.includes("cuello")||n.includes("nuca")||n.includes("barba")||n.includes("contorno")||n.includes("mejillas")||n.includes("entreceja")||n.includes("frente")||n.includes("nariz")||n.includes("orejas")||n.includes("mentón");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","glúteos","zona interg","hombros","manos","pezones"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","coxis","pies"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french boy","sexy bikini","crack"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt","cire-na"].some(k=>n.includes(k));if(f==="Productos")return item.categoria==="Productos"||item.categoria==="Paquetes Especiales";return true;};
+const ITEM_FILTRO=(item,f)=>{if(f==="Todos")return true;const n=item.nombre.toLowerCase();const esCera=n.startsWith("cera ");if(f==="Cera")return esCera;if(esCera)return false;if(f==="Combos")return n.includes("combo")||n.includes("cuerpo completo")||n.includes("full body");if(f==="Rostro")return n.includes("rostro")||n.includes("bigote")||n.includes("patillas")||n.includes("cuello")||n.includes("nuca")||n.includes("barba")||n.includes("contorno")||n.includes("mejillas")||n.includes("entreceja")||n.includes("frente")||n.includes("nariz")||n.includes("orejas")||n.includes("mentón");if(f==="Superior")return["axilas","brazos","pecho","abdomen","espalda","glúteos","zona interg","hombros","manos","pezones"].some(k=>n.includes(k));if(f==="Inferior")return["piernas","coxis","pies"].some(k=>n.includes(k));if(f==="Bikini")return["bikini","french boy","sexy bikini","crack"].some(k=>n.includes(k));if(f==="Faciales")return n.includes("skin renew")||n.includes("skin repair")||n.includes("skin reset");if(f==="HIFU")return n.includes("hifu")||n.includes("cire lift");if(f==="Corporales")return["moldeo","anticel","post op","aparatolog","cire body","cire sculpt","cire-na"].some(k=>n.includes(k));if(f==="Productos")return item.tipo==="producto"||item.categoria==="Paquetes Especiales";return true;};
 const ZONAS_EQUIPO=["Piernas","Brazos","Axilas","Pezones","Espalda","Glúteos","Zona Interglútea","Abdomen","Línea Abdomen","Pecho","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini","General"];
 const ZONAS_PACK=["Cuerpo Completo","Piernas Completas","Medias Piernas","Brazos","Medios Brazos","Axilas","Espalda Completa","Media Espalda","Glúteos","Zona Interglútea","Coxis","Abdomen","Línea Abdomen","Pecho","Pezones","Rostro Completo","Medio Rostro","Bigote","Mentón","Patillas","Bikini Brazilian","French Bikini","Sexy Bikini","Bikini Básico"];
 
@@ -550,13 +338,13 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
               <div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>SERVICIO / PAQUETE</div>
               <select className="inp" value={ep.servicioEdit} onChange={e=>{
                 const nombre=e.target.value;
-                const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);
+                const item=getCatalogo().find(x=>x.nombre===nombre);
                 const ses=nombre.match(/(\d+)[ªa°]?\s*ses/i)?.[1];
                 setEditPaquetes(prev=>prev.map((p,idx)=>idx!==i?p:{...p,servicioEdit:nombre,precioEdit:item?String(getPrecioActual(item)):p.precioEdit,totalEdit:ses?ses:p.totalEdit}));
               }} style={{fontSize:"13px"}}>
-                {CATALOGO.map(cat=>(
+                {catalogoOptGroups(ep.servicioEdit).map(cat=>(
                   <optgroup key={cat.categoria} label={cat.categoria}>
-                    {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}
+                    {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}{it.fueraDeCatalogo?" (fuera de catálogo)":""}</option>)}
                   </optgroup>
                 ))}
               </select>
@@ -587,9 +375,9 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
             <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
               <div>
                 <div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>SERVICIO</div>
-                <select className="inp" value={newPaqForm.servicio||""} onChange={e=>{const nombre=e.target.value;const item=CATALOGO.flatMap(c=>c.items).find(x=>x.nombre===nombre);const ms=nombre.match(/(\d+)[ªa°]?\s*ses/i);setNewPaqForm(f=>({...f,servicio:nombre,precioEdit:item?String(getPrecioActual(item)):f.precioEdit,totalEdit:ms?ms[1]:f.totalEdit}));}} style={{fontSize:"13px"}}>
+                <select className="inp" value={newPaqForm.servicio||""} onChange={e=>{const nombre=e.target.value;const item=getCatalogo().find(x=>x.nombre===nombre);const ms=nombre.match(/(\d+)[ªa°]?\s*ses/i);setNewPaqForm(f=>({...f,servicio:nombre,precioEdit:item?String(getPrecioActual(item)):f.precioEdit,totalEdit:ms?ms[1]:f.totalEdit}));}} style={{fontSize:"13px"}}>
                   <option value="">Seleccionar servicio...</option>
-                  {CATALOGO.map(cat=><optgroup key={cat.categoria} label={cat.categoria}>{cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}</optgroup>)}
+                  {getCatalogoPorCategoria().map(cat=><optgroup key={cat.categoria} label={cat.categoria}>{cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}</optgroup>)}
                 </select>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px"}}>
@@ -1042,6 +830,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
   const completarSinCobrar=async()=>{if(!citaCobro)return;const c=citaCobro.cita;setShowCobro(false);setCitaCobro(null);await completar(c);};
   // Intercepta "Completada" — si hay anticipo pendiente o cita sin anticipo, abre modal de cobro primero
   const abrirCobro=async(cita)=>{
+    await asegurarCatalogo();
     if(cita.paquete_id){
       const{data:paqCheck}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();
       if(paqCheck?.es_preventa&&!paqCheck?.preventa_liquidado){
@@ -1063,7 +852,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       const anticoMonto=mAnticipo?Number(mAnticipo[1]):0;
       let paq=null;
       if(cita.paquete_id){const{data:p}=await supabase.from("paquetes").select("*").eq("id",cita.paquete_id).single();paq=p;}
-      const _catItem=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio);const paqPrecio=paq?.precio||(_catItem?getPrecioActual(_catItem):0);
+      const _catItem=getCatalogo().find(i=>i.nombre===cita.servicio);const paqPrecio=paq?.precio||(_catItem?getPrecioActual(_catItem):0);
       // Buscar otros paquetes del mismo ticket con cobro pendiente
       let otrosPaquetes=[];
       if(paq?.ticket_id){
@@ -1360,7 +1149,7 @@ function AgendaCalendar({session,onVerFicha,isAdmin}){
       </div></div>}
       {showCobro&&citaCobro&&(()=>{
         const{cita,paqPrecio,anticoMonto,restante,paq,otrosPaquetes=[]}=citaCobro;
-        const msiOpts=CATALOGO.flatMap(c=>c.items).find(i=>i.nombre===cita.servicio)?.msi||[];
+        const msiOpts=getCatalogo().find(i=>i.nombre===cita.servicio)?.msi||[];
         const montoEfectivo=montoCustom!==null?montoCustom:restante;
         const totalFinalAg=pagosAg.length===1?(montoCustom!==null?montoCustom:Math.round(paqPrecio*(1-descuentoAg/100)-anticoMonto)):pagosAg.reduce((s,p)=>s+p.monto,0);
         const pagoOkAg=pagosAg.every(p=>p.metodo)&&(pagosAg.length===1||pagosAg.reduce((s,p)=>s+p.monto,0)===montoEfectivo);
@@ -1542,6 +1331,409 @@ function AjustesTerminales({session}){
           {msg&&<span style={{fontSize:"12px",color:msg.startsWith("✓")?"#10b981":"#ff6b6b"}}>{msg}</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CATÁLOGO — Jaz/admin crean, editan y desactivan productos y servicios del POS
+// ══════════════════════════════════════════════════════════════════════════════
+const CATALOGO_FORM_VACIO={tipo:"servicio",nombre:"",categoria:"",sesiones:"",duracionMin:"",modoPrecio:"fijo",precio:"",precioPromo:"",opciones:[{label:"",precio:""},{label:"",precio:""}],msi:[],sucursales:null};
+
+function CatalogoAdmin({session}){
+  const{light,T}=useT();
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtro,setFiltro]=useState("Activos");
+  const[busq,setBusq]=useState("");
+  const[dirty,setDirty]=useState({}); // {id: {precio,precioPromo,orden}}
+  const[msgFila,setMsgFila]=useState({}); // {id: "✓ Guardado"}
+  const[showForm,setShowForm]=useState(false);
+  const[form,setForm]=useState(CATALOGO_FORM_VACIO);
+  const[formErr,setFormErr]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[confirmDel,setConfirmDel]=useState(null); // {id,nombre,paso}
+  const[sembrando,setSembrando]=useState(false);
+  const[showImport,setShowImport]=useState(false);
+  const fileRef=useRef(null);
+  const[importRows,setImportRows]=useState([]);
+  const[importErr,setImportErr]=useState("");
+  const[importStep,setImportStep]=useState(1);
+  const[importando,setImportando]=useState(false);
+  const[forzarCambiosGrandes,setForzarCambiosGrandes]=useState(false);
+
+  const cargar=async()=>{
+    setLoading(true);
+    const{data}=await supabase.from("catalogo").select("*").order("orden");
+    setItems(data||[]);setLoading(false);
+  };
+  useEffect(()=>{cargar();},[]);
+
+  const sembrar=async()=>{
+    setSembrando(true);
+    try{
+      let orden=0;
+      const filas=CATALOGO_SEED.flatMap(cat=>cat.items.map(it=>{
+        orden+=1;
+        const m=it.nombre.match(/(\d+)[ªa°]?\s*ses/i)||it.nombre.match(/\((\d+)s\)/i);
+        return{
+          nombre:it.nombre,categoria:cat.categoria,
+          tipo:cat.categoria==="Productos"?"producto":"servicio",
+          precio:it.precio,precio_promo:it.precioPromo??null,
+          sesiones:m?parseInt(m[1]):null,duracion_min:it.duracion??null,
+          msi:it.msi||[],sucursales:it.sucursales||null,activo:true,orden,
+        };
+      }));
+      const{error}=await supabase.from("catalogo").upsert(filas,{onConflict:"nombre"});
+      if(error)throw error;
+      logActividad(session,"catalogo_sembrar",`${filas.length} items`);
+      await cargar();await recargarCatalogo();
+    }catch(e){alert("Error al sembrar: "+e.message);}
+    setSembrando(false);
+  };
+
+  const itemsFiltrados=items.filter(i=>{
+    if(filtro==="Activos"&&!i.activo)return false;
+    if(filtro==="Inactivos"&&i.activo)return false;
+    if(filtro==="Productos"&&i.tipo!=="producto")return false;
+    if(filtro==="Servicios"&&i.tipo!=="servicio")return false;
+    if(busq&&!i.nombre.toLowerCase().includes(busq.toLowerCase()))return false;
+    return true;
+  });
+  const porCategoria=(()=>{
+    const m=new Map();
+    for(const it of itemsFiltrados){if(!m.has(it.categoria))m.set(it.categoria,[]);m.get(it.categoria).push(it);}
+    return Array.from(m.entries());
+  })();
+
+  const marcarDirty=(id,campo,valor)=>setDirty(d=>({...d,[id]:{...d[id],[campo]:valor}}));
+  const valorActual=(item,campo)=>dirty[item.id]?.[campo]??item[campo];
+  const tieneCambios=(item)=>{const d=dirty[item.id];if(!d)return false;return Object.entries(d).some(([k,v])=>String(v)!==String(item[k]??""));};
+
+  const guardarFila=async(item)=>{
+    const d=dirty[item.id];if(!d)return;
+    const patch={};
+    if("precio" in d)patch.precio=Number(d.precio)||0;
+    if("precioPromo" in d)patch.precio_promo=d.precioPromo===""?null:Number(d.precioPromo);
+    if("orden" in d)patch.orden=Number(d.orden)||item.orden;
+    const{error}=await supabase.from("catalogo").update(patch).eq("id",item.id);
+    if(error){setMsgFila(m=>({...m,[item.id]:"Error"}));return;}
+    logActividad(session,"catalogo_editar",item.nombre);
+    setDirty(d2=>{const n={...d2};delete n[item.id];return n;});
+    setMsgFila(m=>({...m,[item.id]:"✓"}));
+    setTimeout(()=>setMsgFila(m=>({...m,[item.id]:undefined})),2000);
+    await cargar();await recargarCatalogo();
+  };
+
+  const toggleActivo=async(item)=>{
+    await supabase.from("catalogo").update({activo:!item.activo}).eq("id",item.id);
+    logActividad(session,item.activo?"catalogo_desactivar":"catalogo_activar",item.nombre);
+    await cargar();await recargarCatalogo();
+  };
+
+  const pedirBorrar=async(item)=>{
+    const[{count:cP},{count:cC}]=await Promise.all([
+      supabase.from("paquetes").select("id",{count:"exact",head:true}).eq("servicio",item.nombre),
+      supabase.from("citas").select("id",{count:"exact",head:true}).eq("servicio",item.nombre),
+    ]);
+    setConfirmDel({id:item.id,nombre:item.nombre,refs:(cP||0)+(cC||0)});
+  };
+  const confirmarBorrar=async()=>{
+    if(!confirmDel)return;
+    await supabase.from("catalogo").delete().eq("id",confirmDel.id);
+    logActividad(session,"catalogo_eliminar",confirmDel.nombre);
+    setConfirmDel(null);await cargar();await recargarCatalogo();
+  };
+
+  const previewTipo=form.nombre?detectTipo(form.nombre):null;
+  const previewDur=form.nombre&&previewTipo?(Number(form.duracionMin)||getDuracionServicio(form.nombre,previewTipo.id)||previewTipo.duracion):null;
+  const nombreDuplicado=form.nombre&&items.some(i=>normName(i.nombre)===normName(form.nombre));
+
+  const actOpcion=(idx,campo,val)=>setForm(f=>({...f,opciones:f.opciones.map((o,i)=>i===idx?{...o,[campo]:val}:o)}));
+  const agregarOpcion=()=>setForm(f=>({...f,opciones:[...f.opciones,{label:"",precio:""}]}));
+  const quitarOpcion=(idx)=>setForm(f=>({...f,opciones:f.opciones.filter((_,i)=>i!==idx)}));
+
+  const guardarNuevo=async()=>{
+    setFormErr("");
+    if(!form.nombre.trim()){setFormErr("Ponle un nombre.");return;}
+    if(!form.categoria.trim()){setFormErr("Ponle una categoría.");return;}
+    if(nombreDuplicado){setFormErr("Ya existe un item con ese nombre (o muy parecido).");return;}
+    let nombreFinal=form.nombre.trim();
+    if(form.tipo==="servicio"&&form.sesiones&&Number(form.sesiones)>1&&!/ses/i.test(nombreFinal)){
+      nombreFinal=`${nombreFinal} (${form.sesiones} ses)`;
+    }
+    let precio=0,precioPromo=null,preciosOpciones=null;
+    if(form.modoPrecio==="fijo"){
+      if(!form.precio||Number(form.precio)<=0){setFormErr("Ponle un precio válido.");return;}
+      precio=Number(form.precio);precioPromo=form.precioPromo?Number(form.precioPromo):null;
+    }else{
+      const validas=form.opciones.filter(o=>o.label.trim()&&Number(o.precio)>0);
+      if(validas.length<2){setFormErr("Agrega al menos 2 precios con etiqueta y monto.");return;}
+      preciosOpciones=validas.map(o=>({label:o.label.trim(),precio:Number(o.precio)}));
+      precio=preciosOpciones[0].precio;
+    }
+    setSaving(true);
+    try{
+      const{error}=await supabase.from("catalogo").insert([{
+        nombre:nombreFinal,categoria:form.categoria.trim(),tipo:form.tipo,
+        precio,precio_promo:precioPromo,precios_opciones:preciosOpciones,
+        sesiones:form.sesiones?Number(form.sesiones):null,
+        duracion_min:form.duracionMin?Number(form.duracionMin):null,
+        msi:form.msi,sucursales:form.sucursales,activo:true,orden:1000+items.length,
+      }]);
+      if(error)throw error;
+      logActividad(session,"catalogo_crear",nombreFinal);
+      setForm(CATALOGO_FORM_VACIO);setShowForm(false);
+      await cargar();await recargarCatalogo();
+    }catch(e){setFormErr(e.message||"Error al guardar");}
+    setSaving(false);
+  };
+
+  const descargarCSV=()=>{
+    const filas=[["id","nombre","categoria","tipo","precio","precio_promo"],
+      ...items.map(i=>[i.id,i.nombre,i.categoria,i.tipo,i.precio,i.precio_promo??""])];
+    const csv=filas.map(f=>f.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`precios_cire_${hoy()}.csv`;a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseMontoCatalogo=(s,sep)=>{
+    let v=(s||"").replace(/[$\s]/g,"");
+    if(sep===";")v=v.replace(/\./g,"").replace(",",".");
+    else v=v.replace(/,/g,"");
+    return Number(v)||0;
+  };
+
+  const procesarArchivoImport=(file)=>{
+    if(!file)return;setImportErr("");
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const text=e.target.result;
+      const lines=text.split(/\r?\n/).filter(l=>l.trim());
+      if(!lines.length){setImportErr("Archivo vacío.");return;}
+      const sep=lines[0].includes(";")?";":",";
+      const hdr=parseCSVLine(lines[0],sep).map(h=>h.toLowerCase().replace(/"/g,""));
+      const idxId=hdr.indexOf("id"),idxNombre=hdr.indexOf("nombre"),idxPrecio=hdr.indexOf("precio"),idxPromo=hdr.indexOf("precio_promo");
+      if(idxPrecio===-1){setImportErr("El CSV debe tener una columna 'precio'.");return;}
+      const filas=lines.slice(1).map(l=>{
+        const p=parseCSVLine(l,sep).map(v=>v.replace(/^"|"$/g,""));
+        const id=idxId>-1?p[idxId]:null;
+        const nombreCsv=idxNombre>-1?p[idxNombre]:"";
+        const nuevoPrecio=parseMontoCatalogo(p[idxPrecio],sep);
+        const nuevoPromo=idxPromo>-1&&p[idxPromo]?parseMontoCatalogo(p[idxPromo],sep):null;
+        let match=null;
+        if(id)match=items.find(i=>String(i.id)===String(id));
+        if(!match&&nombreCsv)match=items.find(i=>normName(i.nombre)===normName(nombreCsv));
+        if(!match)return{nombreCsv,estado:"no_encontrado"};
+        const cambioPct=match.precio>0?Math.abs(nuevoPrecio-match.precio)/match.precio:0;
+        const sinCambio=nuevoPrecio===match.precio&&nuevoPromo===(match.precio_promo??null);
+        return{id:match.id,nombre:match.nombre,precioActual:match.precio,precioPromoActual:match.precio_promo,
+          nuevoPrecio,nuevoPromo,estado:sinCambio?"sin_cambio":"actualizar",cambioPct,incluir:!sinCambio};
+      });
+      setImportRows(filas);setImportStep(2);
+    };
+    reader.readAsText(file);
+  };
+
+  const cambiosGrandes=importRows.some(r=>r.incluir&&r.estado==="actualizar"&&r.cambioPct>0.6);
+  const aplicarImport=async()=>{
+    setImportando(true);
+    try{
+      const aplicar=importRows.filter(r=>r.incluir&&r.estado==="actualizar");
+      for(const r of aplicar){
+        await supabase.from("catalogo").update({precio:r.nuevoPrecio,precio_promo:r.nuevoPromo}).eq("id",r.id);
+      }
+      logActividad(session,"catalogo_precios_csv",`${aplicar.length} precios actualizados`);
+      setShowImport(false);setImportRows([]);setImportStep(1);setForzarCambiosGrandes(false);
+      await cargar();await recargarCatalogo();
+    }catch(e){setImportErr(e.message||"Error al aplicar");}
+    setImportando(false);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+      <div className="glass" style={{padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
+        <div>
+          <div style={{fontSize:"16px",fontWeight:700}}>🏷 Catálogo del POS</div>
+          <div style={{fontSize:"12px",color:T.muted}}>Crea, edita y desactiva productos y servicios sin desarrollador</div>
+        </div>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          <button className="btn-ghost" onClick={descargarCSV} style={{fontSize:"12px"}}>⬇ Descargar precios (CSV)</button>
+          <button className="btn-ghost" onClick={()=>setShowImport(true)} style={{fontSize:"12px"}}>⬆ Importar precios (CSV)</button>
+          <button className="btn-blue" onClick={()=>{setForm(CATALOGO_FORM_VACIO);setFormErr("");setShowForm(true);}} style={{fontSize:"13px",padding:"9px 18px"}}>+ Nuevo producto/servicio</button>
+        </div>
+      </div>
+
+      {!loading&&items.length===0&&<div className="glass" style={{padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.3)"}}>
+        <div style={{fontSize:"13px"}}>El catálogo está vacío en la base de datos. Siembra los ~180 items actuales para empezar a editarlos aquí.</div>
+        <button className="btn-blue" onClick={sembrar} disabled={sembrando} style={{fontSize:"13px",flexShrink:0}}>{sembrando?"Sembrando...":"Sembrar catálogo inicial"}</button>
+      </div>}
+
+      <div className="glass" style={{padding:"14px 18px",display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap"}}>
+        {["Activos","Inactivos","Productos","Servicios","Todos"].map(f=><button key={f} onClick={()=>setFiltro(f)} style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid",fontSize:"12px",fontWeight:500,cursor:"pointer",background:filtro===f?"#2721E8":"transparent",borderColor:filtro===f?"#2721E8":T.chipBdr,color:filtro===f?"#fff":T.muted}}>{f}</button>)}
+        <input className="inp" placeholder="Buscar..." value={busq} onChange={e=>setBusq(e.target.value)} style={{flex:1,minWidth:"160px",padding:"7px 12px",fontSize:"12px"}}/>
+      </div>
+
+      {loading?<div style={{textAlign:"center",padding:"40px",color:T.sub}}>Cargando...</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+        {porCategoria.map(([categoria,its])=>(
+          <div key={categoria} className="glass" style={{padding:"14px 18px"}}>
+            <div style={{fontSize:"11px",letterSpacing:"1.5px",color:T.sub,marginBottom:"10px"}}>{categoria.toUpperCase()}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {its.map(item=>{const d=tieneCambios(item);return(
+                <div key={item.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 110px 70px 70px 70px",gap:"8px",alignItems:"center",padding:"8px 10px",background:item.activo?"transparent":"rgba(255,255,255,0.02)",borderRadius:"8px",opacity:item.activo?1:0.55}}>
+                  <div>
+                    <div style={{fontSize:"13px",fontWeight:600}}>{item.nombre}</div>
+                    <div style={{fontSize:"10px",color:T.faint}}>{item.tipo==="producto"?"🧴 Producto":"💆 Servicio"}{item.sesiones>1?` · ${item.sesiones} ses`:""}{item.precios_opciones?.length?` · ${item.precios_opciones.length} precios a elegir`:""}{!item.sucursales?" · Todas las sucursales":` · ${item.sucursales.join(", ")}`}</div>
+                  </div>
+                  <input type="number" className="inp" value={valorActual(item,"precio")} onChange={e=>marcarDirty(item.id,"precio",e.target.value)} disabled={!!item.precios_opciones?.length} style={{fontSize:"12px",padding:"6px 8px"}}/>
+                  <input type="number" className="inp" placeholder="promo" value={valorActual(item,"precioPromo")??""} onChange={e=>marcarDirty(item.id,"precioPromo",e.target.value)} disabled={!!item.precios_opciones?.length} style={{fontSize:"12px",padding:"6px 8px"}}/>
+                  <button onClick={()=>guardarFila(item)} disabled={!d} className="btn-ghost" style={{fontSize:"11px",padding:"6px 8px",opacity:d?1:0.4}}>{msgFila[item.id]||"Guardar"}</button>
+                  <button onClick={()=>toggleActivo(item)} style={{fontSize:"11px",padding:"6px 8px",borderRadius:"6px",border:"1px solid",cursor:"pointer",background:item.activo?"rgba(16,185,129,0.1)":"rgba(255,255,255,0.05)",borderColor:item.activo?"rgba(16,185,129,0.4)":"rgba(255,255,255,0.15)",color:item.activo?"#10b981":T.sub}}>{item.activo?"Activo":"Inactivo"}</button>
+                  <button onClick={()=>pedirBorrar(item)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.5)",cursor:"pointer",fontSize:"14px"}} title="Eliminar">🗑</button>
+                </div>
+              );})}
+            </div>
+          </div>
+        ))}
+        {itemsFiltrados.length===0&&items.length>0&&<div style={{textAlign:"center",padding:"30px",color:T.dim,fontSize:"13px"}}>Sin resultados</div>}
+      </div>}
+
+      {/* ─── Modal nuevo producto/servicio ─── */}
+      {showForm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setShowForm(false)}>
+        <div style={{width:"100%",maxWidth:"560px",maxHeight:"90vh",overflowY:"auto",background:light?"#fff":"#22264A",borderRadius:"20px",padding:"24px",display:"flex",flexDirection:"column",gap:"14px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:"15px",fontWeight:700}}>Nuevo producto o servicio</div>
+            <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",fontSize:"20px",cursor:"pointer",color:T.sub}}>×</button>
+          </div>
+
+          <div>
+            <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>¿QUÉ ES?</div>
+            <div style={{display:"flex",gap:"8px"}}>
+              <button onClick={()=>setForm(f=>({...f,tipo:"producto"}))} style={{flex:1,padding:"10px",borderRadius:"10px",border:`1px solid ${form.tipo==="producto"?"#2721E8":T.chipBdr}`,background:form.tipo==="producto"?"rgba(39,33,232,0.12)":"transparent",color:T.muted,cursor:"pointer",fontSize:"13px",fontWeight:600}}>🧴 Producto físico</button>
+              <button onClick={()=>setForm(f=>({...f,tipo:"servicio"}))} style={{flex:1,padding:"10px",borderRadius:"10px",border:`1px solid ${form.tipo==="servicio"?"#2721E8":T.chipBdr}`,background:form.tipo==="servicio"?"rgba(39,33,232,0.12)":"transparent",color:T.muted,cursor:"pointer",fontSize:"13px",fontWeight:600}}>💆 Servicio recurrente</button>
+            </div>
+          </div>
+
+          <div><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>NOMBRE</div><input className="inp" value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))} placeholder="Ej. Bikini Básico Mujer" style={{fontSize:"13px"}}/></div>
+          <div><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>CATEGORÍA</div><input className="inp" list="cat-list" value={form.categoria} onChange={e=>setForm(f=>({...f,categoria:e.target.value}))} placeholder="Ej. Láser Mujer - Zona Íntima" style={{fontSize:"13px"}}/>
+            <datalist id="cat-list">{[...new Set(items.map(i=>i.categoria))].map(c=><option key={c} value={c}/>)}</datalist>
+          </div>
+
+          {form.tipo==="servicio"&&<div style={{display:"flex",gap:"8px"}}>
+            <div style={{flex:1}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>SESIONES</div><input type="number" min="1" className="inp" value={form.sesiones} onChange={e=>setForm(f=>({...f,sesiones:e.target.value}))} style={{fontSize:"13px"}}/></div>
+            <div style={{flex:1}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>DURACIÓN (min, opcional)</div><input type="number" min="15" step="15" className="inp" value={form.duracionMin} onChange={e=>setForm(f=>({...f,duracionMin:e.target.value}))} style={{fontSize:"13px"}}/></div>
+          </div>}
+
+          <div>
+            <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>PRECIO</div>
+            <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+              <button onClick={()=>setForm(f=>({...f,modoPrecio:"fijo"}))} style={{flex:1,padding:"8px",borderRadius:"8px",border:`1px solid ${form.modoPrecio==="fijo"?"#2721E8":T.chipBdr}`,background:form.modoPrecio==="fijo"?"rgba(39,33,232,0.12)":"transparent",color:T.muted,cursor:"pointer",fontSize:"12px",fontWeight:600}}>Precio fijo</button>
+              <button onClick={()=>setForm(f=>({...f,modoPrecio:"multiple"}))} style={{flex:1,padding:"8px",borderRadius:"8px",border:`1px solid ${form.modoPrecio==="multiple"?"#2721E8":T.chipBdr}`,background:form.modoPrecio==="multiple"?"rgba(39,33,232,0.12)":"transparent",color:T.muted,cursor:"pointer",fontSize:"12px",fontWeight:600}}>Varios precios a elegir</button>
+            </div>
+            {form.modoPrecio==="fijo"?
+              <div style={{display:"flex",gap:"8px"}}>
+                <div style={{flex:1}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>PRECIO $</div><input type="number" className="inp" value={form.precio} onChange={e=>setForm(f=>({...f,precio:e.target.value}))} style={{fontSize:"13px"}}/></div>
+                <div style={{flex:1}}><div style={{fontSize:"10px",color:T.sub,marginBottom:"4px"}}>PRECIO PROMO (opcional)</div><input type="number" className="inp" value={form.precioPromo} onChange={e=>setForm(f=>({...f,precioPromo:e.target.value}))} style={{fontSize:"13px"}}/></div>
+              </div>
+              :<div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+                {form.opciones.map((o,i)=><div key={i} style={{display:"flex",gap:"6px"}}>
+                  <input className="inp" placeholder="Etiqueta (ej. 1 zona)" value={o.label} onChange={e=>actOpcion(i,"label",e.target.value)} style={{flex:2,fontSize:"12px"}}/>
+                  <input type="number" className="inp" placeholder="Precio" value={o.precio} onChange={e=>actOpcion(i,"precio",e.target.value)} style={{flex:1,fontSize:"12px"}}/>
+                  {form.opciones.length>2&&<button onClick={()=>quitarOpcion(i)} style={{background:"none",border:"none",color:"rgba(239,68,68,0.6)",cursor:"pointer",fontSize:"16px"}}>✕</button>}
+                </div>)}
+                <button onClick={agregarOpcion} className="btn-ghost" style={{fontSize:"11px",alignSelf:"flex-start"}}>+ Otro precio</button>
+                <div style={{fontSize:"10px",color:T.faint}}>La cajera solo podrá elegir uno de estos precios en el POS — no podrá escribir un monto libre.</div>
+              </div>}
+          </div>
+
+          <div>
+            <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>MSI DISPONIBLES</div>
+            <div style={{display:"flex",gap:"6px"}}>
+              {[3,6,9,12].map(n=>{const on=form.msi.includes(n);return(
+                <button key={n} onClick={()=>setForm(f=>({...f,msi:on?f.msi.filter(x=>x!==n):[...f.msi,n]}))} style={{padding:"6px 12px",borderRadius:"8px",border:`1px solid ${on?"#2721E8":T.chipBdr}`,background:on?"rgba(39,33,232,0.15)":"transparent",color:on?"#fff":T.muted,cursor:"pointer",fontSize:"12px"}}>{n} MSI</button>
+              );})}
+            </div>
+          </div>
+
+          <div>
+            <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>SUCURSALES</div>
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              <button onClick={()=>setForm(f=>({...f,sucursales:null}))} style={{padding:"6px 12px",borderRadius:"8px",border:`1px solid ${form.sucursales===null?"#2721E8":T.chipBdr}`,background:form.sucursales===null?"rgba(39,33,232,0.15)":"transparent",color:form.sucursales===null?"#fff":T.muted,cursor:"pointer",fontSize:"12px",fontWeight:600}}>Todas</button>
+              {SUCURSALES_NAMES.map(s=>{const on=form.sucursales?.includes(s);return(
+                <button key={s} onClick={()=>setForm(f=>({...f,sucursales:on?(f.sucursales.length>1?f.sucursales.filter(x=>x!==s):null):[...(f.sucursales||[]),s]}))} style={{padding:"6px 12px",borderRadius:"8px",border:`1px solid ${on?"#2721E8":T.chipBdr}`,background:on?"rgba(39,33,232,0.15)":"transparent",color:on?"#fff":T.muted,cursor:"pointer",fontSize:"12px"}}>{s}</button>
+              );})}
+            </div>
+          </div>
+
+          {form.tipo==="servicio"&&form.nombre&&<div style={{padding:"10px 12px",background:"rgba(39,33,232,0.06)",borderRadius:"8px",fontSize:"11px",color:T.muted}}>
+            Se clasificará como <b>{previewTipo?.label}</b>{previewDur?` · ${previewDur} min`:""} en la agenda.
+          </div>}
+          {nombreDuplicado&&<div style={{fontSize:"11px",color:"#f59e0b"}}>⚠ Ya existe un item con un nombre muy parecido.</div>}
+          {formErr&&<div style={{fontSize:"12px",color:"#ef4444"}}>{formErr}</div>}
+
+          <button className="btn-blue" onClick={guardarNuevo} disabled={saving} style={{padding:"12px",fontSize:"13px",fontWeight:700}}>{saving?"Guardando...":"✓ Crear"}</button>
+        </div>
+      </div>}
+
+      {/* ─── Confirmar borrado ─── */}
+      {confirmDel&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setConfirmDel(null)}>
+        <div style={{width:"100%",maxWidth:"420px",background:light?"#fff":"#22264A",borderRadius:"20px",padding:"24px",display:"flex",flexDirection:"column",gap:"14px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:"15px",fontWeight:700}}>Eliminar «{confirmDel.nombre}»</div>
+          {confirmDel.refs>0?<>
+            <div style={{fontSize:"13px",color:T.muted}}>Este servicio tiene {confirmDel.refs} paquetes/citas de clientas asociados. Eliminarlo por completo rompería su historial — mejor <b>desactívalo</b> para que deje de aparecer en el POS sin perder esa información.</div>
+            <button className="btn-blue" onClick={()=>{const it=items.find(i=>i.id===confirmDel.id);setConfirmDel(null);if(it)toggleActivo(it);}} style={{padding:"11px",fontSize:"13px"}}>Desactivar en vez de eliminar</button>
+            <button className="btn-ghost" onClick={()=>setConfirmDel(null)} style={{padding:"10px",fontSize:"12px"}}>Cancelar</button>
+          </>:<>
+            <div style={{fontSize:"13px",color:T.muted}}>No tiene historial asociado. Esta acción no se puede deshacer.</div>
+            <div style={{display:"flex",gap:"8px"}}>
+              <button className="btn-ghost" onClick={()=>setConfirmDel(null)} style={{flex:1,padding:"10px",fontSize:"12px"}}>Cancelar</button>
+              <button onClick={confirmarBorrar} style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid #ef4444",background:"rgba(239,68,68,0.15)",color:"#ef4444",fontWeight:700,cursor:"pointer",fontSize:"12px"}}>Sí, eliminar</button>
+            </div>
+          </>}
+        </div>
+      </div>}
+
+      {/* ─── Importar precios CSV ─── */}
+      {showImport&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setShowImport(false)}>
+        <div style={{width:"100%",maxWidth:"640px",maxHeight:"85vh",overflowY:"auto",background:light?"#fff":"#22264A",borderRadius:"20px",padding:"24px",display:"flex",flexDirection:"column",gap:"14px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:"15px",fontWeight:700}}>Importar precios desde CSV</div>
+            <button onClick={()=>setShowImport(false)} style={{background:"none",border:"none",fontSize:"20px",cursor:"pointer",color:T.sub}}>×</button>
+          </div>
+          {importStep===1?<>
+            <div style={{fontSize:"12px",color:T.muted}}>Descarga primero el CSV actual, edita los precios en Excel y vuelve a subirlo aquí. No crea productos nuevos ni cambia nombres — solo actualiza precios de items existentes.</div>
+            <input ref={fileRef} type="file" accept=".csv" onChange={e=>procesarArchivoImport(e.target.files[0])} style={{fontSize:"13px"}}/>
+            {importErr&&<div style={{fontSize:"12px",color:"#ef4444"}}>{importErr}</div>}
+          </>:<>
+            <div style={{fontSize:"12px",color:T.muted}}>
+              {importRows.filter(r=>r.estado==="actualizar").length} para actualizar · {importRows.filter(r=>r.estado==="sin_cambio").length} sin cambio · {importRows.filter(r=>r.estado==="no_encontrado").length} no encontrados
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"320px",overflowY:"auto"}}>
+              {importRows.map((r,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",borderRadius:"8px",background:r.estado==="no_encontrado"?"rgba(239,68,68,0.06)":r.estado==="sin_cambio"?"rgba(255,255,255,0.02)":"rgba(16,185,129,0.06)",opacity:r.estado==="sin_cambio"?0.6:1}}>
+                  {r.estado==="actualizar"&&<input type="checkbox" checked={r.incluir} onChange={e=>setImportRows(rs=>rs.map((x,xi)=>xi===i?{...x,incluir:e.target.checked}:x))}/>}
+                  <div style={{flex:1,fontSize:"12px"}}>{r.nombre||r.nombreCsv||"—"}</div>
+                  {r.estado==="actualizar"&&<div style={{fontSize:"12px"}}>{fmt(r.precioActual)} → <b style={{color:r.cambioPct>0.6?"#ef4444":"#10b981"}}>{fmt(r.nuevoPrecio)}</b></div>}
+                  {r.estado==="sin_cambio"&&<div style={{fontSize:"11px",color:T.faint}}>sin cambio</div>}
+                  {r.estado==="no_encontrado"&&<div style={{fontSize:"11px",color:"#ef4444"}}>no encontrado</div>}
+                </div>
+              ))}
+            </div>
+            {cambiosGrandes&&!forzarCambiosGrandes&&<div style={{padding:"10px 12px",background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"8px",fontSize:"12px",color:"#ef4444"}}>
+              ⚠ Algunos precios cambian más de 60% — revisa que no sea un error de coma decimal antes de continuar.
+              <button onClick={()=>setForzarCambiosGrandes(true)} style={{marginLeft:"10px",background:"none",border:"1px solid #ef4444",borderRadius:"6px",color:"#ef4444",padding:"3px 10px",cursor:"pointer",fontSize:"11px"}}>Entiendo, continuar</button>
+            </div>}
+            {importErr&&<div style={{fontSize:"12px",color:"#ef4444"}}>{importErr}</div>}
+            <div style={{display:"flex",gap:"8px"}}>
+              <button className="btn-ghost" onClick={()=>{setImportStep(1);setImportRows([]);}} style={{flex:1,fontSize:"12px",padding:"10px"}}>← Otro archivo</button>
+              <button className="btn-blue" onClick={aplicarImport} disabled={importando||(cambiosGrandes&&!forzarCambiosGrandes)||!importRows.some(r=>r.incluir)} style={{flex:2,fontSize:"13px",padding:"11px"}}>{importando?"Aplicando...":"✓ Aplicar precios"}</button>
+            </div>
+          </>}
+        </div>
+      </div>}
     </div>
   );
 }
@@ -2050,10 +2242,20 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[showCeraForm,setShowCeraForm]=useState(false);const[ceraZonas,setCeraZonas]=useState([]);const[ceraPrecio,setCeraPrecio]=useState("");
   const[usarPromo,setUsarPromo]=useState(true);
   const[precioPromoManual,setPrecioPromoManual]=useState("");const[showPromoManual,setShowPromoManual]=useState(false);
-  const getPrecio=(item)=>(usarPromo&&item.precioPromo!==undefined)?item.precioPromo:item.precio;
-  const todosItems=CATALOGO.flatMap(c=>c.items.map(i=>({...i,categoria:c.categoria}))).filter(i=>!i.sucursales||i.sucursales.includes(session.nombre));
+  const{items:catalogoItems}=useCatalogo();
+  const getPrecio=(item)=>item.preciosOpciones?.length?item.preciosOpciones[0].precio:(usarPromo&&item.precioPromo!=null)?item.precioPromo:item.precio;
+  const cartKeyOf=(item)=>item.cartKey||(item.id!=null?`cat:${item.id}`:`cat:${item.nombre}`);
+  const todosItems=catalogoItems.filter(i=>!i.sucursales||session.rol!=="sucursal"||i.sucursales.includes(sucursalRecepNombre));
   const itemsFilt=todosItems.filter(i=>ITEM_FILTRO(i,filtro)&&(!busq||i.nombre.toLowerCase().includes(busq.toLowerCase())));
-  const sel=(item)=>{setPrecioPromoManual("");setShowPromoManual(false);carrito.find(x=>x.nombre===item.nombre)?setCarrito(carrito.filter(x=>x.nombre!==item.nombre)):setCarrito([...carrito,{...item,precio:getPrecio(item),qty:1}]);};
+  const sel=(item,opcion)=>{
+    setPrecioPromoManual("");setShowPromoManual(false);
+    const cartKey=cartKeyOf(item);
+    const existente=carrito.find(x=>x.cartKey===cartKey);
+    if(existente&&(!opcion||existente.precioLabel===opcion.label)){setCarrito(carrito.filter(x=>x.cartKey!==cartKey));return;}
+    const precio=opcion?opcion.precio:getPrecio(item);
+    const nuevo={...item,cartKey,precio,precioLabel:opcion?.label||null,qty:1};
+    setCarrito(existente?carrito.map(x=>x.cartKey===cartKey?nuevo:x):[...carrito,nuevo]);
+  };
   const total=carrito.reduce((s,i)=>s+i.precio,0);
   const promoManualOk=precioPromoManual!==""&&Number(precioPromoManual)>0;
   const totalCD=promoManualOk?Math.round(Number(precioPromoManual)):Math.round(total*(1-descuento/100));
@@ -2061,7 +2263,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const tipoSvc=carrito.length>0?detectTipo(carrito[0].nombre):TIPOS_SVC[0];
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
-  const soloProductos=carrito.length>0&&carrito.every(i=>i.categoria==="Productos");
+  const soloProductos=carrito.length>0&&carrito.every(i=>i.tipo==="producto");
   const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&(soloProductos||aOk||sinFechaOpt);
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
   const fechaNacISO=nacAnio&&nacMes&&nacDia?`${nacAnio}-${nacMes}-${nacDia}`:null;
@@ -2070,11 +2272,12 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
   const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setSinFechaOpt(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);setPrecioPromoManual("");setShowPromoManual(false);};
 
-  const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;sel({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
+  const agregarAdhoc=(item)=>setCarrito(c=>[...c,{...item,tipo:"servicio",cartKey:`adhoc:${Date.now()}-${c.length}`,qty:1}]);
+  const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;agregarAdhoc({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
   const toggleZona=(z)=>setZonasSeleccionadas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
-  const agregarZonas=()=>{const todasZonas=[...zonasSeleccionadas,...zonasExtra];if(!todasZonas.length||!zonasSesiones||!zonasPrecio)return;const lista=todasZonas.slice(0,3).join(", ")+(todasZonas.length>3?` +${todasZonas.length-3}`:"");const nombre=`Pack Zonas: ${lista} (${zonasSesiones} ses)`;const dur=zonasDuracion?Number(zonasDuracion):null;const msiArr=zonasMsi&&Number(zonasMsi)>0?[Number(zonasMsi)]:[];sel({nombre,precio:Number(zonasPrecio),msi:msiArr,categoria:"Personalizado",...(dur?{duracion:dur}:{})});setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasMsi("");setZonasExtra([]);setZonaExtraInput("");};
+  const agregarZonas=()=>{const todasZonas=[...zonasSeleccionadas,...zonasExtra];if(!todasZonas.length||!zonasSesiones||!zonasPrecio)return;const lista=todasZonas.slice(0,3).join(", ")+(todasZonas.length>3?` +${todasZonas.length-3}`:"");const nombre=`Pack Zonas: ${lista} (${zonasSesiones} ses)`;const dur=zonasDuracion?Number(zonasDuracion):null;const msiArr=zonasMsi&&Number(zonasMsi)>0?[Number(zonasMsi)]:[];agregarAdhoc({nombre,precio:Number(zonasPrecio),msi:msiArr,categoria:"Personalizado",...(dur?{duracion:dur}:{})});setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasMsi("");setZonasExtra([]);setZonaExtraInput("");};
   const toggleCeraZona=(z)=>setCeraZonas(prev=>prev.includes(z)?prev.filter(x=>x!==z):[...prev,z]);
-  const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;sel({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
+  const agregarCera=()=>{if(!ceraZonas.length||!ceraPrecio)return;const lista=ceraZonas.slice(0,3).join(", ")+(ceraZonas.length>3?` +${ceraZonas.length-3}`:"");const nombre=`Cera: ${lista}`;agregarAdhoc({nombre,precio:Number(ceraPrecio),msi:[],categoria:"Cera"});setShowCeraForm(false);};
 
   const cerrar=async()=>{
     if(!ticketZettlePOS.trim()){setErrGuardar("El número de ticket Zettle es obligatorio.");return;}
@@ -2089,9 +2292,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     if(eT)throw new Error("Ticket: "+eT.message);
     const tId=tD?.[0]?.id;
     for(const item of carrito){
-      if(item.categoria==="Productos")continue;
+      if(item.tipo==="producto")continue;
       let pId=null;
-      if(item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+      if(item.sesiones>1||item.nombre.includes("ses")||/\(\d+s\)/i.test(item.nombre)){const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=item.sesiones||(ms?parseInt(ms[1]):1);
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:true,metodo_pago:mpago,total_pagado:totalCD,estado:sinFechaOpt?"abierta":"agendada",notas:`Ticket #${tId||""}`}]);
@@ -2118,9 +2321,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     const tzAnt=ticketZettleAnticipo.trim()?(ticketZettleAnticipo.trim().startsWith("#")?ticketZettleAnticipo.trim():"#"+ticketZettleAnticipo.trim()):null;
     for(let idx=0;idx<carrito.length;idx++){
       const item=carrito[idx];const esPrimero=idx===0;
-      if(item.categoria==="Productos")continue;
+      if(item.tipo==="producto")continue;
       let pId=null;
-      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=item.sesiones||(ms?parseInt(ms[1]):1);
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const camposAnticipo=esPrimero?{anticipo_metodo:`Anticipo ${mpAnticipo}`,anticipo_monto:montoAnt,...(tzAnt?{anticipo_ticket:tzAnt}:{})}:{};
@@ -2136,9 +2339,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
     if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
     else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
     for(const item of carrito){
-      if(item.categoria==="Productos")continue;
+      if(item.tipo==="producto")continue;
       let pId=null;
-      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+      {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=item.sesiones||(ms?parseInt(ms[1]):1);
         const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:null,fecha_compra:hoy(),activo:true}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
       const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
       const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,es_cobro:false,estado:sinFechaOpt?"abierta":"agendada",notas:"Sin anticipo"}]);
@@ -2166,9 +2369,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       const tId=tD?.[0]?.id;
       for(let idx=0;idx<carrito.length;idx++){
         const item=carrito[idx];const esPrimero=idx===0;
-        if(item.categoria==="Productos")continue;
+        if(item.tipo==="producto")continue;
         let pId=null;
-        {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=ms?parseInt(ms[1]):1;
+        {const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=item.sesiones||(ms?parseInt(ms[1]):1);
           const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true,es_preventa:true,preventa_monto_inicial:montoInicial,preventa_pendiente:montoPendiente,preventa_fecha_limite:"2025-05-31"}]).select();if(eP)throw new Error("Paquete: "+eP.message);pId=pD?.[0]?.id||null;}
         const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
         const camposAnticipo=esPrimero&&esAnticipo250?{anticipo_metodo:`Anticipo ${preventaMetodo}`,anticipo_monto:250,...(tzVal?{anticipo_ticket:tzVal}:{})}:{};
@@ -2371,11 +2574,19 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             ):(
               <>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
-              {itemsFilt.map(item=>{const ec=carrito.find(x=>x.nombre===item.nombre);const cat=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");return(
-                <div key={item.nombre} onClick={()=>sel(item)} style={{background:ec?"rgba(39,33,232,0.12)":T.cardBg,border:`1px solid ${ec?"rgba(39,33,232,0.45)":T.cardBdr}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:"pointer",transition:"all 0.15s",position:"relative",boxShadow:light&&!ec?"0 1px 3px rgba(0,0,0,0.05)":"none"}} onMouseEnter={e=>{if(!ec)e.currentTarget.style.background=T.hoverBg;}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.12)":T.cardBg;}}>
+              {itemsFilt.map(item=>{const cartKey=cartKeyOf(item);const ec=carrito.find(x=>x.cartKey===cartKey);const cat=item.categoria.replace(" Láser","").replace("Zonas Individuales","Individual").replace("Corporal","Corp.");const multi=item.preciosOpciones?.length>0;return(
+                <div key={cartKey} onClick={()=>{if(!multi)sel(item);}} style={{background:ec?"rgba(39,33,232,0.12)":T.cardBg,border:`1px solid ${ec?"rgba(39,33,232,0.45)":T.cardBdr}`,borderRadius:"12px",padding:"14px 14px 12px",cursor:multi?"default":"pointer",transition:"all 0.15s",position:"relative",boxShadow:light&&!ec?"0 1px 3px rgba(0,0,0,0.05)":"none"}} onMouseEnter={e=>{if(!ec&&!multi)e.currentTarget.style.background=T.hoverBg;}} onMouseLeave={e=>{e.currentTarget.style.background=ec?"rgba(39,33,232,0.12)":T.cardBg;}}>
                   <div style={{fontSize:"9px",color:T.sub,letterSpacing:"1px",marginBottom:"5px",textTransform:"uppercase"}}>{cat}</div>
                   <div style={{fontSize:"13px",fontWeight:600,lineHeight:1.3,marginBottom:"8px",minHeight:"36px"}}>{item.nombre}</div>
-                  <div style={{fontSize:"16px",fontWeight:700,color:usarPromo&&item.precioPromo!==undefined?"#f59e0b":"#49B8D3"}}>{fmt(getPrecio(item))}{usarPromo&&item.precioPromo!==undefined&&<span style={{fontSize:"9px",fontWeight:600,color:"#ef4444",marginLeft:"6px",textDecoration:"line-through"}}>{fmt(item.precio)}</span>}</div>
+                  {multi?(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                      {item.preciosOpciones.map(op=>{const activa=ec?.precioLabel===op.label;return(
+                        <button key={op.label} onClick={e=>{e.stopPropagation();sel(item,op);}} style={{padding:"5px 10px",borderRadius:"8px",border:`1px solid ${activa?"#2721E8":T.chipBdr}`,background:activa?"#2721E8":"transparent",color:activa?"#fff":T.muted,fontSize:"11px",fontWeight:600,cursor:"pointer"}}>{op.label} · {fmt(op.precio)}</button>
+                      );})}
+                    </div>
+                  ):(
+                    <div style={{fontSize:"16px",fontWeight:700,color:usarPromo&&item.precioPromo!=null?"#f59e0b":"#49B8D3"}}>{fmt(getPrecio(item))}{usarPromo&&item.precioPromo!=null&&<span style={{fontSize:"9px",fontWeight:600,color:"#ef4444",marginLeft:"6px",textDecoration:"line-through"}}>{fmt(item.precio)}</span>}</div>
+                  )}
                   {item.msi?.length>0&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>hasta {Math.max(...item.msi)} MSI</div>}
                   {ec&&<div style={{position:"absolute",top:"8px",right:"8px",width:"22px",height:"22px",borderRadius:"50%",background:"#2721E8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:700,color:"#fff"}}>✓</div>}
                 </div>);})}
@@ -2395,7 +2606,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
                 {carrito.map((item,idx)=>(
                   <div key={idx} style={{padding:"10px 12px",background:"rgba(39,33,232,0.1)",border:"1px solid rgba(39,33,232,0.3)",borderRadius:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div><div style={{fontSize:"12px",fontWeight:600}}>{item.nombre}</div><div style={{fontSize:"14px",fontWeight:700,color:"#49B8D3",marginTop:"2px"}}>{fmt(item.precio)}</div></div>
+                    <div><div style={{fontSize:"12px",fontWeight:600}}>{item.nombre}{item.precioLabel?` (${item.precioLabel})`:""}</div><div style={{fontSize:"14px",fontWeight:700,color:"#49B8D3",marginTop:"2px"}}>{fmt(item.precio)}</div></div>
                     <button onClick={()=>setCarrito(carrito.filter((_,i)=>i!==idx))} style={{background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"6px",color:"#ff6b6b",cursor:"pointer",padding:"3px 8px",fontSize:"10px"}}>✕</button>
                   </div>
                 ))}
@@ -3098,7 +3309,7 @@ function GCalImport({session,useDST=true}){
 // IMPORTAR CSV DE VENTAS — parsea el formato de Excel de ventas por sucursal
 // ══════════════════════════════════════════════════════════════════════════════
 const MESES_MAP={"enero":"01","febrero":"02","marzo":"03","abril":"04","mayo":"05","junio":"06","julio":"07","agosto":"08","septiembre":"09","octubre":"10","noviembre":"11","diciembre":"12"};
-function parseCSVLine(line){const r=[];let c="",q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===","&&!q){r.push(c.trim());c="";}else c+=line[i];}r.push(c.trim());return r;}
+function parseCSVLine(line,sep=","){const r=[];let c="",q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===sep&&!q){r.push(c.trim());c="";}else c+=line[i];}r.push(c.trim());return r;}
 function parseFechaVenta(f){
   // "2026-03-02" → as-is (ISO)
   const m0=f.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -4935,9 +5146,9 @@ function RepararImport({sucursalId,sucursalNombre}){
                   :<select value={servVal} onChange={e2=>setEdit(c.id,"servicio",e2.target.value)}
                       style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${isDirty?"#2721E8":"rgba(255,255,255,0.1)"}`,borderRadius:"6px",color:light?"#1a1a2e":"#fff",fontSize:"12px",padding:"5px 8px",width:"100%",cursor:"pointer"}}>
                     <option value="Servicio">— Sin clasificar —</option>
-                    {CATALOGO.map(cat=>(
+                    {catalogoOptGroups(servVal).map(cat=>(
                       <optgroup key={cat.categoria} label={cat.categoria}>
-                        {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}</option>)}
+                        {cat.items.map(it=><option key={it.nombre} value={it.nombre}>{it.nombre}{it.fueraDeCatalogo?" (fuera de catálogo)":""}</option>)}
                       </optgroup>
                     ))}
                   </select>
@@ -5905,7 +6116,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const esDuenaGeneral=!!sucursalesPropias;
-  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","finanzas","importar","reparar","analitica","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","finanzas","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot));
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","importar","reparar","analitica","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot)).filter(t=>!(t==="catalogo"&&!puedeEditarCatalogo(session)));
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>t!=="zettle"&&!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -6015,7 +6226,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],catalogo:["🏷","Catálogo"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -6454,6 +6665,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
             </button>
           </div>
         </div>}
+
+        {/* ═══ CATÁLOGO ═══ */}
+        {tab==="catalogo"&&<CatalogoAdmin session={session}/>}
 
         {/* ═══ IMPORTAR ═══ */}
         {tab==="importar"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
@@ -7057,6 +7271,7 @@ function AsistenteVirtual({ session }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App(){
   useCSSInjection();
+  useEffect(()=>{cargarCatalogo();},[]);
   const{tema,toggleTema}=useTema();
   const[session,setSession]=useState(null);
   const[supaUser,setSupaUser]=useState(null);
