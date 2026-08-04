@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, fmt, cdmx } from "../../lib/constantes.js";
+import { supabase } from "../../lib/supabase.js";
 import { indiceEstacionalPooled, backtestWalkForward, proyectar, BASES_CALCULO, siguienteMes } from "./forecast.js";
 
 const BANDA_SANA_ADS = { min: 10, max: 15 };
@@ -12,8 +13,43 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
   const [vistaRango, setVistaRango] = useState("80");
   const [baseCalculo, setBaseCalculo] = useState("desest");
   const [pctAds, setPctAds] = useState(() => { const o = {}; sucVisible.forEach((s) => { o[s] = 12.5; }); return o; });
+  const [guardado, setGuardado] = useState(null); // {mes, porSucursal:{suc:{porcentaje,presupuesto,base_calculo,rango}}}
+  const [guardandoSuc, setGuardandoSuc] = useState(null);
+  const [msgGuardarSuc, setMsgGuardarSuc] = useState({});
 
   const mesObjetivo = useMemo(() => siguienteMes(periodo), [periodo]);
+
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      const { data, error } = await supabase.from("meta_ads_presupuesto").select("*").eq("mes", mesObjetivo);
+      if (!activo) return;
+      if (!error && data?.length > 0) {
+        const porSucursal = {};
+        data.forEach((r) => { porSucursal[r.sucursal] = r; });
+        setGuardado({ mes: mesObjetivo, porSucursal });
+      } else {
+        setGuardado(null);
+      }
+    })();
+    return () => { activo = false; };
+  }, [mesObjetivo]);
+
+  const guardarSucursal = async (f) => {
+    setGuardandoSuc(f.sucursal);
+    setMsgGuardarSuc((m) => ({ ...m, [f.sucursal]: "" }));
+    try {
+      const row = { mes: mesObjetivo, sucursal: f.sucursal, porcentaje: f.pctAds, presupuesto: f.presupuesto, venta_estimada: f.activo.punto, base_calculo: baseCalculo, rango: vistaRango, updated_at: new Date().toISOString() };
+      const { error } = await supabase.from("meta_ads_presupuesto").upsert([row], { onConflict: "mes,sucursal" });
+      if (error) throw error;
+      setGuardado((g) => ({ mes: mesObjetivo, porSucursal: { ...(g?.mes === mesObjetivo ? g.porSucursal : {}), [f.sucursal]: row } }));
+      setMsgGuardarSuc((m) => ({ ...m, [f.sucursal]: "✓ Guardado" }));
+    } catch (e) {
+      setMsgGuardarSuc((m) => ({ ...m, [f.sucursal]: "Error" }));
+    }
+    setGuardandoSuc(null);
+    setTimeout(() => setMsgGuardarSuc((m) => ({ ...m, [f.sucursal]: "" })), 2500);
+  };
 
   // El mes en curso está incompleto y dispara errores absurdos en el modelo
   // (ver Proyeccion.jsx) — solo se usan meses ya cerrados.
@@ -76,6 +112,11 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
               <div style={{ width: "150px", textAlign: "right" }}>
                 <div style={{ fontWeight: 700, fontSize: "15px", color: "#2721E8" }}>{fmt(f.presupuesto)}</div>
               </div>
+              <div style={{ width: "1px", height: "26px", background: T.div }} />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+                <button onClick={() => guardarSucursal(f)} disabled={guardandoSuc === f.sucursal} style={{ padding: "5px 11px", borderRadius: "7px", fontSize: "11px", fontWeight: 700, border: "none", cursor: guardandoSuc === f.sucursal ? "default" : "pointer", background: "#2721E8", color: "#fff", opacity: guardandoSuc === f.sucursal ? 0.6 : 1, whiteSpace: "nowrap" }}>{guardandoSuc === f.sucursal ? "Guardando…" : "Guardar"}</button>
+                {msgGuardarSuc[f.sucursal] && <span style={{ fontSize: "10px", color: msgGuardarSuc[f.sucursal].startsWith("✓") ? "#10b981" : "#ef4444" }}>{msgGuardarSuc[f.sucursal]}</span>}
+              </div>
             </div>
           </div>
         );
@@ -87,6 +128,33 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
           <div style={{ fontSize: "11px", color: T.faint }}>{totalVenta > 0 ? ((totalPresupuesto / totalVenta) * 100).toFixed(1) : 0}% de {fmt(totalVenta)}</div>
         </div>
       </div>
+      {guardado && (
+        <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: `1px solid ${T.div}` }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.5px", color: T.faint, marginBottom: "10px", textTransform: "uppercase" }}>
+            Presupuesto guardado — {monthLabel(guardado.mes)}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {sucVisible.map((suc) => {
+              const g = guardado.porSucursal[suc];
+              if (!g) return null;
+              const escenario = BASES_CALCULO.find((b) => b.k === g.base_calculo)?.l ?? g.base_calculo;
+              const rangoLabel = g.rango === "80" ? "P10–P90" : "P5–P95";
+              return (
+                <div key={suc} style={{ flex: "1 1 180px", minWidth: "160px", padding: "10px 12px", borderRadius: "10px", background: T.hoverBg }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "99px", background: COLORES[suc] }} />
+                    <span style={{ fontWeight: 700, fontSize: "12px" }}>{suc}</span>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: "15px", color: "#2721E8" }}>{fmt(g.presupuesto)}</div>
+                  <div style={{ fontSize: "11px", color: T.faint }}>{Number(g.porcentaje).toFixed(1)}% · {rangoLabel}</div>
+                  <div style={{ fontSize: "10.5px", color: T.faint, marginTop: "2px" }}>{escenario}</div>
+                  <div style={{ fontSize: "10.5px", color: T.faint, marginTop: "4px", paddingTop: "4px", borderTop: `1px solid ${T.div}` }}>Venta estimada: <b style={{ color: T.muted }}>{fmt(g.venta_estimada)}</b></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -128,8 +128,8 @@ export function proyectar(historial, suc, mesObjetivo, indice, backtest) {
 
 export const BASES_CALCULO = [
   { k: "prom3m", l: "Promedio 3 meses (crudo)" },
-  { k: "desest", l: "Ajustado por temporada" },
-  { k: "desest_castigado", l: "Ajustado + castigo por optimismo" },
+  { k: "desest", l: "Optimista" },
+  { k: "desest_castigado", l: "Realista" },
 ];
 
 export function siguienteMes(periodo) {
