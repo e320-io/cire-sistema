@@ -168,6 +168,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   useEffect(()=>{cargar();setAiTxt("");cargarVentasSemanales(periodo);},[periodo]);
   useEffect(()=>{if(vista==="individual"){setFSuc(sucSel);setFPeriodo(periodo);}},[vista,sucSel,periodo]);
 
+  const PRODUCTOS_FISICOS=["Inhibidor de vello Beautive","Exfoliante corporal Beautive","Moisten Ácido Hialurónico","Moisten PDRN","Depilsense Inhibidor de Vello Aspid Pro","Talco Líquido Despigmentante Aspid Pro","Moisten Crema"];
   const TIERS_RECEP=[{desde:350000,pct:3.00},{desde:300000,pct:2.50},{desde:250000,pct:2.25},{desde:210000,pct:2.00},{desde:190000,pct:1.75},{desde:160000,pct:1.50},{desde:130000,pct:1.25},{desde:90000,pct:1.00},{desde:0,pct:0}];
   const getTierRecep=(base)=>TIERS_RECEP.find(t=>base>=t.desde)||{desde:0,pct:0};
   const TASAS_BASE_COM={Zettle:3.5,BBVA:0.85,Banorte:0.55,"Mercado Pago":2.99};
@@ -189,8 +190,10 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     const cMsi=Math.round(monto*(tMsi*1.16/100)*100)/100;
     const cTotal=Math.round((cBase+cMsi)*100)/100;
     const mRec=Math.round((monto-cTotal)*100)/100;
-    const esCera=(t.servicios||[]).some(s=>s.toLowerCase().includes("cera"));
-    const cCos=Math.round(mRec*(esCera?0.10:0.05)*100)/100;
+    const serviciosArr=t.servicios||[];
+    const esSoloProductos=serviciosArr.length>0&&serviciosArr.every(s=>PRODUCTOS_FISICOS.includes(s));
+    const esCera=serviciosArr.some(s=>s.toLowerCase().includes("cera"));
+    const cCos=esSoloProductos?null:Math.round(mRec*(esCera?0.10:0.05)*100)/100;
     const hora=t.created_at?new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"—";
     const capturista=USUARIOS.find(u=>u.usuario===t.usuario)?.nombre||t.usuario||"Importado";
     return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos,usuario:capturista,hora};
@@ -242,7 +245,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
   useEffect(()=>{if(subtab==="comisiones")cargarComisiones();},[subtab,periodo,sucSel]);
   useEffect(()=>{if(subtab==="comisiones"&&comSubTab==="comparativo")cargarComparativoZettle();},[subtab,comSubTab,periodo,sucSel]);
   const exportarComPDF=()=>{
-    const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
+    const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+(r.com_cosmetara||0)}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
     const r2=v=>Math.round(v*100)/100;
     const fmtP=v=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(v);
     const baseRecepPDF=r2(tot.monto_recibido-tot.com_cosmetara);
@@ -259,7 +262,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
       <td style="text-align:right;color:#ea580c">${r.com_msi>0?fmtP(r.com_msi):"—"}</td>
       <td style="text-align:right;font-weight:700;color:#ea580c">${r.com_terminal>0?fmtP(r.com_terminal):"—"}</td>
       <td style="text-align:right;font-weight:600;color:#16a34a">${fmtP(r.monto_recibido)}</td>
-      <td style="text-align:right;font-weight:700;color:#0e6a8a">${r.com_cosmetara>0?fmtP(r.com_cosmetara):"—"}</td>
+      <td style="text-align:right;font-weight:700;color:${r.com_cosmetara===null?"#d97706":"#0e6a8a"}">${r.com_cosmetara===null?"Pendiente":(r.com_cosmetara>0?fmtP(r.com_cosmetara):"—")}</td>
     </tr>`).join("");
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
     <title>Comisiones ${sucSel} ${etiq(periodo)}</title>
@@ -1147,7 +1150,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
                 <td style={{padding:"7px 10px",textAlign:"right",color:"#f97316"}}>{r.com_msi>0?`-${fmt(r.com_msi)}`:"—"}</td>
                 <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{r.com_terminal>0?`-${fmt(r.com_terminal)}`:"—"}</td>
                 <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#10b981"}}>{fmt(r.monto_recibido)}</td>
-                <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#49B8D3"}}>{r.com_cosmetara>0?fmt(r.com_cosmetara):"—"}</td>
+                <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:r.com_cosmetara===null?"#f0c040":"#49B8D3"}}>{r.com_cosmetara===null?"Pendiente":(r.com_cosmetara>0?fmt(r.com_cosmetara):"—")}</td>
                 <td style={{padding:"7px 10px",position:"relative"}}>
                   {r.comision_periodo&&<span style={{fontSize:"9px",background:"rgba(251,146,60,0.15)",color:"#f97316",border:"1px solid rgba(251,146,60,0.4)",borderRadius:"10px",padding:"1px 6px",marginRight:"4px",whiteSpace:"nowrap"}}>{etiq(r.comision_periodo).split(" ")[0]}</span>}
                   <div style={{display:"flex",gap:"4px",alignItems:"center"}}>
@@ -1168,7 +1171,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
                 </td>
               </tr>)}
             </tbody>
-            <tfoot>{(()=>{const tot=comFiltrado.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});const r2=v=>Math.round(v*100)/100;return(<tr style={{borderTop:`2px solid ${T.div}`,background:"rgba(255,255,255,0.04)"}}>
+            <tfoot>{(()=>{const tot=comFiltrado.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+(r.com_cosmetara||0)}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});const r2=v=>Math.round(v*100)/100;return(<tr style={{borderTop:`2px solid ${T.div}`,background:"rgba(255,255,255,0.04)"}}>
               <td colSpan={8} style={{padding:"10px",fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:T.sub}}>TOTAL · {comFiltrado.length} registros{buscarCom.trim()?` (filtrado de ${comData.length})`:""}</td>
               <td style={{padding:"10px",textAlign:"right",fontWeight:800,fontSize:"14px"}}>{fmt(r2(tot.monto))}</td>
               <td style={{padding:"10px",textAlign:"right",fontWeight:700,color:"#f97316"}}>{tot.com_base>0?`-${fmt(r2(tot.com_base))}`:"—"}</td>
@@ -1182,7 +1185,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
 
         {/* Resumen comisión recepcionista */}
         {!loadingCom&&comData.length>0&&(()=>{
-          const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+r.com_cosmetara}),{monto:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
+          const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+(r.com_cosmetara||0)}),{monto:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
           const r2=v=>Math.round(v*100)/100;
           const baseRecep=r2(tot.monto_recibido-tot.com_cosmetara);
           const tier=getTierRecep(baseRecep);
