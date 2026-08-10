@@ -5721,11 +5721,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     const esJulio2026=fecha&&fecha.slice(0,7)==="2026-07";
     if(esJulio2026&&String(r.adset_id)===JULIO26_MIXTO_ADSET_ID)return fecha<=JULIO26_MIXTO_CUTOFF?repartoCinco():{Valle:0.5,Polanco:0.5};
     if(comb.includes("coapa"))return{Coapa:1};
-    if(nm.includes("valle"))return{Valle:0.5,Polanco:0.5};
+    if(esJulio2026&&nm.includes("valle"))return{Valle:0.5,Polanco:0.5}; // solo julio 2026: ese mes targeteaba Valle+Polanco juntos
     if(nm.includes("5 sucursales"))return repartoCinco();
     const f={};SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))f[s]=1;});
     return f;
   };
+  // Campañas "AGO-..." son el roster activo de agosto 2026; todo lo demás es gasto de campañas anteriores que sigue corriendo mientras se pausan
+  const esCampanaNueva=(campania)=>/^AGO/i.test((campania||"").trim());
   // Descripción legible de cómo se repartió un adset, para el resumen colapsable
   const describirReparto=(r,fecha)=>{
     const frac=fraccionSucursales(r,fecha);
@@ -6458,8 +6460,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           {metaDisplay&&!metaErrorDisplay&&(()=>{
             const[mY,mM]=mesSel.split("-").map(Number);
             const periodoDisp=isCustomPeriod?customLabel:new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-            const porSucMes=sucNames.map(n=>{const ms=metaDisplay.porSucursal?.[n]?.mensajes||0;const sp=metaDisplay.porSucursal?.[n]?.spend||0;return{nombre:n,mensajes:ms,spend:sp};});
-            const maxMsMes=Math.max(...porSucMes.map(s=>s.mensajes),1);
+            const porSucMes=sucNames.map(n=>{
+              const ms=metaDisplay.porSucursal?.[n]?.mensajes||0;const sp=metaDisplay.porSucursal?.[n]?.spend||0;
+              let spNueva=0,spAnterior=0;
+              resumenCampanasDisplay.forEach(r=>{const aporte=r.porSucursal?.[n];if(!aporte)return;if(esCampanaNueva(r.campania))spNueva+=aporte.spend;else spAnterior+=aporte.spend;});
+              return{nombre:n,mensajes:ms,spend:sp,spNueva,spAnterior};
+            });
+            const maxSpendMes=Math.max(...porSucMes.map(s=>s.spend),1);
             const invMes=filtro?filtro.reduce((s,n)=>s+(metaDisplay.porSucursal?.[n]?.spend||0),0):metaDisplay.spend;
             const msgsMes=filtro?filtro.reduce((s,n)=>s+(metaDisplay.porSucursal?.[n]?.mensajes||0),0):metaDisplay.mensajes;
             return<>
@@ -6467,15 +6474,28 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                 {[{l:"INVERSIÓN",v:fmt(invMes),c:"#f97316"},{l:"MENSAJES",v:fmtN(msgsMes),c:"#a855f7"},{l:"IMPRESIONES",v:fmtN(metaDisplay.impresiones),c:"#49B8D3"},{l:"ALCANCE",v:fmtN(metaDisplay.alcance),c:"#49B8D3"}].map(k=><div key={k.l} className="kpi"><div style={{fontSize:"10px",letterSpacing:"2px",color:T.sub,marginBottom:"10px"}}>{k.l}</div><div style={{fontSize:"28px",fontWeight:700,color:k.c}}>{k.v}</div></div>)}
               </div>
               <div className="glass" style={{overflow:"hidden"}}>
-                <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`}}><div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>MENSAJES E INVERSIÓN POR SUCURSAL · {periodoDisp.toUpperCase()}</div></div>
-                <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 100px",padding:"10px 20px",borderBottom:`1px solid ${T.div}`}}>
+                <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"8px"}}>
+                  <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>MENSAJES E INVERSIÓN POR SUCURSAL · {periodoDisp.toUpperCase()}</div>
+                  <div style={{display:"flex",gap:"12px",fontSize:"10px",color:T.faint}}>
+                    <span style={{display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"7px",height:"7px",borderRadius:"2px",background:"#f97316"}}/>Campañas AGO- (nuevas)</span>
+                    <span style={{display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"7px",height:"7px",borderRadius:"2px",background:"#94a3b8"}}/>Campañas anteriores</span>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 140px",padding:"10px 20px",borderBottom:`1px solid ${T.div}`}}>
                   {["#","Sucursal","Mensajes","Inversión"].map(h=><div key={h} style={{fontSize:"10px",letterSpacing:"1px",color:T.faint}}>{h}</div>)}
                 </div>
-                {porSucMes.sort((a,b)=>b.mensajes-a.mensajes).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 100px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center"}}>
+                {porSucMes.sort((a,b)=>b.spend-a.spend).map((s,i)=><div key={s.nombre} style={{display:"grid",gridTemplateColumns:"32px 110px 1fr 140px",padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",alignItems:"center"}}>
                   <div style={{fontSize:"14px",fontWeight:700,color:COLORES[s.nombre]}}>{i+1}</div>
                   <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre]}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
-                  <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${s.mensajes>0?(s.mensajes/maxMsMes)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:T.sub,marginTop:"3px"}}>{fmtN(s.mensajes)} msgs</div></div>
-                  <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
+                  <div style={{paddingRight:"12px"}}><div style={{height:"6px",background:"rgba(255,255,255,0.04)",borderRadius:"3px"}}><div style={{width:`${s.spend>0?(s.spend/maxSpendMes)*100:0}%`,height:"100%",background:COLORES[s.nombre],borderRadius:"3px"}}/></div><div style={{fontSize:"10px",color:T.sub,marginTop:"3px"}}>{Math.round(s.mensajes)} msgs</div></div>
+                  <div>
+                    <div style={{fontSize:"13px",fontWeight:600,color:"#f97316"}}>{s.spend>0?fmt(s.spend):"—"}</div>
+                    {s.spend>0&&<div style={{marginTop:"4px",height:"4px",display:"flex",borderRadius:"2px",overflow:"hidden",background:"rgba(255,255,255,0.06)"}}>
+                      {s.spNueva>0&&<div style={{width:`${(s.spNueva/s.spend)*100}%`,background:"#f97316"}}/>}
+                      {s.spAnterior>0&&<div style={{width:`${(s.spAnterior/s.spend)*100}%`,background:"#94a3b8"}}/>}
+                    </div>}
+                    {(s.spNueva>0&&s.spAnterior>0)&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px",lineHeight:"1.5"}}>{fmt(s.spNueva)} nuevas<br/>{fmt(s.spAnterior)} anteriores</div>}
+                  </div>
                 </div>)}
               </div>
               {/* Resumen colapsable por sucursal: qué campañas/ad sets aportaron a cada una */}
@@ -6496,12 +6516,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                         </span>
                       </div>
                       {abierta&&<div style={{padding:"0 20px 12px 32px"}}>
-                        {aportes.map((a,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px 90px",gap:"10px",padding:"7px 0",fontSize:"12px",borderTop:i>0?"1px solid rgba(255,255,255,0.03)":"none"}}>
-                          <span style={{color:T.muted}}>{a.campania}<br/><span style={{fontSize:"11px",color:T.faint}}>{a.adset}</span></span>
+                        {aportes.map((a,i)=>{const nueva=esCampanaNueva(a.campania);return<div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px 90px",gap:"10px",padding:"7px 0",fontSize:"12px",borderTop:i>0?"1px solid rgba(255,255,255,0.03)":"none"}}>
+                          <span style={{color:T.muted}}>
+                            <span style={{fontSize:"8px",fontWeight:700,letterSpacing:"0.5px",padding:"1px 5px",borderRadius:"4px",marginRight:"6px",background:nueva?"rgba(249,115,22,0.15)":"rgba(148,163,184,0.15)",color:nueva?"#f97316":"#94a3b8"}}>{nueva?"NUEVA":"ANTERIOR"}</span>
+                            {a.campania}<br/><span style={{fontSize:"11px",color:T.faint}}>{a.adset}</span>
+                          </span>
                           <span style={{color:T.sub,fontSize:"11px"}}>{a.reparto}</span>
                           <span style={{textAlign:"right"}}>{fmtN(Math.round(a.mensajes))} msgs</span>
                           <span style={{textAlign:"right",color:"#f97316",fontWeight:600}}>{fmt(a.spend)}</span>
-                        </div>)}
+                        </div>;})}
                       </div>}
                     </div>;
                   })}

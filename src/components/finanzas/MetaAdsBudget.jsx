@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, fmt, cdmx } from "../../lib/constantes.js";
 import { supabase } from "../../lib/supabase.js";
-import { indiceEstacionalPooled, backtestWalkForward, proyectar, BASES_CALCULO, siguienteMes } from "./forecast.js";
+import { indiceEstacionalPooled, backtestWalkForward, proyectar, BASES_CALCULO } from "./forecast.js";
 
 const BANDA_SANA_ADS = { min: 10, max: 15 };
 const MESES_LABEL = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -17,7 +17,7 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
   const [guardandoSuc, setGuardandoSuc] = useState(null);
   const [msgGuardarSuc, setMsgGuardarSuc] = useState({});
 
-  const mesObjetivo = useMemo(() => siguienteMes(periodo), [periodo]);
+  const mesObjetivo = useMemo(() => cdmx().slice(0, 7), []);
 
   useEffect(() => {
     let activo = true;
