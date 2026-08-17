@@ -48,6 +48,16 @@ export function mesAnioAnterior(mesYYYYMM) {
   return `${Number(y) - 1}-${m}`;
 }
 
+// Rango de días calendario que cubre una semana-bucket (1..5) de un mes dado.
+// Devuelve null si ese mes no llega a tener esa semana (p.ej. semana 5 en un mes de 28 días).
+export function rangoSemana(mesYYYYMM, semana) {
+  const dias = diasEnMes(mesYYYYMM);
+  const desde = (semana - 1) * 7 + 1;
+  if (desde > dias) return null;
+  const hasta = semana === 5 ? dias : Math.min(semana * 7, dias);
+  return { desde, hasta };
+}
+
 // Venta real de una sucursal en un mes específico, repartida por semana calendario.
 export function ventasPorSemanaSuc(tickets, suc, mes) {
   const porSemana = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
