@@ -5660,13 +5660,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[mesY,mesM]=mesSel.split("-").map(Number);
   const curYM=(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;})();
   const mesDesde=`${mesSel}-01`;
-  const mesHasta=mesSel<curYM?`${mesSel}-${new Date(mesY,mesM,0).getDate()}`:hoy();
+  const mesHasta=mesSel===curYM?hoy():`${mesSel}-${new Date(mesY,mesM,0).getDate()}`;
   const desde=periodo==="personalizado"?customDesde:mesDesde;
   const hasta=periodo==="personalizado"?customHasta:mesHasta;
   const mesSelLabel=new Date(mesY,mesM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
   const customLabel=`${new Date(customDesde+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${new Date(customHasta+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"})}`;
   const periodoLabel=periodo==="personalizado"?customLabel:mesSelLabel;
-  const mesesOpciones=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});})();
+  const mesesOpciones=(()=>{const hoy=new Date();const start=new Date(2024,0,1);const total=(hoy.getFullYear()-start.getFullYear())*12+(hoy.getMonth()-start.getMonth())+1+1;return Array.from({length:total},(_,i)=>{const d=new Date(hoy.getFullYear(),hoy.getMonth()+1-i,1);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const l=d.toLocaleDateString("es-MX",{month:"long",year:"numeric"});return{v,l};});})();
 
   const cargarDatos=async()=>{
     setLoadingDB(true);

@@ -4,7 +4,7 @@ import { fetchZettleRaw, fetchHistorialMensualCacheado } from "../../lib/zettle.
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, SUCURSALES_NAMES, fmt, cdmx } from "../../lib/constantes.js";
 import { indiceEstacionalPooled, backtestWalkForward, proyectar, siguienteMes } from "./forecast.js";
-import { ADS_ESTIMADO, gastoPorPeriodoSuc as gastoPorPeriodoSucDe, periodosReales, refPeriodo as refPeriodoDe, gastoDe as gastoDeDe } from "./utilidad.js";
+import { ADS_ESTIMADO, gastoPorSucCategoria, gastoUnicoPorSucPeriodo, gastoBaseDe } from "./utilidad.js";
 import { distribucionSemanalPooled, distribucionSemanalMes, diasEnMes, mesAnioAnterior, ventasPorSemanaSuc, bucketSemana, rangoSemana } from "./semanal.js";
 
 const MESES_LABEL = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -74,8 +74,8 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
   const mesAnterior = mesesConVenta[mesesConVenta.length - 2];
   const mesObjetivo = useMemo(() => (ultimoMesCerrado ? siguienteMes(ultimoMesCerrado) : null), [ultimoMesCerrado]);
 
-  const gastoPorPeriodoSuc = useMemo(() => gastoPorPeriodoSucDe(gastos), [gastos]);
-  const periodosRealesPorSuc = useMemo(() => periodosReales(gastoPorPeriodoSuc, SUCURSALES_NAMES), [gastoPorPeriodoSuc]);
+  const gastoPorSucCat = useMemo(() => gastoPorSucCategoria(gastos), [gastos]);
+  const gastoUnicoPorSucPer = useMemo(() => gastoUnicoPorSucPeriodo(gastos), [gastos]);
 
   const modelo = useMemo(() => {
     if (!historialCerrado.length) return null;
@@ -93,9 +93,7 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
       const ventaAnterior = filaAnterior?.[suc] || 0;
       const crecimientoPct = ventaAnterior > 0 ? ((ventaUltimo - ventaAnterior) / ventaAnterior) * 100 : null;
 
-      const perRef = refPeriodoDe(periodosRealesPorSuc, suc, ultimoMesCerrado);
-      const esReferencia = perRef !== ultimoMesCerrado;
-      const gastoBase = gastoDeDe(gastoPorPeriodoSuc, suc, perRef, false);
+      const { total: gastoBase, esReferencia } = gastoBaseDe(gastoPorSucCat, gastoUnicoPorSucPer, suc, ultimoMesCerrado, false);
       const gasto = gastoBase + ADS_ESTIMADO.punto;
       const utilidad = ventaUltimo > 0 ? ventaUltimo - gasto : null;
       const margenPct = ventaUltimo > 0 ? (utilidad / ventaUltimo) * 100 : null;
@@ -119,7 +117,7 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
 
       return { sucursal: suc, ventaUltimo, ventaAnterior, crecimientoPct, utilidad, margenPct, esReferencia, puntoProyOptimista, puntoProyRealista, puntoProyAnterior, promedio };
     });
-  }, [modelo, ultimoMesCerrado, mesAnterior, historialCerrado, periodosRealesPorSuc, gastoPorPeriodoSuc, mesObjetivo]);
+  }, [modelo, ultimoMesCerrado, mesAnterior, historialCerrado, gastoPorSucCat, gastoUnicoPorSucPer, mesObjetivo]);
 
   useEffect(() => { onFilas?.(filas); }, [filas, onFilas]);
 

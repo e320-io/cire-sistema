@@ -6,7 +6,7 @@ import {
 import { supabase } from "../../lib/supabase.js";
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, fmt, cdmx } from "../../lib/constantes.js";
-import { ADS_ESTIMADO, gastoPorPeriodoSuc as gastoPorPeriodoSucDe, periodosReales, refPeriodo as refPeriodoDe, gastoDe as gastoDeDe } from "./utilidad.js";
+import { ADS_ESTIMADO, gastoPorSucCategoria, gastoUnicoPorSucPeriodo, gastoBaseDe } from "./utilidad.js";
 
 const MESES_LABEL = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const monthLabel = (m) => { const [y, mm] = m.split("-"); return `${MESES_LABEL[parseInt(mm, 10) - 1]} ${y.slice(2)}`; };
@@ -45,10 +45,9 @@ export default function MesAMes({ historial, sucVisible, periodo }) {
     })();
   }, []);
 
-  const gastoPorPeriodoSuc = useMemo(() => gastoPorPeriodoSucDe(gastos), [gastos]);
-  const periodosRealesPorSuc = useMemo(() => periodosReales(gastoPorPeriodoSuc, sucVisible), [gastoPorPeriodoSuc, sucVisible]);
-  const refPeriodo = (suc, per) => refPeriodoDe(periodosRealesPorSuc, suc, per);
-  const gastoDe = (suc, perRef) => gastoDeDe(gastoPorPeriodoSuc, suc, perRef, incluirUnicos);
+  const gastoPorSucCat = useMemo(() => gastoPorSucCategoria(gastos), [gastos]);
+  const gastoUnicoPorSucPer = useMemo(() => gastoUnicoPorSucPeriodo(gastos), [gastos]);
+  const gastoDe = (suc, mesRef) => gastoBaseDe(gastoPorSucCat, gastoUnicoPorSucPer, suc, mesRef, incluirUnicos);
 
   // El mes en curso está incompleto — se excluye de las opciones para no mostrar
   // "-15,700% de margen" solo porque el mes lleva un día de ventas capturadas. El corte
@@ -71,9 +70,7 @@ export default function MesAMes({ historial, sucVisible, periodo }) {
       const row = historialCerrado.find((r) => r.mes === mes);
       const venta = row ? (row[suc] || 0) : 0;
       const noData = venta <= 0;
-      const perRef = refPeriodo(suc, mes);
-      const esReferencia = perRef !== mes;
-      const gastoBase = gastoDe(suc, perRef);
+      const { total: gastoBase, esReferencia } = gastoDe(suc, mes);
       const ads = incluirAds ? ADS_ESTIMADO.punto : 0;
       const gasto = gastoBase + ads;
       const utilidad = noData ? null : venta - gasto;
@@ -86,16 +83,16 @@ export default function MesAMes({ historial, sucVisible, periodo }) {
       const historialSuc = historialCerrado.filter((r) => r.mes >= primerMes && r.mes <= mes).map((r) => {
         const v = r[suc] || 0;
         if (v <= 0) return { mes: r.mes, mesLabel: monthLabel(r.mes), venta: null, utilidad: null };
-        const pr = refPeriodo(suc, r.mes);
-        const g = gastoDe(suc, pr) + ads;
-        return { mes: r.mes, mesLabel: monthLabel(r.mes), venta: v, utilidad: v - g, esReferencia: pr !== r.mes };
+        const { total: gBase, esReferencia: refHist } = gastoDe(suc, r.mes);
+        const g = gBase + ads;
+        return { mes: r.mes, mesLabel: monthLabel(r.mes), venta: v, utilidad: v - g, esReferencia: refHist };
       });
       const mesesEnRojo = historialSuc.filter((h) => h.venta > 0 && h.utilidad < 0).length;
       const mesesConDatos = historialSuc.filter((h) => h.utilidad != null).length;
 
-      return { sucursal: suc, noData, venta, gasto, utilidad, margenPct, esReferencia, perRef, utilPeor, utilMejor, historialSuc, mesesEnRojo, mesesConDatos };
+      return { sucursal: suc, noData, venta, gasto, utilidad, margenPct, esReferencia, utilPeor, utilMejor, historialSuc, mesesEnRojo, mesesConDatos };
     }).sort((a, b) => (b.margenPct ?? -999) - (a.margenPct ?? -999));
-  }, [mes, sucVisible, historialCerrado, gastoPorPeriodoSuc, incluirUnicos, incluirAds]);
+  }, [mes, sucVisible, historialCerrado, gastoPorSucCat, gastoUnicoPorSucPer, incluirUnicos, incluirAds]);
 
   const filasConDatos = filas.filter((f) => !f.noData);
   const totales = useMemo(() => {
