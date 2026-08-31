@@ -6301,10 +6301,12 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           })()}
 
           {/* ═══ BLOQUE 3 — Comparativo de sucursales ═══ */}
-          {/* "Ingreso" respeta el selector de periodo de arriba (Mes/Personalizado); "Proyección"
-              siempre es del mes calendario siguiente al último mes cerrado — son dos relojes
-              distintos a propósito, igual que en Finanzas > Proyección. Estado y proyección vienen
-              de ResumenFinanciero (más abajo) vía el prop onFilas, para no duplicar ese cálculo. */}
+          {/* "Ingreso" respeta el selector de periodo de arriba (Mes/Personalizado); "Meta del mes"
+              proyecta el mes calendario siguiente al último mes cerrado por defecto, pero si el
+              selector de arriba apunta a un mes futuro (hoy o después), proyecta ESE mes en su
+              lugar — para poder elegir p.ej. septiembre y ver de una vez su meta proyectada.
+              Estado y proyección vienen de ResumenFinanciero (más abajo) vía el prop onFilas,
+              para no duplicar ese cálculo. */}
           <div className="glass" style={{padding:"22px"}}>
             <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>COMPARATIVO DE SUCURSALES</div>
             <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>

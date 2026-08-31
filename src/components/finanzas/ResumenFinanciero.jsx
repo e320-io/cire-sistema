@@ -73,6 +73,12 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
   const ultimoMesCerrado = mesesConVenta[mesesConVenta.length - 1];
   const mesAnterior = mesesConVenta[mesesConVenta.length - 2];
   const mesObjetivo = useMemo(() => (ultimoMesCerrado ? siguienteMes(ultimoMesCerrado) : null), [ultimoMesCerrado]);
+  // "META DEL MES" (tabla Comparativo de sucursales, en Resumen) debe proyectar el mes que
+  // el filtro global tenga seleccionado cuando ese mes es hoy o a futuro — si alguien elige
+  // septiembre en el dropdown de arriba, quiere ver la meta de septiembre, no la de mesObjetivo
+  // (que por defecto es solo "el mes siguiente al último cerrado"). Si el filtro apunta a un
+  // mes ya cerrado (histórico), se mantiene mesObjetivo — no tiene sentido "proyectar" el pasado.
+  const mesProyeccion = useMemo(() => (mesFiltro && mesObjetivo && mesFiltro >= mesObjetivo ? mesFiltro : mesObjetivo), [mesFiltro, mesObjetivo]);
 
   const gastoPorSucCat = useMemo(() => gastoPorSucCategoria(gastos), [gastos]);
   const gastoUnicoPorSucPer = useMemo(() => gastoUnicoPorSucPeriodo(gastos), [gastos]);
@@ -102,7 +108,7 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
       // y "realista" (ajustado + castigo por el sesgo de sobreestimación medido en el
       // backtest). No son la misma cifra a propósito — se muestran ambas para que la
       // meta del mes se lea como un rango, no como un número falsamente preciso.
-      const proy = proyectar(historialCerrado, suc, mesObjetivo, modelo.indice, modelo.backtest);
+      const proy = proyectar(historialCerrado, suc, mesProyeccion, modelo.indice, modelo.backtest);
       const puntoProyOptimista = proy?.desest?.punto || 0;
       const puntoProyRealista = proy?.desest_castigado?.punto || 0;
 
@@ -117,7 +123,7 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
 
       return { sucursal: suc, ventaUltimo, ventaAnterior, crecimientoPct, utilidad, margenPct, esReferencia, puntoProyOptimista, puntoProyRealista, puntoProyAnterior, promedio };
     });
-  }, [modelo, ultimoMesCerrado, mesAnterior, historialCerrado, gastoPorSucCat, gastoUnicoPorSucPer, mesObjetivo]);
+  }, [modelo, ultimoMesCerrado, mesAnterior, historialCerrado, gastoPorSucCat, gastoUnicoPorSucPer, mesProyeccion]);
 
   useEffect(() => { onFilas?.(filas); }, [filas, onFilas]);
 
