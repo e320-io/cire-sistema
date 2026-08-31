@@ -136,7 +136,12 @@ export default function ResumenFinanciero({ sucNames, mesFiltro, onVerDetalle, o
   const mesEjecucion = modoPacing === "actual" ? periodoActual : (anclarAFiltro ? (mesFiltro || periodoActual) : (mesFiltro || mesObjetivo));
   const esMesActualReal = mesEjecucion === periodoActual;
   const semanaActual = esMesActualReal ? bucketSemana(parseInt(cdmx().slice(8, 10), 10)) : null;
-  const historialParaEjecucion = useMemo(() => historial.filter((r) => r.mes < mesEjecucion), [historial, mesEjecucion]);
+  // Se parte de historialCerrado (no de `historial` a secas) para nunca meter al modelo
+  // el mes en curso incompleto — si mesEjecucion es un mes futuro (p.ej. septiembre elegido
+  // en el filtro global), `r.mes < mesEjecucion` por sí solo sí dejaría pasar ese mes parcial
+  // (agosto), lo que desalineaba esta proyección de la de "Comparativo de sucursales" y la
+  // de "¿Qué % de tu venta invertir en Meta Ads?", que sí lo excluyen.
+  const historialParaEjecucion = useMemo(() => historialCerrado.filter((r) => r.mes < mesEjecucion), [historialCerrado, mesEjecucion]);
   const modeloEjecucion = useMemo(() => {
     if (!historialParaEjecucion.length || !mesEjecucion) return null;
     const indice = indiceEstacionalPooled(historialParaEjecucion, SUCURSALES_NAMES);
