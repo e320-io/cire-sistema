@@ -17,7 +17,11 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
   const [guardandoSuc, setGuardandoSuc] = useState(null);
   const [msgGuardarSuc, setMsgGuardarSuc] = useState({});
 
-  const mesObjetivo = useMemo(() => cdmx().slice(0, 7), []);
+  // Por defecto el mes en curso, pero si el selector global de arriba (prop `periodo`)
+  // apunta a hoy o a un mes futuro, se proyecta y presupuesta ESE mes en su lugar — para
+  // poder elegir p.ej. septiembre en el dropdown y ver de una vez su presupuesto sugerido.
+  const mesActualReal = useMemo(() => cdmx().slice(0, 7), []);
+  const mesObjetivo = useMemo(() => (periodo && periodo >= mesActualReal ? periodo : mesActualReal), [periodo, mesActualReal]);
 
   useEffect(() => {
     let activo = true;
@@ -53,7 +57,6 @@ export default function MetaAdsBudget({ historial, sucVisible, periodo }) {
 
   // El mes en curso está incompleto y dispara errores absurdos en el modelo
   // (ver Proyeccion.jsx) — solo se usan meses ya cerrados.
-  const mesActualReal = useMemo(() => cdmx().slice(0, 7), []);
   const historialCompletos = useMemo(() => historial.filter((r) => r.mes <= periodo && r.mes < mesActualReal), [historial, periodo, mesActualReal]);
 
   const modelo = useMemo(() => {
