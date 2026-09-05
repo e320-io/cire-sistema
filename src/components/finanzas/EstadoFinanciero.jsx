@@ -180,7 +180,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     BBVA:{3:3,6:6,9:8,12:10},
     Zettle:{3:4,6:7,9:9,12:12},
   };
-  const calcCom=(t)=>{
+  const UMBRAL_VENTA_COS=100000;
+  const calcCom=(t,ventaMensualSuc=0)=>{
     const mp=t.metodo_pago||"";
     const terminal=t.comision_terminal_override||(mp.includes(" · ")?mp.replace(/^.* · /,"").trim():null);
     const msiM=(mp.match(/(\d+)MSI/)||[])[1];
@@ -195,10 +196,11 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     const serviciosArr=t.servicios||[];
     const esSoloProductos=serviciosArr.length>0&&serviciosArr.every(s=>productosFisicosNorm.has(normName(s)));
     const esCera=serviciosArr.some(s=>s.toLowerCase().includes("cera"));
-    const cCos=esSoloProductos?null:Math.round(mRec*(esCera?0.10:0.05)*100)/100;
+    const ventaBaja=ventaMensualSuc<UMBRAL_VENTA_COS;
+    const cCos=esSoloProductos?null:Math.round(mRec*(ventaBaja?0.03:(esCera?0.10:0.05))*100)/100;
     const hora=t.created_at?new Date(t.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"—";
     const capturista=USUARIOS.find(u=>u.usuario===t.usuario)?.nombre||t.usuario||"Importado";
-    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos,usuario:capturista,hora};
+    return{id:t.id,fecha:t.fecha,comision_periodo:t.comision_periodo||null,comision_monto:t.comision_monto??null,comision_terminal_override:t.comision_terminal_override||null,comision_msi_override:t.comision_msi_override??null,recibo:t.ticket_zettle||"—",zona:t.sucursal_nombre,nombre:t.clienta_nombre||t.clienta||"—",servicios:(t.servicios||[]).join(", "),metodo_pago:mp,terminal:terminal||"Efectivo / Otro",msi_meses:msiMeses,monto,com_base:cBase,com_msi:cMsi,com_terminal:cTotal,monto_recibido:mRec,com_cosmetara:cCos,com_cosmetara_plana:ventaBaja,usuario:capturista,hora};
   };
   const cargarComisiones=async()=>{
     setLoadingCom(true);
@@ -227,7 +229,8 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
       const ids=new Set();
       const data=[...(r1.data||[]),...(r2.data||[])].filter(t=>{if(ids.has(t.id))return false;ids.add(t.id);return true;});
       data.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
-      setComData(data.map(calcCom));
+      const ventaMensualSuc=ventas[sucSel]||0;
+      setComData(data.map(t=>calcCom(t,ventaMensualSuc)));
     }catch(e){console.error("cargarComisiones:",e);}
     setLoadingCom(false);
   };
@@ -245,7 +248,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     }catch(e){console.error("cargarComparativoZettle:",e);setComZettleTotal(null);}
     setLoadingComZettle(false);
   };
-  useEffect(()=>{if(subtab==="comisiones")cargarComisiones();},[subtab,periodo,sucSel]);
+  useEffect(()=>{if(subtab==="comisiones")cargarComisiones();},[subtab,periodo,sucSel,ventas]);
   useEffect(()=>{if(subtab==="comisiones"&&comSubTab==="comparativo")cargarComparativoZettle();},[subtab,comSubTab,periodo,sucSel]);
   const exportarComPDF=()=>{
     const tot=comData.reduce((a,r)=>({monto:a.monto+r.monto,com_base:a.com_base+r.com_base,com_msi:a.com_msi+r.com_msi,com_terminal:a.com_terminal+r.com_terminal,monto_recibido:a.monto_recibido+r.monto_recibido,com_cosmetara:a.com_cosmetara+(r.com_cosmetara||0)}),{monto:0,com_base:0,com_msi:0,com_terminal:0,monto_recibido:0,com_cosmetara:0});
@@ -284,6 +287,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
     </style></head><body>
     <h1>Comisiones Cosmetaras — ${sucSel}</h1>
     <div class="sub">${etiq(periodo).toUpperCase()} · ${comData.length} registros</div>
+    ${(ventas[sucSel]||0)<UMBRAL_VENTA_COS?`<div style="font-size:11px;color:#b45309;margin:-14px 0 16px">⚠ Venta del mes (${fmtP(ventas[sucSel]||0)}) no alcanzó ${fmtP(UMBRAL_VENTA_COS)} → comisión plana 3% en servicios (venta de producto sigue igual)</div>`:""}
     <table>
       <thead><tr>
         <th>Fecha</th><th>Hora</th><th>Recibo</th><th>Nombre</th><th>Usuario</th><th>Servicios</th><th>Terminal</th>
@@ -1055,6 +1059,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
           <div>
             <div style={{fontSize:"14px",fontWeight:700}}>Comisiones cosmetaras</div>
             <div style={{fontSize:"11px",color:T.sub}}>{sucSel} · {etiq(periodo)}</div>
+            {(ventas[sucSel]||0)<UMBRAL_VENTA_COS&&<div style={{fontSize:"11px",color:"#f59e0b",marginTop:"4px"}}>⚠ Venta del mes ({fmt(ventas[sucSel]||0)}) no alcanzó {fmt(UMBRAL_VENTA_COS)} → comisión plana 3% en servicios (venta de producto sigue igual)</div>}
           </div>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
             {comSubTab==="tabla"&&<input className="inp" placeholder="Buscar por nombre…" value={buscarCom} onChange={e=>setBuscarCom(e.target.value)} style={{width:"200px",fontSize:"12px"}}/>}
