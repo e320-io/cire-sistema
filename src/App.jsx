@@ -5723,7 +5723,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(comb.includes("coapa"))return{Coapa:1};
     if(esJulio2026&&nm.includes("valle"))return{Valle:0.5,Polanco:0.5}; // solo julio 2026: ese mes targeteaba Valle+Polanco juntos
     if(nm.includes("5 sucursales"))return repartoCinco();
-    const f={};SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))f[s]=1;});
+    const matches=SUCURSALES_NAMES.filter(s=>nm.includes(s.toLowerCase()));
+    const f={};matches.forEach(s=>{f[s]=1/matches.length;});
     return f;
   };
   // Campañas "AGO-..." son el roster activo de agosto 2026; todo lo demás es gasto de campañas anteriores que sigue corriendo mientras se pausan
