@@ -254,6 +254,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const[modalAgSig,setModalAgSig]=useState(false);const[agSigPaqId,setAgSigPaqId]=useState(null);const[fechaAgSig,setFechaAgSig]=useState("");const[horaAgSig,setHoraAgSig]=useState("");const[savingAgSig,setSavingAgSig]=useState(false);
   const[modalSeg2da,setModalSeg2da]=useState(false);const[seg2daGrupo,setSeg2daGrupo]=useState(null);const[fechaSeg2da,setFechaSeg2da]=useState("");const[horaSeg2da,setHoraSeg2da]=useState("");const[savingSeg2da,setSavingSeg2da]=useState(false);
   const[modalSesExtra,setModalSesExtra]=useState(false);const[sesExtraMotivo,setSesExtraMotivo]=useState("");const[fechaSesExtra,setFechaSesExtra]=useState("");const[horaSesExtra,setHoraSesExtra]=useState("");const[savingSesExtra,setSavingSesExtra]=useState(false);
+  const[cobroDiferido,setCobroDiferido]=useState(null);const[cdMetodo,setCdMetodo]=useState("Efectivo");const[cdTicket,setCdTicket]=useState("");const[cdSaving,setCdSaving]=useState(false);const[cdErr,setCdErr]=useState("");
 
   const cargar=async()=>{setLoading(true);const{data:c}=await supabase.from("clientas").select("*").eq("id",clientaId).single();const{data:p}=await supabase.from("paquetes").select("*").eq("clienta_id",clientaId).order("fecha_compra",{ascending:false});const{data:ci}=await supabase.from("citas").select("*").eq("clienta_id",clientaId).order("fecha",{ascending:false});setClienta(c);setPaquetes(p||[]);setCitasH(ci||[]);setLoading(false);};
   useEffect(()=>{cargar();},[clientaId]);
@@ -303,6 +304,25 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
   const agendarSiguienteSesion=async()=>{if(!agSigPaqId||!fechaAgSig||!horaAgSig)return;setSavingAgSig(true);try{const paq=paquetes.find(p=>p.id===agSigPaqId);if(!paq)return;const tipo=detectTipo(paq.servicio);const dur=getDuracionServicio(paq.servicio,tipo.id)??tipo.duracion??60;const sN=paq.sesiones_usadas+1;await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,paquete_id:paq.id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:paq.servicio,tipo_servicio:tipo.id,duracion_min:dur,fecha:fechaAgSig,hora_inicio:horaAgSig,hora_fin:horaFin(horaAgSig,dur),sesion_numero:sN,es_cobro:false,estado:"agendada",notas:"Agendada desde ficha de clienta"}]);setModalAgSig(false);setFechaAgSig("");setHoraAgSig("");setAgSigPaqId(null);await cargar();}catch(e){console.error(e);}setSavingAgSig(false);};
   const agendarSesExtra=async()=>{if(!sesExtraMotivo.trim()||!fechaSesExtra||!horaSesExtra)return;setSavingSesExtra(true);try{await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,paquete_id:null,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:sesExtraMotivo.trim(),tipo_servicio:"valoracion",duracion_min:60,fecha:fechaSesExtra,hora_inicio:horaSesExtra,hora_fin:horaFin(horaSesExtra,60),sesion_numero:null,es_cobro:false,estado:"agendada",notas:"Sesión extra"}]);setModalSesExtra(false);setSesExtraMotivo("");setFechaSesExtra("");setHoraSesExtra("");await cargar();}catch(e){console.error(e);}setSavingSesExtra(false);};
   const agendarSeg2da=async()=>{if(!seg2daGrupo||!fechaSeg2da||!horaSeg2da)return;setSavingSeg2da(true);try{const tipo=detectTipo(seg2daGrupo.servicio);const dur=getDuracionServicio(seg2daGrupo.servicio,tipo.id)??tipo.duracion??90;await supabase.from("citas").insert([{clienta_id:clientaId,clienta_nombre:clienta.nombre,paquete_id:seg2daGrupo.paquete_id,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:seg2daGrupo.servicio,tipo_servicio:tipo.id,duracion_min:dur,fecha:fechaSeg2da,hora_inicio:horaSeg2da,hora_fin:horaFin(horaSeg2da,dur),sesion_numero:2,es_cobro:false,estado:"agendada",notas:"2ª sesión agendada desde ficha de clienta"}]);if(seg2daGrupo.paquete_id){const paq=paquetes.find(p=>p.id===seg2daGrupo.paquete_id);if(paq&&paq.total_sesiones<2)await supabase.from("paquetes").update({total_sesiones:2,activo:true}).eq("id",paq.id);}setModalSeg2da(false);setFechaSeg2da("");setHoraSeg2da("");setSeg2daGrupo(null);await cargar();}catch(e){console.error(e);}setSavingSeg2da(false);};
+  const abrirCobroDiferido=(paq)=>{setCobroDiferido(paq);setCdMetodo("Efectivo");setCdTicket("");setCdErr("");};
+  const registrarPagoDiferido=async()=>{
+    if(!cobroDiferido||!cdMetodo)return;
+    if(!cdTicket.trim()){setCdErr("El número de ticket Zettle es obligatorio.");return;}
+    setCdSaving(true);setCdErr("");try{
+      const paq=cobroDiferido;
+      const numCuota=(paq.pago_diferido_cuotas_pagadas||1)+1;
+      const esUltima=numCuota>=(paq.pago_diferido_cuotas_total||3);
+      const monto=esUltima?Number(paq.pago_diferido_pendiente||0):Number(paq.pago_diferido_monto_cuota||0);
+      if(monto<=0)throw new Error("Monto de cuota inválido.");
+      const tNum=await nextTicketNum();
+      const tz=cdTicket.trim().startsWith("#")?cdTicket.trim():"#"+cdTicket.trim();
+      const{error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:paq.sucursal_id,sucursal_nombre:paq.sucursal_nombre,servicios:[paq.servicio],total:monto,metodo_pago:`${cdMetodo} · Diferido ${numCuota}/${paq.pago_diferido_cuotas_total||3}`,descuento:0,tipo_clienta:"Recompra",fecha:hoy(),clienta_id:clientaId,clienta_nombre:clienta.nombre,ticket_zettle:tz,usuario:session.usuario}]);
+      if(eT)throw new Error(eT.message);
+      const nuevoPendiente=Math.max(0,Number(paq.pago_diferido_pendiente||0)-monto);
+      await supabase.from("paquetes").update({pago_diferido_cuotas_pagadas:numCuota,pago_diferido_pendiente:nuevoPendiente,pago_diferido_completado:esUltima}).eq("id",paq.id);
+      setCobroDiferido(null);setCdTicket("");await cargar();
+    }catch(e){console.error(e);setCdErr(e.message||"Error al guardar");}setCdSaving(false);
+  };
 
   if(loading)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>Cargando ficha...</div>;
   if(!clienta)return<div style={{padding:"40px",textAlign:"center",color:T.sub}}>No encontrada</div>;
@@ -563,6 +583,46 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
         </div>);})}
         {paquetes.length===0&&<div style={{fontSize:"14px",color:T.faint,padding:"16px 0"}}>Sin paquetes registrados</div>}
       </div>
+
+      {/* PAGOS DIFERIDOS PENDIENTES */}
+      {paquetes.some(p=>p.pago_diferido&&!p.pago_diferido_completado)&&<div style={{marginBottom:"28px"}}>
+        <SH count={paquetes.filter(p=>p.pago_diferido&&!p.pago_diferido_completado).length}>Pagos diferidos pendientes</SH>
+        {paquetes.filter(p=>p.pago_diferido&&!p.pago_diferido_completado).map(p=>{
+          const numCuota=(p.pago_diferido_cuotas_pagadas||1)+1;
+          const esUltima=numCuota>=(p.pago_diferido_cuotas_total||3);
+          const monto=esUltima?Number(p.pago_diferido_pendiente||0):Number(p.pago_diferido_monto_cuota||0);
+          return(<div key={p.id} className="glass" style={{padding:"16px 18px",marginBottom:"10px",borderColor:"rgba(249,115,22,0.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+              <div style={{fontSize:"14px",fontWeight:700}}>{p.servicio}</div>
+              <div style={{fontSize:"11px",fontWeight:700,color:"#f97316"}}>Pago {p.pago_diferido_cuotas_pagadas||1}/{p.pago_diferido_cuotas_total||3} cubierto</div>
+            </div>
+            <div style={{fontSize:"12px",color:T.muted,marginBottom:"10px"}}>Pendiente total: <b style={{color:"#f97316"}}>{fmt(p.pago_diferido_pendiente)}</b></div>
+            <button className="btn-blue" style={{padding:"9px 14px",fontSize:"12px",background:"#f97316"}} onClick={()=>abrirCobroDiferido(p)}>💵 Registrar pago {numCuota}/{p.pago_diferido_cuotas_total||3} · {fmt(monto)}</button>
+          </div>);
+        })}
+      </div>}
+
+      {/* MODAL COBRO PAGO DIFERIDO */}
+      {cobroDiferido&&<div className="overlay"><div className="glass" style={{width:420,padding:"28px",borderColor:"rgba(249,115,22,0.35)"}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:"#f97316",marginBottom:"16px",fontWeight:700}}>REGISTRAR PAGO DIFERIDO</div>
+        <div style={{fontSize:"14px",fontWeight:700,marginBottom:"4px"}}>{cobroDiferido.servicio}</div>
+        <div style={{fontSize:"13px",color:T.muted,marginBottom:"16px"}}>Pago {(cobroDiferido.pago_diferido_cuotas_pagadas||1)+1} de {cobroDiferido.pago_diferido_cuotas_total||3} · Pendiente total {fmt(cobroDiferido.pago_diferido_pendiente)}</div>
+        <div style={{marginBottom:"14px"}}>
+          <div style={{fontSize:"10px",color:T.sub,marginBottom:"6px",letterSpacing:"1px"}}>MÉTODO DE PAGO</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+            {["Efectivo","Débito","Crédito","Transferencia"].map(m=><button key={m} onClick={()=>setCdMetodo(m)} style={{padding:"7px 12px",borderRadius:"7px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",background:cdMetodo===m?"#f97316":"transparent",borderColor:cdMetodo===m?"#f97316":T.div,color:cdMetodo===m?"#fff":T.sub}}>{m}</button>)}
+          </div>
+        </div>
+        <div style={{marginBottom:"14px"}}>
+          <div style={{fontSize:"10px",color:"#ef4444",marginBottom:"6px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE *</div>
+          <input className="inp" value={cdTicket} onChange={e=>{setCdTicket(e.target.value);setCdErr("");}} placeholder="#123" style={{fontSize:"13px",padding:"8px 12px"}}/>
+        </div>
+        {cdErr&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"12px",lineHeight:"1.4"}}>⚠ {cdErr}</div>}
+        <div style={{display:"flex",gap:"10px"}}>
+          <button className="btn-ghost" onClick={()=>setCobroDiferido(null)} style={{flex:1,padding:"12px"}}>Cancelar</button>
+          <button className="btn-blue" onClick={registrarPagoDiferido} disabled={cdSaving||!cdMetodo||!cdTicket.trim()} style={{flex:2,padding:"12px",fontSize:"14px",background:"#f97316"}}>{cdSaving?"Guardando...":"✓ Registrar pago"}</button>
+        </div>
+      </div></div>}
 
       {/* AVANCE POR ZONA */}
       {paquetes.map(paq=>{
@@ -2226,6 +2286,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const[ticketZettleAnticipo,setTicketZettleAnticipo]=useState("");
   const[montoAnticipoCustom,setMontoAnticipoCustom]=useState("");
   const[metodoAnticipoCust,setMetodoAnticipoCust]=useState("transferencia");
+  const[diferir3,setDiferir3]=useState(false);
   const[preventaOpt,setPreventaOpt]=useState("no"); // "no"|"anticipo_250"|"mitad"
   const[preventaMetodo,setPreventaMetodo]=useState("");
   const[preventaTicket,setPreventaTicket]=useState("");
@@ -2264,13 +2325,16 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const duracionCita=carrito.length>0?(carrito[0].duracion??getDuracionServicio(carrito[0].nombre,tipoSvc.id)??tipoSvc.duracion):tipoSvc.duracion;
   const dOk=tipoTicket==="recompra"?!!clientaSel:nombreCli.trim().length>0;
   const soloProductos=carrito.length>0&&carrito.every(i=>i.tipo==="producto");
+  const esPaqueteVenta=carrito.some(i=>i.tipo!=="producto"&&(i.sesiones>1||i.nombre.includes("ses")||/\(\d+s\)/i.test(i.nombre)));
+  const diferirCuotaBase=Math.floor(totalCD/3);
+  const diferirCuotas=[diferirCuotaBase,diferirCuotaBase,totalCD-diferirCuotaBase*2];
   const pOk=carrito.length>0,aOk=!!fechaCita&&!!horaCita,todo=pOk&&dOk&&(soloProductos||aOk||sinFechaOpt);
   const dow=fechaCita?new Date(fechaCita+"T12:00:00").getDay():-1,esDom=dow===0;
   const fechaNacISO=nacAnio&&nacMes&&nacDia?`${nacAnio}-${nacMes}-${nacDia}`:null;
   const nombreFinal=tipoTicket==="recompra"&&clientaSel?clientaSel.nombre:nombreCli;
   const buscarCliPOS=async(q)=>{if(q.length<2){setCliResults([]);return;}const{data}=await supabase.from("clientas").select("*").ilike("nombre",`%${q}%`).eq("sucursal_id",session.id).limit(6);setCliResults(data||[]);};
   const selCliPOS=(c)=>{setClientaSel(c);setBusqCli(c.nombre);setCliResults([]);};
-  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setSinFechaOpt(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);setPrecioPromoManual("");setShowPromoManual(false);};
+  const limpiar=()=>{setCarrito([]);setTipoTicket("nueva");setClientaSel(null);setBusqCli("");setCliResults([]);setNombreCli("");setTelCli("");setNacDia("");setNacMes("");setNacAnio("");setComoNos("");setDepiAntes(null);setFechaCita("");setHoraCita("");setShowAgenda(false);setSinFechaOpt(false);setMetodo("");setMsiSel(0);setDescuento(0);setShowConfirm(false);setAnticoOpt("no");setTicketZettleAnticipo("");setTicketZettlePOS("");setPagos([{metodo:"",monto:0}]);setTermSel({});setFechaTicket(hoy());setShowMantForm(false);setMantZona("");setMantSesiones("");setMantPrecio("");setShowZonasForm(false);setZonasSeleccionadas([]);setZonasSesiones("");setZonasDuracion("");setZonasPrecio("");setZonasExtra([]);setZonaExtraInput("");setShowCeraForm(false);setCeraZonas([]);setCeraPrecio("");setPreventaOpt("no");setPreventaMetodo("");setPreventaTicket("");setPreventaTerminal("");setPreventaMsi(0);setPrecioPromoManual("");setShowPromoManual(false);setDiferir3(false);};
 
   const agregarAdhoc=(item)=>setCarrito(c=>[...c,{...item,tipo:"servicio",cartKey:`adhoc:${Date.now()}-${c.length}`,qty:1}]);
   const agregarMantenimiento=()=>{if(!mantZona.trim()||!mantSesiones||!mantPrecio)return;const nombre=`Mant. ${mantZona.trim()} (${mantSesiones} ses)`;agregarAdhoc({nombre,precio:Number(mantPrecio),msi:[],categoria:"Mantenimiento"});setShowMantForm(false);};
@@ -2301,6 +2365,36 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
       if(eCi)throw new Error("Cita: "+eCi.message);
     }
     logActividad(session,"venta_completada",carrito.map(i=>i.nombre).join(", "));
+    const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
+  }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
+
+  const cerrarDiferido=async()=>{
+    if(!ticketZettlePOS.trim()){setErrGuardar("El número de ticket Zettle es obligatorio.");return;}
+    setSaving(true);setErrGuardar("");try{
+    let cliId=null;
+    if(tipoTicket==="recompra"&&clientaSel){cliId=clientaSel.id;}
+    else{const{data:cD,error:eC}=await supabase.from("clientas").insert([{nombre:nombreCli,telefono:telCli,fecha_nacimiento:fechaNacISO,como_nos_conocio:comoNos,sucursal_id:session.id,sucursal_nombre:session.nombre}]).select();if(eC)throw new Error("Clienta: "+eC.message);cliId=cD?.[0]?.id||null;}
+    const[cuota1,cuota2,cuota3]=diferirCuotas;
+    const mpago="Efectivo · Diferido 1/3";
+    const tNum=await nextTicketNum();
+    const tzPOS=ticketZettlePOS.trim().startsWith("#")?ticketZettlePOS.trim():"#"+ticketZettlePOS.trim();
+    const{data:tD,error:eT}=await supabase.from("tickets").insert([{ticket_num:tNum,sucursal_id:session.id,sucursal_nombre:session.nombre,servicios:carrito.map(i=>i.nombre),total:cuota1,metodo_pago:mpago,descuento,tipo_clienta:tipoTicket==="recompra"?"Recompra":"Nueva",fecha:fechaTicket,clienta_id:cliId||null,clienta_nombre:nombreFinal||null,ticket_zettle:tzPOS,usuario:session.usuario}]).select();
+    if(eT)throw new Error("Ticket: "+eT.message);
+    const tId=tD?.[0]?.id;
+    let esPrimero=true;
+    for(const item of carrito){
+      if(item.tipo==="producto")continue;
+      const ms=item.nombre.match(/(\d+)[ªa°]?\s*ses/i)||item.nombre.match(/\((\d+)s\)/i);const tot=item.sesiones||(ms?parseInt(ms[1]):1);
+      const campoDiferido=esPrimero?{pago_diferido:true,pago_diferido_cuotas_total:3,pago_diferido_cuotas_pagadas:1,pago_diferido_monto_cuota:cuota2,pago_diferido_pendiente:cuota2+cuota3,pago_diferido_completado:false}:{};
+      const{data:pD,error:eP}=await supabase.from("paquetes").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,total_sesiones:tot,sesiones_usadas:0,precio:item.precio,ticket_id:tId,fecha_compra:hoy(),activo:true,...campoDiferido}]).select();if(eP)throw new Error("Paquete: "+eP.message);
+      const pId=pD?.[0]?.id||null;
+      const ts=detectTipo(item.nombre);const dc=item.duracion??getDuracionServicio(item.nombre,ts.id)??ts.duracion;
+      const camposPago=esPrimero?{es_cobro:true,metodo_pago:mpago,total_pagado:cuota1}:{es_cobro:false};
+      const{error:eCi}=await supabase.from("citas").insert([{clienta_id:cliId,clienta_nombre:nombreFinal,paquete_id:pId,sucursal_id:session.id,sucursal_nombre:session.nombre,servicio:item.nombre,tipo_servicio:ts.id,duracion_min:dc,fecha:sinFechaOpt?null:fechaCita,hora_inicio:sinFechaOpt?null:horaCita,hora_fin:sinFechaOpt?null:horaFin(horaCita,dc),sesion_numero:1,estado:sinFechaOpt?"abierta":"agendada",notas:`Diferido 1/3 · Pendiente ${fmt(cuota2+cuota3)} · Ticket #${tId||""}`,...camposPago}]);
+      if(eCi)throw new Error("Cita: "+eCi.message);
+      esPrimero=false;
+    }
+    logActividad(session,"venta_diferida",carrito.map(i=>i.nombre).join(", "));
     const fTk=fechaTicket;setShowConfirm(false);setShowExito(true);cargarT(session.id,fTk);setHistorialFecha(fTk);setTimeout(()=>{setShowExito(false);limpiar();},2200);
   }catch(e){console.error(e);setErrGuardar(e.message||"Error al guardar");}setSaving(false);};
 
@@ -2675,7 +2769,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                 {/* Preventa Hot Sale options */}
                 <div style={{fontSize:"9px",letterSpacing:"1px",color:"#f97316",marginBottom:"3px",fontWeight:600}}>🔥 PREVENTA HOT SALE</div>
                 {[{v:"anticipo_250",l:"$250 anticipo · liquida en 2 quincenas",sub:`$250 hoy · ${fmt(Math.round(total/2)-250)} Q1 · ${fmt(Math.round(total/2))} Q2`},{v:"mitad",l:`${fmt(Math.round(total/2))} ahora · segunda mitad a fin de mayo`,sub:`${fmt(Math.round(total/2))} hoy · ${fmt(Math.round(total/2))} antes 31 mayo`}].map(o=>(
-                  <button key={o.v} onClick={()=>{setPreventaOpt(o.v===preventaOpt?"no":o.v);setAnticoOpt("no");setPreventaMetodo("");setPreventaTicket("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:preventaOpt===o.v?"rgba(249,115,22,0.12)":"transparent",borderColor:preventaOpt===o.v?"#f97316":T.div,color:preventaOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub}}>
+                  <button key={o.v} onClick={()=>{setPreventaOpt(o.v===preventaOpt?"no":o.v);setAnticoOpt("no");setDiferir3(false);setPreventaMetodo("");setPreventaTicket("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:preventaOpt===o.v?"rgba(249,115,22,0.12)":"transparent",borderColor:preventaOpt===o.v?"#f97316":T.div,color:preventaOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>🔥 {o.l}</span>{preventaOpt===o.v&&<span style={{fontSize:"12px",color:"#f97316"}}>✓</span>}</div>
                     {total>0&&<div style={{fontSize:"9px",color:preventaOpt===o.v?"#f97316":T.faint,marginTop:"2px"}}>{o.sub}</div>}
                   </button>))}
@@ -2697,9 +2791,17 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
                 {preventaOpt==="no"&&<div style={{height:"1px",background:T.div,margin:"4px 0"}}/>}
                 {/* Original anticipo options */}
                 {preventaOpt==="no"&&[{v:"no",l:"Sin anticipo",sub:"Paga el día de su cita"},{v:"transferencia",l:"$250 · Transferencia / Tarjeta"},{v:"efectivo",l:"$250 · Efectivo"},{v:"otra",l:"Otra cantidad"}].map(o=>(
-                  <button key={o.v} onClick={()=>{setAnticoOpt(o.v);if(o.v==="no")setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v?o.v==="no"?(light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"):"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v?o.v==="no"?T.dim:"#10b981":T.div,color:anticoOpt===o.v?(light?"#1a1a2e":"#fff"):T.sub,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span>{o.l}</span>{anticoOpt===o.v&&<span style={{fontSize:"12px",color:o.v==="no"?T.faint:"#10b981"}}>✓</span>}
+                  <button key={o.v} onClick={()=>{setAnticoOpt(o.v);setDiferir3(false);if(o.v==="no")setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:anticoOpt===o.v&&!diferir3?o.v==="no"?(light?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.05)"):"rgba(16,185,129,0.12)":"transparent",borderColor:anticoOpt===o.v&&!diferir3?o.v==="no"?T.dim:"#10b981":T.div,color:anticoOpt===o.v&&!diferir3?(light?"#1a1a2e":"#fff"):T.sub,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>{o.l}</span>{anticoOpt===o.v&&!diferir3&&<span style={{fontSize:"12px",color:o.v==="no"?T.faint:"#10b981"}}>✓</span>}
                   </button>))}
+                {preventaOpt==="no"&&<button onClick={()=>{setDiferir3(!diferir3);setAnticoOpt("no");setTicketZettleAnticipo("");}} style={{padding:"9px 12px",borderRadius:"8px",border:"1px solid",fontSize:"11px",fontWeight:500,cursor:"pointer",textAlign:"left",background:diferir3?"rgba(249,115,22,0.12)":"transparent",borderColor:diferir3?"#f97316":T.div,color:diferir3?(light?"#1a1a2e":"#fff"):T.sub}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>🗓️ Diferir en 3 pagos · Efectivo</span>{diferir3&&<span style={{fontSize:"12px",color:"#f97316"}}>✓</span>}</div>
+                  {totalCD>0&&<div style={{fontSize:"9px",color:diferir3?"#f97316":T.faint,marginTop:"2px"}}>{fmt(diferirCuotas[0])} hoy · {fmt(diferirCuotas[1])} · {fmt(diferirCuotas[2])} pendientes</div>}
+                </button>}
+                {preventaOpt==="no"&&diferir3&&<div style={{marginTop:"4px"}}>
+                  <div style={{fontSize:"9px",color:"#ef4444",marginBottom:"4px",letterSpacing:"1px",fontWeight:600}}>TICKET ZETTLE * (1er pago)</div>
+                  <input className="inp" value={ticketZettlePOS} onChange={e=>{setTicketZettlePOS(e.target.value);setErrGuardar("");}} placeholder="#123" style={{fontSize:"12px",padding:"7px 10px",letterSpacing:"0.5px"}}/>
+                </div>}
                 {preventaOpt==="no"&&anticoOpt==="otra"&&<div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
                   <div style={{display:"flex",gap:"6px"}}>
                     {[{v:"transferencia",l:"Transferencia / Tarjeta"},{v:"efectivo",l:"Efectivo"}].map(m=>(
@@ -2721,6 +2823,8 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div>{(()=>{const dis=saving||!preventaMetodo||!preventaTicket.trim();return<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:dis?"rgba(249,115,22,0.35)":"#f97316",cursor:dis?"default":"pointer"}} onClick={cerrarPreventa}>{saving?"Guardando...":preventaOpt==="anticipo_250"?`🔥 Registrar preventa · $250 anticipo`:`🔥 Registrar preventa · ${fmt(Math.round(total/2))} ahora`}</button>;})()}</div>
               :anticoOpt!=="no"
               ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"9px",color:"#f59e0b",marginTop:"4px"}}>⚠ Retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}</div>}</div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:"#10b981"}} onClick={cerrarAnticipo} disabled={saving}>{saving?"Guardando...":anticoOpt==="otra"&&montoAnticipoCustom?`✓ Registrar anticipo $${montoAnticipoCustom} + cita`:"✓ Registrar anticipo $250 + cita"}</button></div>
+              :diferir3
+              ?<div style={{display:"flex",flexDirection:"column",gap:"8px"}}><div style={{padding:"8px 10px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"4px",fontWeight:600}}>📅 FECHA TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"11px",padding:"6px 10px",colorScheme:"dark"}}/></div><button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px",background:(!ticketZettlePOS.trim()||saving)?"rgba(249,115,22,0.35)":"#f97316"}} onClick={cerrarDiferido} disabled={saving||!ticketZettlePOS.trim()}>{saving?"Guardando...":`🗓️ Cobrar ${fmt(diferirCuotas[0])} (1/3) + agendar`}</button></div>
               :<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 {!soloProductos&&<button className="btn-blue" style={{width:"100%",padding:"13px",fontSize:"14px"}} onClick={agendarSinAnticipo} disabled={saving}>{saving?"Guardando...":"📅 Agendar sin anticipo"}</button>}
                 <button className={soloProductos?"btn-blue":"btn-ghost"} style={{width:"100%",padding:soloProductos?"13px":"10px",fontSize:soloProductos?"14px":"12px",color:soloProductos?undefined:T.muted}} onClick={()=>{setErrGuardar("");setPagos([{metodo:"",monto:totalCD}]);setShowConfirm(true);}} disabled={saving}>Cobrar {fmt(totalCD)} ahora</button>
@@ -2737,8 +2841,21 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             <div style={{fontSize:"11px",color:T.muted,marginTop:"6px"}}>Clienta: {nombreFinal}{tipoTicket==="recompra"?" (Recompra)":""}</div>{soloProductos?<div style={{fontSize:"11px",color:T.muted}}>🛍 Venta de producto — sin cita</div>:sinFechaOpt?<div style={{fontSize:"11px",color:"#f59e0b"}}>🗓 Sin fecha — se agendará desde su ficha</div>:<div style={{fontSize:"11px",color:T.muted}}>📅 {new Date(fechaCita+"T12:00:00").toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})} · {horaCita}</div>}
           </div>
           <div style={{padding:"10px 12px",background:"rgba(168,85,247,0.06)",border:"1px solid rgba(168,85,247,0.25)",borderRadius:"8px"}}><div style={{fontSize:"9px",letterSpacing:"1px",color:"rgba(168,85,247,0.8)",marginBottom:"6px",fontWeight:600}}>📅 FECHA DEL TICKET</div><input type="date" className="inp" value={fechaTicket} max={hoy()} onChange={e=>setFechaTicket(e.target.value||hoy())} style={{fontSize:"12px",padding:"7px 10px",colorScheme:"dark"}}/>{fechaTicket!==hoy()&&<div style={{fontSize:"10px",color:"#f59e0b",marginTop:"6px"}}>⚠ Ticket retroactivo: {new Date(fechaTicket+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>}</div>
+          {/* Diferir en 3 pagos (solo paquetes de sesiones) */}
+          {esPaqueteVenta&&<div style={{padding:"10px 12px",background:diferir3?"rgba(249,115,22,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${diferir3?"rgba(249,115,22,0.35)":T.div}`,borderRadius:"10px"}}>
+            <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",fontSize:"12px",fontWeight:600,color:diferir3?"#f97316":T.muted}}>
+              <input type="checkbox" checked={diferir3} onChange={e=>setDiferir3(e.target.checked)}/>
+              🗓️ Diferir en 3 pagos (efectivo)
+            </label>
+            {diferir3&&<div style={{marginTop:"8px",display:"flex",flexDirection:"column",gap:"4px",fontSize:"11px",color:T.muted}}>
+              <div>1er pago (hoy): <b style={{color:"#f97316"}}>{fmt(diferirCuotas[0])}</b></div>
+              <div>2º pago (pendiente): <b>{fmt(diferirCuotas[1])}</b></div>
+              <div>3er pago (pendiente): <b>{fmt(diferirCuotas[2])}</b></div>
+              <div style={{fontSize:"10px",color:T.faint,marginTop:"2px"}}>El 2º y 3er pago se registran desde la ficha de la clienta cuando venga a cubrirlos.</div>
+            </div>}
+          </div>}
           {/* Multi-pago */}
-          <div><div style={{fontSize:"10px",color:T.sub,marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
+          {!diferir3&&<div><div style={{fontSize:"10px",color:T.sub,marginBottom:"8px",letterSpacing:"1px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>FORMA DE PAGO</span>{pagos.length>1&&(()=>{const rest=totalCD-pagos.reduce((s,p)=>s+p.monto,0);return<span style={{color:rest===0?"#10b981":"#f97316",fontSize:"10px",fontWeight:600}}>{rest===0?"✓ Completo":`Restante: ${fmt(rest)}`}</span>;})()}</div>
             {pagos.map((p,i)=>(
               <div key={i} style={{marginBottom:"8px",padding:"10px",background:T.cardBg,borderRadius:"8px",border:`1px solid ${T.cardBdr}`}}>
                 {pagos.length>1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}><span style={{fontSize:"10px",color:T.sub}}>Pago {i+1}</span><button onClick={()=>setPagos(pagos.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"rgba(255,100,100,0.55)",cursor:"pointer",fontSize:"14px",lineHeight:1,padding:"0 2px"}}>✕</button></div>}
@@ -2754,7 +2871,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
               </div>
             ))}
             {pagos[pagos.length-1]?.metodo&&<button className="btn-ghost" onClick={()=>{const suma=pagos.length===1?0:pagos.reduce((s,p)=>s+p.monto,0);const resto=totalCD-suma;setPagos(pagos.length===1?[{...pagos[0],monto:Math.round(totalCD/2)},{metodo:"",monto:totalCD-Math.round(totalCD/2)}]:[...pagos,{metodo:"",monto:Math.max(0,resto)}]);}} style={{width:"100%",fontSize:"11px",padding:"8px",marginTop:"2px"}}>+ Agregar otro método de pago</button>}
-          </div>
+          </div>}
           <div style={{padding:"14px",background:"rgba(0,0,0,0.3)",borderRadius:"10px"}}>
             {carrito.map((item,idx)=><div key={idx} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",marginBottom:"4px"}}><span style={{color:T.muted}}>{item.nombre}</span><span>{fmt(item.precio)}</span></div>)}
             <div style={{height:"1px",background:"rgba(255,255,255,0.08)",margin:"6px 0"}}/>
@@ -2769,7 +2886,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"9px",color:T.faint,marginTop:"3px"}}>Obligatorio — número del recibo generado en Zettle</div>
         </div>
         {errGuardar&&<div style={{padding:"10px 14px",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.3)",borderRadius:"8px",color:"#ff6b6b",fontSize:"12px",marginBottom:"12px",lineHeight:"1.4"}}>⚠ {errGuardar}</div>}
-        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={cerrar} disabled={saving||!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)} style={{flex:2,padding:"13px",fontSize:"15px"}}>{saving?"Guardando...":"✓ Confirmar cobro"}</button></div>
+        <div style={{display:"flex",gap:"10px"}}><button className="btn-ghost" onClick={()=>setShowConfirm(false)} style={{flex:1,padding:"13px"}}>Cancelar</button><button className="btn-blue" onClick={diferir3?cerrarDiferido:cerrar} disabled={saving||!ticketZettlePOS.trim()||(!diferir3&&(!pagos.every(p=>p.metodo)||(pagos.length>1&&pagos.reduce((s,p)=>s+p.monto,0)!==totalCD)))} style={{flex:2,padding:"13px",fontSize:"15px",background:diferir3?"#f97316":undefined}}>{saving?"Guardando...":diferir3?`✓ Cobrar ${fmt(diferirCuotas[0])} · Diferido 1/3`:"✓ Confirmar cobro"}</button></div>
       </div></div>}
 
       {showExito&&<div className="overlay" style={{zIndex:300}}><div className="glass" style={{width:400,padding:"40px",textAlign:"center",borderColor:"rgba(16,185,129,0.3)"}}><div style={{fontSize:"48px",marginBottom:"12px"}}>✅</div><div style={{fontSize:"18px",fontWeight:700,marginBottom:"6px"}}>¡Ticket creado!</div><div style={{fontSize:"13px",color:T.muted}}>{tipoTicket==="recompra"?"Recompra":"Ficha"} de {nombreFinal}{soloProductos?"":" + cita agendada"}</div></div></div>}
@@ -5723,7 +5840,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(comb.includes("coapa"))return{Coapa:1};
     if(esJulio2026&&nm.includes("valle"))return{Valle:0.5,Polanco:0.5}; // solo julio 2026: ese mes targeteaba Valle+Polanco juntos
     if(nm.includes("5 sucursales"))return repartoCinco();
-    const f={};SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))f[s]=1;});
+    const matches=SUCURSALES_NAMES.filter(s=>nm.includes(s.toLowerCase()));
+    const f={};matches.forEach(s=>{f[s]=1/matches.length;});
     return f;
   };
   // Campañas "AGO-..." son el roster activo de agosto 2026; todo lo demás es gasto de campañas anteriores que sigue corriendo mientras se pausan
