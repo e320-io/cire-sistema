@@ -7,6 +7,7 @@ import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, f
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
+import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
 import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
 import { getCatalogo, getCatalogoPorCategoria, cargarCatalogo, recargarCatalogo, asegurarCatalogo, useCatalogo } from "./lib/catalogo.js";
@@ -5745,6 +5746,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[resumenCampanasMes,setResumenCampanasMes]=useState([]);
   const[resumenSucAbierto,setResumenSucAbierto]=useState(null); // nombre de la sucursal expandida, o null
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
+  const[msgsMesPasado,setMsgsMesPasado]=useState(null); // {ym,porSucursal:{suc:mensajes},gastoPorSucursal:{suc:$}} del mes anterior al seleccionado
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
   const[metaDataMes,setMetaDataMes]=useState(null);
@@ -5855,6 +5857,29 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(entries.length===SUCURSALES_NAMES.length)return"5 sucursales (÷5)";
     return entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(" + ");
   };
+  // Insights diarios por adset en tramos de 5 días, en paralelo y con páginas chicas: pedir el mes
+  // completo en una sola consulta hace que Meta tarde >30s o falle (error 1504044) y el gráfico queda vacío.
+  const fetchDiarioMeta=async(since,until)=>{
+    const tramos=[];
+    for(let d=new Date(since+"T12:00:00"),fin=new Date(until+"T12:00:00");d<=fin;){
+      const ini=d.toISOString().slice(0,10);
+      const e=new Date(d);e.setDate(e.getDate()+4);
+      const fn=e>fin?fin:e;
+      tramos.push([ini,fn.toISOString().slice(0,10)]);
+      d=new Date(fn);d.setDate(d.getDate()+1);
+    }
+    let error=null;
+    const partes=await Promise.all(tramos.map(async([a,b])=>{
+      const filas=[];
+      let u=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${a}","until":"${b}"}&level=adset&time_increment=1&limit=100&access_token=${META_TOKEN}`;
+      while(u){
+        try{const j=await(await fetch(u)).json();if(j.error){error=error||j.error;break;}filas.push(...(j.data||[]));u=j.paging?.next;}
+        catch(e){error=error||{message:"Sin conexión con Meta"};break;}
+      }
+      return filas;
+    }));
+    return{data:partes.flat(),error};
+  };
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
     try{
@@ -5874,11 +5899,20 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           setLoadingMeta(false);return;
         }
       }
+      // Período con días en curso: pintar al instante lo último guardado en caché mientras Meta responde (lento)
+      else{
+        const{data:cachedLive}=await supabase.from("meta_diario").select("*").gte("fecha",since).lte("fecha",until);
+        if(cachedLive&&cachedLive.length>0){
+          let tS=0,tM=0;const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+          cachedLive.forEach(r=>{tS+=Number(r.spend||0);tM+=Number(r.mensajes||0);if(pS[r.sucursal]){pS[r.sucursal].spend+=Number(r.spend||0);pS[r.sucursal].mensajes+=Number(r.mensajes||0);}});
+          setMetaData(prev=>prev||{spend:tS,mensajes:tM,impresiones:0,clics:0,alcance:0,porSucursal:pS});
+          setMetaDiario(cachedLive.map(r=>({fecha:r.fecha,sucursal:r.sucursal,mensajes:Number(r.mensajes),spend:Number(r.spend)})));
+        }
+      }
       // Fetch desde Meta API
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const urlDiario=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
-      const[res,resDiario]=await Promise.all([fetch(url),fetch(urlDiario)]);
-      const json=await res.json();let jsonDiario=await resDiario.json();
+      const[res,jsonDiario]=await Promise.all([fetch(url),fetchDiarioMeta(since,until)]);
+      const json=await res.json();
       if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
       const rows=json.data||[];
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
@@ -5895,9 +5929,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         const frac=fraccionSucursales(r,null);
         Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
       });
-      let allDiarioData=[...(jsonDiario.data||[])];
-      let nextUrl=jsonDiario.paging?.next;
-      while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
+      if(jsonDiario.error)setMetaError(`Detalle diario: ${jsonDiario.error.message}`);
+      const allDiarioData=jsonDiario.data;
       const mixtoDiario=allDiarioData.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
       if(jsonDiario.error||mixtoDiario.length===0){
         // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
@@ -5929,8 +5962,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
       });
       setMetaDiario(diario);
-      // Guardar datos diarios históricos en caché para futuras consultas
-      if(isAllHistorical&&diario.length>0){
+      // Guardar datos diarios en caché (también el mes en curso, para que la próxima carga pinte al instante)
+      if(diario.length>0&&!jsonDiario.error){
         const now=new Date().toISOString();
         supabase.from("meta_diario").upsert(
           diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:d.fecha.substring(0,7),mensajes:d.mensajes,spend:d.spend,updated_at:now})),
@@ -5966,9 +5999,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
       const fields="campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
       const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
-      const[res,resD]=await Promise.all([fetch(url),fetch(urlD)]);
-      const json=await res.json();const jsonD=await resD.json();
+      const[res,jsonD]=await Promise.all([fetch(url),fetchDiarioMeta(since,until)]);
+      const json=await res.json();
       if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
       const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
@@ -5984,8 +6016,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
       });
       // Datos diarios
-      let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
-      while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
+      const allD=jsonD.data;
       const mixtoDiario=allD.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
       if(jsonD.error||mixtoDiario.length===0){
         // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
@@ -6024,7 +6055,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       });
       setMetaDiarioMes(diario);
       // Guardar datos diarios en caché para meses pasados
-      if(isPast&&diario.length>0){
+      if(isPast&&diario.length>0&&!jsonD.error){
         const now=new Date().toISOString();
         supabase.from("meta_diario").upsert(
           diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:ym,mensajes:d.mensajes,spend:d.spend,updated_at:now})),
@@ -6209,6 +6240,28 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   };
   useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel,customDesde,customHasta]);
   useEffect(()=>{cargarMetaMes(mesSel);},[mesSel]);
+  // Mensajes del mes anterior al seleccionado, por sucursal (una sola consulta agregada; se guarda en localStorage porque un mes cerrado no cambia)
+  useEffect(()=>{
+    const antY=mesM===1?mesY-1:mesY,antM=mesM===1?12:mesM-1;
+    const ym=`${antY}-${String(antM).padStart(2,"0")}`;
+    const key=`meta_mes_${ym}`;
+    let activo=true;setMsgsMesPasado(null);
+    try{const c=JSON.parse(localStorage.getItem(key)||"null");if(c?.mensajes){setMsgsMesPasado({ym,porSucursal:c.mensajes,gastoPorSucursal:c.gasto});return;}}catch{}
+    (async()=>{
+      try{
+        const until=`${ym}-${new Date(antY,antM,0).getDate()}`;
+        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${ym}-01","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
+        const json=await(await fetch(url)).json();
+        if(json.error||!activo)return;
+        const pS={},pG={};SUCURSALES_NAMES.forEach(n=>{pS[n]=0;pG[n]=0;});
+        (json.data||[]).forEach(r=>{const ms=getMetaM(r.actions),sp=Number(r.spend||0);Object.entries(fraccionSucursales(r,null)).forEach(([n,f])=>{pS[n]+=ms*f;pG[n]+=sp*f;});});
+        SUCURSALES_NAMES.forEach(n=>{pS[n]=Math.round(pS[n]);pG[n]=Math.round(pG[n]);});
+        try{localStorage.setItem(key,JSON.stringify({mensajes:pS,gasto:pG}));}catch{}
+        setMsgsMesPasado({ym,porSucursal:pS,gastoPorSucursal:pG});
+      }catch{}
+    })();
+    return()=>{activo=false;};
+  },[mesSel]);
   useEffect(()=>{cargarMetaHistorial();},[]);
   useEffect(()=>{if(!sucursalesPropias)return;const suc=sucursalesPropias;const cargarSolicitudes=async()=>{const{data}=await supabase.from("solicitudes_reagendado").select("*").in("sucursal",suc).order("created_at",{ascending:false}).limit(50);setSolicitudesRe(data||[]);};cargarSolicitudes();const ch=supabase.channel("solicitudes_re_rt").on("postgres_changes",{event:"*",schema:"public",table:"solicitudes_reagendado"},()=>cargarSolicitudes()).subscribe();return()=>{supabase.removeChannel(ch);};},[]);
 
@@ -6454,42 +6507,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
           {historialMensual.length>0&&<MetaAdsBudget historial={historialMensual} sucVisible={sucNames} periodo={mesSel}/>}
 
+          <MensajesDiarios datos={metaDiarioF} sucNames={sucNames} cargando={loadingMeta} error={metaError} periodoLabel={periodoLabel} mesPasado={msgsMesPasado} proyectar={periodo!=="personalizado"&&mesSel===curYM} hoy={hoy()}/>
+
           {/* ═══ SECCIÓN B — Ritmo operativo y pacing en tiempo real ═══ */}
           <div style={{fontSize:"12px",fontWeight:700,letterSpacing:"1px",color:light?"#1a1a2e":"#fff",paddingBottom:"2px",marginTop:"4px",borderBottom:`2px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.1)"}`}}>
             ⏱ RITMO OPERATIVO Y PACING · MES EN CURSO
           </div>
           <ResumenFinanciero sucNames={sucNames} mesFiltro={mesSel} onVerDetalle={()=>setTab("finanzas")} onFilas={setFilasFinancieras}/>
-
-          {/* Gráfica mensajes recibidos por día */}
-          {metaDiarioF.length>0&&(()=>{
-            const filtrado=msgSucFiltro==="Todas"?metaDiarioF:metaDiarioF.filter(d=>d.sucursal===msgSucFiltro);
-            const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
-            const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
-            const maxMsg=Math.max(...dias.map(d=>d[1]),1);
-            const totalMsgFilt=dias.reduce((s,d)=>s+d[1],0);
-            return<div className="glass" style={{padding:"24px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-                <div>
-                  <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>MENSAJES RECIBIDOS POR DÍA</div>
-                  <div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:T.sub}}>mensajes · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div>
-                </div>
-                <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:light?"#1a1a2e":"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
-                  <option value="Todas" style={{background:"#22264A"}}>Todas las sucursales</option>
-                  {sucNames.map(s=><option key={s} value={s} style={{background:"#22264A"}}>{s}</option>)}
-                </select>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"160px"}}>
-                {dias.map(([f,m])=>{const p=m/maxMsg;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
-                  <div style={{fontSize:"9px",fontWeight:600,color:"#a855f7",marginBottom:"4px"}}>{m}</div>
-                  <div style={{width:"100%",maxWidth:"32px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#a855f7,#7c3aed)",borderRadius:"4px 4px 0 0",transition:"height 0.3s"}}/>
-                  <div style={{fontSize:"8px",color:T.faint,marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div>
-                </div>;})}
-              </div>
-              {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
-                {sucNames.map(s=>{const t=metaDiarioF.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:T.muted,cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
-              </div>}
-            </div>;
-          })()}
         </div>}
 
         {/* ═══ SUCURSALES — tabla expandida ═══ */}
