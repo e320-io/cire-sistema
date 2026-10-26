@@ -6317,6 +6317,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     return ant>0?((ventasZettle[suc]-ant)/ant*100):null;
   };
 
+  // Comparativo de sucursales: mismo mes del periodo seleccionado en los 3 años anteriores
+  // (de historialMensual) y venta del mes inmediato anterior.
+  const aniosComp=[1,2,3].map(i=>{const ym=`${mesY-i}-${String(mesM).padStart(2,"0")}`;const mesCorto=new Date(mesY-i,mesM-1,1).toLocaleDateString("es-MX",{month:"short"}).replace(".","").toUpperCase();return{ym,label:`${mesCorto} ${mesY-i}`};});
+  const ventaMesAnt=(suc)=>{
+    if(ventasMesAnteriorPorSuc?.[suc]!=null)return ventasMesAnteriorPorSuc[suc];
+    const d=new Date(mesY,mesM-2,1);
+    return historialMensual.find(h=>h.mes===`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`)?.[suc]??null;
+  };
+
   // ─── Por sucursal ──────────────────────────────────────────────────────────
   const porSuc=sucNames.map(n=>{
     const tks=tksF.filter(t=>t.sucursal_nombre===n);
@@ -6480,8 +6489,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               para no duplicar ese cálculo. */}
           <div className="glass" style={{padding:"22px"}}>
             <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>COMPARATIVO DE SUCURSALES</div>
-            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>
-              <span>SUCURSAL</span><span style={{textAlign:"right"}}>INGRESO</span><span style={{textAlign:"right"}}>MARGEN NETO</span><span style={{textAlign:"right"}}>VS. MES ANT.</span><span style={{textAlign:"right"}}>META DEL MES</span><span style={{textAlign:"center"}}>ESTADO</span><span/>
+            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>
+              <span>SUCURSAL</span><span style={{textAlign:"right"}}>INGRESO</span><span style={{textAlign:"right"}}>MES ANT.</span>{aniosComp.map(a=><span key={a.ym} style={{textAlign:"right"}}>{a.label}</span>)}<span style={{textAlign:"right"}}>VS. MES ANT.</span><span style={{textAlign:"right"}}>META DEL MES</span><span style={{textAlign:"center"}}>ESTADO</span><span/>
             </div>
             {porSuc.slice().sort((a,b)=>b.ventas-a.ventas).map(s=>{
               const crecSuc=crecimientoPorSuc(s.nombre);
@@ -6492,10 +6501,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               const estadoLabel=band?({sano:"Sano",ajustado:"Atención",riesgo:"Alerta",sin_datos:"—"}[band.key]):"—";
               const estadoColor=band?({sano:"#10b981",ajustado:"#f0c040",riesgo:"#ff6b6b",sin_datos:T.faint}[band.key]):T.faint;
               return(
-                <div key={s.nombre} style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",alignItems:"center",padding:"9px 4px",borderTop:`1px solid ${T.div}`,background:enAlerta?"rgba(255,107,107,0.05)":"transparent"}}>
+                <div key={s.nombre} style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",alignItems:"center",padding:"9px 4px",borderTop:`1px solid ${T.div}`,background:enAlerta?"rgba(255,107,107,0.05)":"transparent"}}>
                   <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
                   <div style={{textAlign:"right",fontSize:"13px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</div>
-                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:fin?.margenPct>=0?"#10b981":"#ff6b6b"}}>{fin?.margenPct!=null?`${fin.margenPct>=0?"+":""}${fin.margenPct.toFixed(1)}%`:"—"}</div>
+                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:600,color:T.muted}}>{ventaMesAnt(s.nombre)!=null?fmt(ventaMesAnt(s.nombre)):"—"}</div>
+                  {aniosComp.map(a=>{const v=historialMensual.find(h=>h.mes===a.ym)?.[s.nombre];return<div key={a.ym} style={{textAlign:"right",fontSize:"12px",fontWeight:600,color:T.muted}}>{v!=null?fmt(v):"—"}</div>;})}
                   <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:crecSuc==null?T.faint:creciendoSuc?"#10b981":"#ff6b6b"}}>{crecSuc==null?"—":`${creciendoSuc?"↑":"↓"} ${Math.abs(crecSuc).toFixed(1)}%`}</div>
                   <div style={{textAlign:"right",fontSize:"11.5px",fontWeight:600,color:T.muted}}>{fin?`${fmt(fin.puntoProyRealista)} – ${fmt(fin.puntoProyOptimista)}`:"—"}</div>
                   <div style={{textAlign:"center"}}><span style={{fontSize:"10px",fontWeight:700,color:estadoColor,background:`${estadoColor}22`,padding:"2px 9px",borderRadius:"99px"}}>{estadoLabel}</span></div>
