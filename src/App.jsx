@@ -5839,6 +5839,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(JULIO26_VALLE_ADSET_IDS.has(String(r.adset_id)))return{Valle:1};
     const esJulio2026=fecha&&fecha.slice(0,7)==="2026-07";
     if(esJulio2026&&String(r.adset_id)===JULIO26_MIXTO_ADSET_ID)return fecha<=JULIO26_MIXTO_CUTOFF?repartoCinco():{Valle:0.5,Polanco:0.5};
+    // Promo "Axila gratis CDMX" (oct 2026): aplica a las 5 sucursales, el nombre del adset no las menciona
+    if(cn.includes("axila gratis"))return repartoCinco();
     if(comb.includes("coapa"))return{Coapa:1};
     if(esJulio2026&&nm.includes("valle"))return{Valle:0.5,Polanco:0.5}; // solo julio 2026: ese mes targeteaba Valle+Polanco juntos
     if(nm.includes("5 sucursales"))return repartoCinco();

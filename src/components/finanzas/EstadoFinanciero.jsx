@@ -159,7 +159,7 @@ function EstadoFinanciero({sucursalesFiltro=null,sucursalesPropias=null,esAdmin=
         const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,spend&time_range={"since":"${desde}","until":"${hasta}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
         const json=await(await fetch(url)).json();
         const ms={};SUCURSALES_NAMES.forEach(s=>{ms[s]=0;});
-        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;const sp=Number(r.spend||0);const n=SUCURSALES_NAMES.length;if(comb.includes("coapa")){ms["Coapa"]+=sp;}else if(nm.includes("valle")){ms["Valle"]+=sp/2;ms["Polanco"]+=sp/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{ms[s]+=sp/n;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=sp;});}});
+        (json.data||[]).forEach(r=>{const nm=(r.adset_name||"").toLowerCase();const cn=(r.campaign_name||"").toLowerCase();const comb=nm+" "+cn;const sp=Number(r.spend||0);const n=SUCURSALES_NAMES.length;if(cn.includes("axila gratis")){SUCURSALES_NAMES.forEach(s=>{ms[s]+=sp/n;});}else if(comb.includes("coapa")){ms["Coapa"]+=sp;}else if(nm.includes("valle")){ms["Valle"]+=sp/2;ms["Polanco"]+=sp/2;}else if(nm.includes("5 sucursales")){SUCURSALES_NAMES.forEach(s=>{ms[s]+=sp/n;});}else{SUCURSALES_NAMES.forEach(s=>{if(nm.includes(s.toLowerCase()))ms[s]+=sp;});}});
         setMetaGs(ms);
       }catch{}
     }
