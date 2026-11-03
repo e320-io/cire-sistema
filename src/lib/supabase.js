@@ -3,7 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 export const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
-export const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
+// Cuenta principal: VITE_META_ACCOUNT, o la primera de VITE_META_ACCOUNTS ("id:Nombre,id:Nombre") si falta.
+export const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT
+  || (import.meta.env.VITE_META_ACCOUNTS || "").split(",")[0].split(":")[0].trim().replace(/^act_/, "")
+  || undefined;
 export const CLAUDE_KEY   = import.meta.env.VITE_CLAUDE_KEY;
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

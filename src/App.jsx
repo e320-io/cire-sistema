@@ -8,6 +8,8 @@ import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
+import { leerMeta } from "./lib/metaCuentas.js";
+import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
 import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
 import { getCatalogo, getCatalogoPorCategoria, cargarCatalogo, recargarCatalogo, asegurarCatalogo, useCatalogo } from "./lib/catalogo.js";
@@ -5727,6 +5729,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const{light,T,acc}=useT();
   useCSSInjection();
   const[tab,setTab]=useState("resumen");
+  const[metaSub,setMetaSub]=useState("resumen"); // sub-tab de Meta Ads: resumen | rendimiento
   const tabInicioRef=useRef(Date.now());
   const tabPrevRef=useRef("resumen");
   useEffect(()=>{
@@ -5834,6 +5837,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const JULIO26_VALLE_ADSET_IDS=new Set(["52519186761371","52517464244571"]);
   const repartoCinco=()=>{const f={};SUCURSALES_NAMES.forEach(s=>f[s]=1/SUCURSALES_NAMES.length);return f;};
   const fraccionSucursales=(r,fecha)=>{
+    if(r._fraccion)return r._fraccion; // desde nov 2026: reparto ya calculado por cuenta publicitaria (ver lib/metaCuentas.js)
     const nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;
     // Estos ids son únicos y solo existen en campañas de julio 2026, así que no dependen de `fecha`
     if(JULIO26_VALLE_ADSET_IDS.has(String(r.adset_id)))return{Valle:1};
@@ -5872,13 +5876,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     }
     let error=null;
     const partes=await Promise.all(tramos.map(async([a,b])=>{
-      const filas=[];
-      let u=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${a}","until":"${b}"}&level=adset&time_increment=1&limit=100&access_token=${META_TOKEN}`;
-      while(u){
-        try{const j=await(await fetch(u)).json();if(j.error){error=error||j.error;break;}filas.push(...(j.data||[]));u=j.paging?.next;}
-        catch(e){error=error||{message:"Sin conexión con Meta"};break;}
-      }
-      return filas;
+      const j=await leerMeta({since:a,until:b,diario:true,fracAdset:fraccionSucursales});
+      if(j.error)error=error||j.error;
+      return j.data;
     }));
     return{data:partes.flat(),error};
   };
@@ -5912,9 +5912,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
       }
       // Fetch desde Meta API
-      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const[res,jsonDiario]=await Promise.all([fetch(url),fetchDiarioMeta(since,until)]);
-      const json=await res.json();
+      const[json,jsonDiario]=await Promise.all([leerMeta({since,until,fracAdset:fraccionSucursales}),fetchDiarioMeta(since,until)]);
       if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
       const rows=json.data||[];
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
@@ -6000,9 +5998,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const since=`${ym}-01`;
       const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
       const fields="campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
-      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const[res,jsonD]=await Promise.all([fetch(url),fetchDiarioMeta(since,until)]);
-      const json=await res.json();
+      const[json,jsonD]=await Promise.all([leerMeta({since,until,fracAdset:fraccionSucursales}),fetchDiarioMeta(since,until)]);
       if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
       const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
@@ -6086,8 +6082,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
         // Fetch desde Meta API (mes actual o caché faltante)
         try{
-          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-          const res=await fetch(url);const json=await res.json();
+          const json=await leerMeta({since,until,fracAdset:fraccionSucursales});
           if(json.error)return{ym,label,spend:0,mensajes:0,porSucursal:{}};
           const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
           let tS=0,tM=0,mixtoFallback=null;
@@ -6252,8 +6247,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     (async()=>{
       try{
         const until=`${ym}-${new Date(antY,antM,0).getDate()}`;
-        const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${ym}-01","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-        const json=await(await fetch(url)).json();
+        const json=await leerMeta({since:`${ym}-01`,until,fracAdset:fraccionSucursales});
         if(json.error||!activo)return;
         const pS={},pG={};SUCURSALES_NAMES.forEach(n=>{pS[n]=0;pG[n]=0;});
         (json.data||[]).forEach(r=>{const ms=getMetaM(r.actions),sp=Number(r.spend||0);Object.entries(fraccionSucursales(r,null)).forEach(([n,f])=>{pS[n]+=ms*f;pG[n]+=sp*f;});});
@@ -6598,6 +6592,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ META ADS ═══ */}
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          <div style={{display:"flex",gap:"8px"}}>
+            {[["resumen","Resumen"],["rendimiento","Rendimiento"]].map(([k,l])=><button key={k} onClick={()=>setMetaSub(k)} style={{fontSize:"12px",padding:"6px 16px",borderRadius:"99px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,color:metaSub===k?"#fff":T.muted,background:metaSub===k?"#2721E8":"transparent",border:`1px solid ${metaSub===k?"#2721E8":T.div}`}}>{l}</button>)}
+          </div>
+          {metaSub==="rendimiento"&&<RendimientoMeta mes={mesSel} usuario={session?.usuario}/>}
+          {metaSub==="resumen"&&<>
           {/* Barra de acciones */}
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
             {loadingMetaDisplay
@@ -6784,6 +6783,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           {!loadingMetaDisplay&&!metaDisplay&&!metaErrorDisplay&&<div style={{textAlign:"center",padding:"60px 32px",color:T.faint,fontSize:"13px"}}>Sin datos para este período</div>}
           {!loadingMetaDisplay&&metaErrorDisplay&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorDisplay}</div></div>}
           </div>{/* /loading wrapper */}
+          </>}
         </div>}
 
         {/* ═══ VER POS ═══ */}
