@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useState, useMemo } from "react";
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, fmt, hoy } from "../../lib/constantes.js";
@@ -79,7 +80,7 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursale
   const kpi = (l, v, c) => <div style={{ padding: "8px 14px", borderRadius: "10px", border: `1px solid ${T.div}` }}><div style={{ fontSize: "10px", letterSpacing: "1.5px", color: T.sub }}>{l}</div><div style={{ fontSize: "17px", fontWeight: 700, color: c }}>{v}</div></div>;
   const mesTxt = new Date(mes + "-01T12:00:00").toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 
-  return (
+  return createPortal(
     <div onClick={onCerrar} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div onClick={(e) => e.stopPropagation()} className="glass" style={{ width: "100%", maxWidth: "1280px", maxHeight: "92vh", display: "flex", flexDirection: "column", padding: "20px 22px", background: T.bg || "#fff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -146,6 +147,7 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursale
           Toda venta se toma como liquidada al capturarla (cobrado = precio); aquí solo se corrigen excepciones. No vino: se queda con el anticipo y ya no se espera más (cobrado = anticipo). Pendiente: solo cuenta el anticipo hasta que la cambies a Liquidada. Cambiar la sucursal mueve la venta a la otra.
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

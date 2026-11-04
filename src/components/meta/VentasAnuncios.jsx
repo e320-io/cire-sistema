@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useState } from "react";
 import { useT } from "../../lib/theme.jsx";
 import { COLORES, fmt, hoy } from "../../lib/constantes.js";
@@ -56,7 +57,7 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
   const cobrado = ventas.reduce((a, v) => a + Number(v.monto), 0);
   const esperado = ventas.reduce((a, v) => a + esperadoVenta(v), 0);
 
-  return (
+  return createPortal(
     <div onClick={onCerrar} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div onClick={(e) => e.stopPropagation()} className="glass" style={{ width: "100%", maxWidth: "560px", maxHeight: "92vh", overflowY: "auto", padding: "22px 24px", background: T.bg || "#fff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -113,6 +114,7 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
