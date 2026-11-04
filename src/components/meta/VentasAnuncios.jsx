@@ -14,14 +14,14 @@ export const SERV = {
   "Moldeo (drenaje)": [["Drenaje linfático", 700], ["Otro moldeo", null]],
 };
 const ANTICIPOS = [200, 250]; // anticipo habitual de clienta nueva; el resto se liquida el día de la sesión
-export const ORIGEN = ["No sé", "Anuncio de video", "Anuncio de imagen", "Recomendación u otro"];
+export const ORIGEN = ["No sé", "Anuncio de video", "Anuncio de imagen", "Campaña pasada", "Recomendación u otro"];
 
 // Modal para capturar y revisar las ventas del mes que llegaron por anuncios.
 // sucursales: las que se pueden elegir (recepción solo ve la suya); soloHoy: lista solo lo de hoy y sin borrar (recepción).
 export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambio, tablaLista, sucursales = SUCURSALES, sucursalInicial = "", soloHoy = false }) {
   const { T: T0, light } = useT();
   const T = { ...T0, text: light ? "#1a1f3c" : "#fff", bg: T0.dropBg }; // el tema base no define text ni bg
-  const [f, setF] = useState({ nombre: "", sucursal: sucursales.includes(sucursalInicial) ? sucursalInicial : sucursales.length === 1 ? sucursales[0] : "", servicio: "", paquete: "", precio: "", anticipo: "250", fecha: hoy(), origen: "No sé" });
+  const [f, setF] = useState({ nombre: "", sucursal: sucursales.includes(sucursalInicial) ? sucursalInicial : sucursales.length === 1 ? sucursales[0] : "", servicio: "", paquete: "", precio: "", anticipo: "250", fecha: hoy(), origen: "No sé", notas: "" });
   const [msg, setMsg] = useState("");
   const [guardando, setGuardando] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
@@ -35,14 +35,15 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
   const guardar = async () => {
     const anticipo = Number(f.anticipo), precio = Number(f.precio);
     if (!f.nombre.trim() || !f.sucursal || !f.servicio || !f.paquete || !(anticipo > 0) || !(precio > 0)) { setMsg("Completa nombre, sucursal, servicio, paquete, precio y anticipo."); return; }
+    if (f.origen === "Campaña pasada" && !f.notas.trim()) { setMsg("Anota de qué campaña pasada llegó la clienta."); return; }
     if (anticipo > precio) { setMsg("El anticipo no puede ser mayor al precio."); return; }
     // Se toma como liquidada desde la captura; si no viene, se cambia a "No vino" en el resumen (queda el anticipo).
     setGuardando(true); setMsg("");
-    const { error } = await supabase.from("ventas_anuncios").insert([{ nombre_clienta: f.nombre.trim(), fecha: f.fecha, sucursal: f.sucursal, servicio: f.servicio, paquete: f.paquete, origen: f.origen, monto: precio, anticipo, precio_total: precio, liquidado: true, estado: "liquidada", fecha_liquidacion: f.fecha, creado_por: usuario || null }]);
+    const { error } = await supabase.from("ventas_anuncios").insert([{ nombre_clienta: f.nombre.trim(), fecha: f.fecha, sucursal: f.sucursal, servicio: f.servicio, paquete: f.paquete, origen: f.origen, notas: f.origen === "Campaña pasada" ? f.notas.trim() : "", monto: precio, anticipo, precio_total: precio, liquidado: true, estado: "liquidada", fecha_liquidacion: f.fecha, creado_por: usuario || null }]);
     setGuardando(false);
     if (error) { setMsg(`No se guardó: ${error.message}`); return; }
     setMsg("✓ Venta guardada");
-    setF((x) => ({ ...x, paquete: "", precio: "" }));
+    setF((x) => ({ ...x, nombre: "", paquete: "", precio: "", notas: "" }));
     onCambio();
   };
   const borrar = async (id) => {
@@ -89,6 +90,7 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
         </div>
         {etiqueta("¿CÓMO LLEGÓ LA CLIENTA?")}
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>{ORIGEN.map((o) => <button key={o} style={chip(f.origen === o, "#a855f7")} onClick={() => set("origen", o)}>{o}</button>)}</div>
+        {f.origen === "Campaña pasada" && <input style={{ ...campo, marginTop: "8px" }} value={f.notas} onChange={(e) => set("notas", e.target.value)} placeholder="¿De qué campaña pasada fue? (ej. Hot Sale, Buen Fin 2025, Verano…)" autoFocus />}
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "18px" }}>
           <button style={{ padding: "10px 22px", fontSize: "13px", fontWeight: 700, color: "#fff", background: "#2721E8", border: "none", borderRadius: "10px", cursor: "pointer", fontFamily: "inherit", opacity: guardando || !tablaLista ? 0.5 : 1 }} onClick={guardar} disabled={guardando || !tablaLista}>{guardando ? "Guardando…" : "Guardar venta"}</button>
@@ -103,7 +105,7 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
               <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: COLORES[v.sucursal], flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div><b>{v.nombre_clienta || "Sin nombre"}</b> · {v.sucursal} · {v.servicio} · {v.paquete}</div>
-                <div style={{ color: T.faint, fontSize: "11px" }}>{v.fecha} · {v.origen}</div>
+                <div style={{ color: T.faint, fontSize: "11px" }}>{v.fecha} · {v.origen}{v.notas ? ` · ${v.notas}` : ""}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <b>{fmt(Number(v.monto))}</b>
