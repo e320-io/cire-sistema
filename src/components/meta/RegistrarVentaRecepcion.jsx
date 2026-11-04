@@ -14,7 +14,9 @@ export default function RegistrarVentaRecepcion({ session, sucursales, inicial, 
 
   const cargar = useCallback(async () => {
     const mes = hoy().slice(0, 7);
-    const { data, error } = await supabase.from("ventas_anuncios").select("*").gte("fecha", `${mes}-01`).lte("fecha", `${mes}-31`).in("sucursal", sucursales).order("fecha", { ascending: false }).order("creado_en", { ascending: false });
+    const [y, m] = mes.split("-").map(Number);
+    const fin = `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`; // último día real del mes
+    const { data, error } = await supabase.from("ventas_anuncios").select("*").gte("fecha", `${mes}-01`).lte("fecha", fin).in("sucursal", sucursales).order("fecha", { ascending: false }).order("creado_en", { ascending: false });
     if (error) { setTablaLista(false); setVentas([]); return; }
     setTablaLista(true); setVentas(data || []);
   }, [sucursales.join("|")]);
