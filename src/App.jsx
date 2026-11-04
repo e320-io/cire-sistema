@@ -10,6 +10,7 @@ import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
 import { leerMeta } from "./lib/metaCuentas.js";
 import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
+import RegistrarVentaRecepcion from "./components/meta/RegistrarVentaRecepcion.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
 import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
 import { getCatalogo, getCatalogoPorCategoria, cargarCatalogo, recargarCatalogo, asegurarCatalogo, useCatalogo } from "./lib/catalogo.js";
@@ -2513,6 +2514,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          {!isAdmin&&session.rol==="sucursal"&&["Valle","Metepec"].includes(session.nombre)&&<RegistrarVentaRecepcion session={session} sucursales={session.sucursalesRecepcion||[session.nombre]} inicial={sessionRec.nombre} light={light}/>}
           {view==="historial"&&tickets.length>0&&<div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.4)":T.faint}}>HOY <span style={{color:"#49B8D3",fontWeight:700}}>{fmt(totalHoy)}</span></div>}
           {isAdmin&&<button className="btn-ghost" onClick={onSwitchSucursal} style={{fontSize:"11px"}}>← Dashboard</button>}
           <button onClick={toggleTema} className="btn-ghost" style={{fontSize:"11px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>

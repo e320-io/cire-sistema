@@ -8,8 +8,11 @@ const ACCIONES_MENSAJE = [
 
 export const SUCURSALES = ["Valle", "Coapa", "Polanco", "Oriente", "Metepec"];
 export const BIKINI_MULTI = "Valle + Polanco + Coapa";
+const TRES = "Valle + Polanco + Coapa (todas)"; // campañas sin sucursal en la cuenta compartida: tercios, conservando el servicio
 const SUC_BIKINI_MULTI = ["Valle", "Coapa", "Polanco"];
 export const REGLAS = { minGasto: 100, bajo: 0.8, alto: 1.5 };
+
+const sinAcentos = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 // Cuentas publicitarias. VITE_META_ACCOUNTS="id:Nombre,id:Nombre" las sobreescribe; por defecto, la cuenta de siempre.
 export const CUENTAS = (() => {
@@ -17,13 +20,13 @@ export const CUENTAS = (() => {
   if (raw) {
     return raw.split(",").map((p) => {
       const [id, ...n] = p.trim().split(":");
-      return { id: id.replace(/^act_/, ""), nombre: n.join(":") || id };
+      const nombre = n.join(":").trim() || id;
+      return { id: id.replace(/^act_/, ""), nombre, sucursal: ["Oriente", "Metepec"].find((s) => sinAcentos(nombre) === sinAcentos(s)) || null };
     });
   }
-  return META_ACCOUNT ? [{ id: META_ACCOUNT, nombre: "Valle · Polanco · Coapa" }] : [];
+  return META_ACCOUNT ? [{ id: META_ACCOUNT, nombre: "Valle · Polanco · Coapa", sucursal: null }] : [];
 })();
 
-const sinAcentos = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** Sucursal y servicio a partir del nombre del anuncio ("Sucursal | Servicio o CC-n | Título"), con respaldo en conjunto y campaña. */
 export function clasificar(nombre, conjunto = "", campana = "") {
@@ -69,7 +72,10 @@ export async function anunciosDeCuenta(cuenta, since, until) {
       if (json.error) return { filas, error: json.error.message };
       for (const r of json.data || []) {
         const acc = (r.actions || []).find((a) => ACCIONES_MENSAJE.includes(a.action_type));
-        const { sucursal, servicio } = clasificar(r.ad_name, r.adset_name, r.campaign_name);
+        let { sucursal, servicio } = clasificar(r.ad_name, r.adset_name, r.campaign_name);
+        // Cada sucursal con cuenta propia cobra todo ahí; en la compartida, lo que no dice sucursal va en tercios
+        if (cuenta.sucursal) sucursal = cuenta.sucursal;
+        else if (sucursal === "Todas" || sucursal === "Sin asignar") sucursal = TRES;
         filas.push({
           cuenta: cuenta.nombre, adId: String(r.ad_id), anuncio: r.ad_name, conjunto: r.adset_name, campana: r.campaign_name,
           gasto: Number(r.spend || 0), impresiones: Number(r.impressions || 0), mensajes: Number(acc?.value || 0),
@@ -105,6 +111,7 @@ export function conVeredicto(ads, reglas = REGLAS) {
 export function repartir(ads) {
   return ads.flatMap((a) => {
     if (a.sucursal === BIKINI_MULTI) return SUC_BIKINI_MULTI.map((s) => ({ ...a, sucursal: s, servicio: "Bikini*", gasto: a.gasto / 3, mensajes: a.mensajes / 3 }));
+    if (a.sucursal === TRES) return SUC_BIKINI_MULTI.map((s) => ({ ...a, sucursal: s, gasto: a.gasto / 3, mensajes: a.mensajes / 3 }));
     if (a.sucursal === "Todas") return SUCURSALES.map((s) => ({ ...a, sucursal: s, gasto: a.gasto / 5, mensajes: a.mensajes / 5 }));
     return [a];
   });
@@ -142,3 +149,34 @@ export function totales(ads) {
 export const ESTADOS_VENTA = { pendiente: "Pendiente", liquidada: "Liquidada", no_vino: "No vino" };
 /** Lo que se espera cobrar de una venta: el precio completo, salvo que no haya venido (se queda el anticipo). */
 export const esperadoVenta = (v) => (v.estado === "no_vino" ? Number(v.monto) : Number(v.precio_total ?? v.monto));
+
+/** Mensajes y gasto por hora de un día, de una cuenta (hora del anunciante). Devuelve { filas: [{hora, sucursal, gasto, mensajes}], error }. */
+export async function mensajesPorHora(cuenta, dia) {
+  const params = new URLSearchParams({
+    level: "ad",
+    fields: "ad_name,adset_name,campaign_name,spend,actions",
+    breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+    time_range: JSON.stringify({ since: dia, until: dia }),
+    limit: "500",
+    access_token: META_TOKEN,
+  });
+  let url = `${API}/act_${cuenta.id}/insights?${params}`;
+  const crudas = [];
+  try {
+    while (url) {
+      const json = await (await fetch(url)).json();
+      if (json.error) return { filas: [], error: json.error.message };
+      for (const r of json.data || []) {
+        const acc = (r.actions || []).find((a) => ACCIONES_MENSAJE.includes(a.action_type));
+        let { sucursal, servicio } = clasificar(r.ad_name, r.adset_name, r.campaign_name);
+        if (cuenta.sucursal) sucursal = cuenta.sucursal;
+        else if (sucursal === "Todas" || sucursal === "Sin asignar") sucursal = TRES;
+        crudas.push({ hora: parseInt(r.hourly_stats_aggregated_by_advertiser_time_zone, 10), sucursal, servicio, gasto: Number(r.spend || 0), mensajes: Number(acc?.value || 0), impresiones: 0, anuncio: r.ad_name });
+      }
+      url = json.paging?.next;
+    }
+  } catch (e) {
+    return { filas: [], error: "Sin conexión con Meta." };
+  }
+  return { filas: repartir(crudas), error: "" };
+}

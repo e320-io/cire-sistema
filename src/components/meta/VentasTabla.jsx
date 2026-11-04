@@ -9,8 +9,10 @@ const COLOR_ESTADO = { pendiente: "#c99a00", liquidada: "#10b981", no_vino: "#ff
 const diaLargo = (f) => new Date(f + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 
 // Tabla de ventas por anuncio del mes, día por día. Cada renglón se edita en línea y se guarda por separado.
-export default function VentasTabla({ ventas, mes, onCambio, onCerrar }) {
-  const { T } = useT();
+// sucursales: a cuáles se puede mover una venta (recepción solo ve la suya).
+export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursales = SUCURSALES }) {
+  const { T: T0, light } = useT();
+  const T = { ...T0, text: light ? "#1a1f3c" : "#fff", bg: T0.dropBg }; // el tema base no define text ni bg
   const [drafts, setDrafts] = useState({}); // id -> campos modificados
   const [msg, setMsg] = useState("");
   const [guardando, setGuardando] = useState(null);
@@ -36,7 +38,7 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar }) {
     if (monto > precio) { setMsg("Lo cobrado no puede ser mayor al precio."); return; }
     setGuardando(v.id); setMsg("");
     const { error } = await supabase.from("ventas_anuncios").update({
-      fecha: val(v, "fecha"), sucursal: val(v, "sucursal"), servicio: val(v, "servicio"), paquete: val(v, "paquete"), origen: val(v, "origen"),
+      fecha: val(v, "fecha"), nombre_clienta: (val(v, "nombre_clienta") || "").trim(), sucursal: val(v, "sucursal"), servicio: val(v, "servicio"), paquete: val(v, "paquete"), origen: val(v, "origen"),
       precio_total: precio, monto, anticipo: val(v, "anticipo") === "" || val(v, "anticipo") == null ? null : Number(val(v, "anticipo")), estado, notas: val(v, "notas") || "",
       liquidado: estado === "liquidada", fecha_liquidacion: estado === "liquidada" ? (v.fecha_liquidacion || hoy()) : null,
     }).eq("id", v.id);
@@ -66,7 +68,7 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar }) {
 
   const exportar = () => {
     const c = (x) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const filas = [["Fecha", "Sucursal", "Servicio", "Paquete", "Origen", "Precio", "Anticipo", "Cobrado", "Estado", "Notas"], ...ventas.slice().sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map((v) => [v.fecha, v.sucursal, v.servicio, v.paquete, v.origen, v.precio_total ?? v.monto, v.anticipo, v.monto, ESTADOS_VENTA[v.estado] || v.estado, v.notas])];
+    const filas = [["Fecha", "Clienta", "Sucursal", "Servicio", "Paquete", "Origen", "Precio", "Anticipo", "Cobrado", "Estado", "Notas"], ...ventas.slice().sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map((v) => [v.fecha, v.nombre_clienta, v.sucursal, v.servicio, v.paquete, v.origen, v.precio_total ?? v.monto, v.anticipo, v.monto, ESTADOS_VENTA[v.estado] || v.estado, v.notas])];
     const blob = new Blob(["﻿" + filas.map((r) => r.map(c).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `ventas-anuncios-${mes}.csv`; a.click();
   };
@@ -97,15 +99,15 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar }) {
         <div style={{ overflow: "auto", flex: 1 }}>
           {ventas.length === 0 && <div style={{ padding: "40px", textAlign: "center", fontSize: "13px", color: T.faint }}>Aún no hay ventas este mes. Usa “+ Registrar venta”.</div>}
           {ventas.length > 0 && (
-            <table style={{ width: "100%", minWidth: "1190px", borderCollapse: "collapse" }}>
+            <table style={{ width: "100%", minWidth: "1340px", borderCollapse: "collapse" }}>
               <thead><tr style={{ position: "sticky", top: 0, background: T.bg || "#fff", zIndex: 1 }}>
-                {["FECHA", "SUCURSAL", "SERVICIO", "PAQUETE", "ORIGEN", "PRECIO", "ANTICIPO", "COBRADO", "ESTADO", "NOTAS", ""].map((h) => <th key={h} style={th}>{h}</th>)}
+                {["FECHA", "CLIENTA", "SUCURSAL", "SERVICIO", "PAQUETE", "ORIGEN", "PRECIO", "ANTICIPO", "COBRADO", "ESTADO", "NOTAS", ""].map((h) => <th key={h} style={th}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {dias.map(([dia, lista]) => {
                   const cob = lista.reduce((a, v) => a + Number(v.monto), 0), esp = lista.reduce((a, v) => a + esperadoVenta(v), 0);
                   return [
-                    <tr key={"d" + dia}><td colSpan={11} style={{ padding: "12px 6px 6px", fontSize: "11.5px", fontWeight: 700, color: T.sub, textTransform: "capitalize", borderTop: `1px solid ${T.div}` }}>
+                    <tr key={"d" + dia}><td colSpan={12} style={{ padding: "12px 6px 6px", fontSize: "11.5px", fontWeight: 700, color: T.sub, textTransform: "capitalize", borderTop: `1px solid ${T.div}` }}>
                       {diaLargo(dia)} · {lista.length} {lista.length === 1 ? "venta" : "ventas"} · cobrado {fmt(cob)} · esperado {fmt(esp)}
                     </td></tr>,
                     ...lista.map((v) => {
@@ -113,7 +115,8 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar }) {
                       return (
                         <tr key={v.id} style={{ background: sucio(v) ? "rgba(39,33,232,0.06)" : "transparent" }}>
                           <td style={{ ...tdc, width: "128px" }}><input style={inp} type="date" value={val(v, "fecha")} onChange={(e) => cambiar(v, "fecha", e.target.value)} /></td>
-                          <td style={{ ...tdc, width: "104px" }}><select style={{ ...inp, color: COLORES[val(v, "sucursal")], fontWeight: 700 }} value={val(v, "sucursal")} onChange={(e) => cambiar(v, "sucursal", e.target.value)}>{SUCURSALES.map((s) => <option key={s}>{s}</option>)}</select></td>
+                          <td style={{ ...tdc, minWidth: "140px" }}><input style={inp} value={val(v, "nombre_clienta") || ""} onChange={(e) => cambiar(v, "nombre_clienta", e.target.value)} placeholder="Nombre" /></td>
+                          <td style={{ ...tdc, width: "104px" }}><select style={{ ...inp, color: COLORES[val(v, "sucursal")], fontWeight: 700 }} value={val(v, "sucursal")} onChange={(e) => cambiar(v, "sucursal", e.target.value)}>{sucursales.map((s) => <option key={s}>{s}</option>)}</select></td>
                           <td style={{ ...tdc, width: "130px" }}><select style={inp} value={val(v, "servicio")} onChange={(e) => cambiar(v, "servicio", e.target.value)}>{Object.keys(SERV).map((s) => <option key={s}>{s}</option>)}</select></td>
                           <td style={{ ...tdc, minWidth: "150px" }}><input style={inp} value={val(v, "paquete")} onChange={(e) => cambiar(v, "paquete", e.target.value)} list="paquetes-ventas" /></td>
                           <td style={{ ...tdc, width: "150px" }}><select style={inp} value={val(v, "origen")} onChange={(e) => cambiar(v, "origen", e.target.value)}>{ORIGEN.map((o) => <option key={o}>{o}</option>)}</select></td>

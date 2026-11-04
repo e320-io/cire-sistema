@@ -16,9 +16,11 @@ const ANTICIPOS = [200, 250]; // anticipo habitual de clienta nueva; el resto se
 export const ORIGEN = ["No sé", "Anuncio de video", "Anuncio de imagen", "Recomendación u otro"];
 
 // Modal para capturar y revisar las ventas del mes que llegaron por anuncios.
-export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambio, tablaLista }) {
-  const { T } = useT();
-  const [f, setF] = useState({ sucursal: "", servicio: "", paquete: "", precio: "", anticipo: "250", fecha: hoy(), origen: "No sé" });
+// sucursales: las que se pueden elegir (recepción solo ve la suya); soloHoy: lista solo lo de hoy y sin borrar (recepción).
+export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambio, tablaLista, sucursales = SUCURSALES, sucursalInicial = "", soloHoy = false }) {
+  const { T: T0, light } = useT();
+  const T = { ...T0, text: light ? "#1a1f3c" : "#fff", bg: T0.dropBg }; // el tema base no define text ni bg
+  const [f, setF] = useState({ nombre: "", sucursal: sucursales.includes(sucursalInicial) ? sucursalInicial : sucursales.length === 1 ? sucursales[0] : "", servicio: "", paquete: "", precio: "", anticipo: "250", fecha: hoy(), origen: "No sé" });
   const [msg, setMsg] = useState("");
   const [guardando, setGuardando] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
@@ -31,11 +33,11 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
 
   const guardar = async () => {
     const anticipo = Number(f.anticipo), precio = Number(f.precio);
-    if (!f.sucursal || !f.servicio || !f.paquete || !(anticipo > 0) || !(precio > 0)) { setMsg("Completa sucursal, servicio, paquete, precio y anticipo."); return; }
+    if (!f.nombre.trim() || !f.sucursal || !f.servicio || !f.paquete || !(anticipo > 0) || !(precio > 0)) { setMsg("Completa nombre, sucursal, servicio, paquete, precio y anticipo."); return; }
     if (anticipo > precio) { setMsg("El anticipo no puede ser mayor al precio."); return; }
     // Se toma como liquidada desde la captura; si no viene, se cambia a "No vino" en el resumen (queda el anticipo).
     setGuardando(true); setMsg("");
-    const { error } = await supabase.from("ventas_anuncios").insert([{ fecha: f.fecha, sucursal: f.sucursal, servicio: f.servicio, paquete: f.paquete, origen: f.origen, monto: precio, anticipo, precio_total: precio, liquidado: true, estado: "liquidada", fecha_liquidacion: f.fecha, creado_por: usuario || null }]);
+    const { error } = await supabase.from("ventas_anuncios").insert([{ nombre_clienta: f.nombre.trim(), fecha: f.fecha, sucursal: f.sucursal, servicio: f.servicio, paquete: f.paquete, origen: f.origen, monto: precio, anticipo, precio_total: precio, liquidado: true, estado: "liquidada", fecha_liquidacion: f.fecha, creado_por: usuario || null }]);
     setGuardando(false);
     if (error) { setMsg(`No se guardó: ${error.message}`); return; }
     setMsg("✓ Venta guardada");
@@ -64,8 +66,10 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
 
         {!tablaLista && <div style={{ marginTop: "12px", padding: "10px 12px", borderRadius: "8px", background: "rgba(240,192,64,0.12)", color: "#c99a00", fontSize: "12px", lineHeight: 1.5 }}>Falta crear la tabla en Supabase: ejecuta <b>029_ventas_anuncios.sql</b> y <b>030_ventas_anuncios_anticipo.sql</b> (en supabase/migrations) en el SQL Editor.</div>}
 
+        {etiqueta("NOMBRE DE LA CLIENTA")}
+        <input style={campo} value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre y apellido" autoComplete="off" />
         {etiqueta("SUCURSAL")}
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>{SUCURSALES.map((s) => <button key={s} style={chip(f.sucursal === s, COLORES[s])} onClick={() => set("sucursal", s)}>{s}</button>)}</div>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>{sucursales.map((s) => <button key={s} style={chip(f.sucursal === s, COLORES[s])} onClick={() => set("sucursal", s)}>{s}</button>)}</div>
         {etiqueta("SERVICIO")}
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>{Object.keys(SERV).map((s) => <button key={s} style={chip(f.servicio === s, "#2721E8")} onClick={() => elegirServicio(s)}>{s}</button>)}</div>
         {f.servicio && <>
@@ -91,20 +95,20 @@ export default function VentasAnuncios({ ventas, mes, usuario, onCerrar, onCambi
         </div>
 
         <div style={{ marginTop: "22px", borderTop: `1px solid ${T.div}`, paddingTop: "14px" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", color: T.sub, marginBottom: "8px" }}>VENTAS DE {mes} · {ventas.length} · cobrado {fmt(cobrado)} de {fmt(esperado)}</div>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", color: T.sub, marginBottom: "8px" }}>{soloHoy ? "VENTAS DE HOY" : `VENTAS DE ${mes}`} · {ventas.length} · cobrado {fmt(cobrado)} de {fmt(esperado)}</div>
           {ventas.length === 0 && <div style={{ fontSize: "12px", color: T.faint }}>Aún no hay ventas registradas este mes.</div>}
           {ventas.map((v) => (
             <div key={v.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "7px 0", borderTop: `1px solid ${T.div}`, fontSize: "12px" }}>
               <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: COLORES[v.sucursal], flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div><b>{v.sucursal}</b> · {v.servicio} · {v.paquete}</div>
+                <div><b>{v.nombre_clienta || "Sin nombre"}</b> · {v.sucursal} · {v.servicio} · {v.paquete}</div>
                 <div style={{ color: T.faint, fontSize: "11px" }}>{v.fecha} · {v.origen}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <b>{fmt(Number(v.monto))}</b>
                 <div style={{ fontSize: "10.5px", color: v.estado === "liquidada" ? "#10b981" : v.estado === "no_vino" ? "#ff6b6b" : "#c99a00" }}>{v.estado === "liquidada" ? "liquidada" : v.estado === "no_vino" ? "no vino" : `de ${fmt(Number(v.precio_total ?? v.monto))}`}</div>
               </div>
-              <button className="btn-ghost" style={{ padding: "3px 8px", fontSize: "11px" }} onClick={() => borrar(v.id)}>Borrar</button>
+              {!soloHoy && <button className="btn-ghost" style={{ padding: "3px 8px", fontSize: "11px" }} onClick={() => borrar(v.id)}>Borrar</button>}
             </div>
           ))}
         </div>

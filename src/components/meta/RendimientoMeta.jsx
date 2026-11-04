@@ -4,7 +4,7 @@ import { COLORES, fmt, fmtN, hoy } from "../../lib/constantes.js";
 import { META_TOKEN, supabase } from "../../lib/supabase.js";
 import VentasAnuncios from "./VentasAnuncios.jsx";
 import VentasTabla from "./VentasTabla.jsx";
-import { CUENTAS, SUCURSALES, anunciosDeCuenta, conVeredicto, porCuenta, porServicio, porSucursal, porSucursalServicio, totales, esperadoVenta } from "./rendimiento.js";
+import { CUENTAS, SUCURSALES, anunciosDeCuenta, conVeredicto, porCuenta, porServicio, porSucursal, porSucursalServicio, totales, esperadoVenta, mensajesPorHora } from "./rendimiento.js";
 
 const $2 = (n) => (n == null ? "—" : `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const COLOR_SERV = { "Láser CC": "#49B8D3", "Bikini": "#f472b6", "Bikini*": "#f472b6", "HIFU 4D": "#a855f7", "Facial": "#f59e0b", "Moldeo (drenaje)": "#10b981", "Otro": "#94a3b8" };
@@ -69,11 +69,93 @@ function Dona({ titulo, partes, total, formato, T }) {
   );
 }
 
+// Mensajes de hoy hora por hora, apilados por sucursal. filas: [{ hora, sucursal, gasto, mensajes }]
+function PorHora({ filas, cargando, T }) {
+  const [hover, setHover] = useState(null);
+  const horaActual = parseInt(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City", hour: "numeric", hour12: false }), 10) % 24;
+  const horas = Array.from({ length: horaActual + 1 }, (_, h) => h);
+  const val = (h, s) => filas.filter((f) => f.hora === h && f.sucursal === s).reduce((a, f) => a + f.mensajes, 0);
+  const sucs = SUCURSALES.filter((s) => filas.some((f) => f.sucursal === s && f.mensajes > 0));
+  const tot = (h) => sucs.reduce((a, s) => a + val(h, s), 0);
+  const gastoH = (h) => filas.filter((f) => f.hora === h).reduce((a, f) => a + f.gasto, 0);
+  const total = horas.reduce((a, h) => a + tot(h), 0);
+  const pico = horas.reduce((m, h) => (tot(h) > tot(m) ? h : m), 0);
+  const hh = (h) => `${String(h).padStart(2, "0")}:00`;
+  const W = 760, H = 210, pl = 30, pr = 6, pt = 10, pb = 26;
+  const iw = W - pl - pr, ih = H - pt - pb;
+  const slot = iw / 24, bw = Math.min(slot * 0.72, 22);
+  const maxH = Math.max(1, ...horas.map(tot));
+  const techo = Math.max(4, Math.ceil(maxH / 4) * 4);
+  const y = (v) => pt + ih - (v / techo) * ih;
+  const resumen = (s) => horas.reduce((a, h) => a + val(h, s), 0);
+  return (
+    <div className="glass" style={{ padding: "20px 24px" }}>
+      <div style={{ fontSize: "11px", letterSpacing: "2px", color: T.sub }}>MENSAJES DE HOY · HORA POR HORA</div>
+      {cargando && filas.length === 0 ? <div style={{ marginTop: "10px", fontSize: "13px", color: T.muted }}>Cargando desde Meta…</div> : <>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap", margin: "6px 0 10px" }}>
+          <span style={{ fontSize: "26px", fontWeight: 700, color: "#a855f7" }}>{Math.round(total).toLocaleString("es-MX")}</span>
+          <span style={{ fontSize: "12px", color: T.sub }}>mensajes hasta las {hh(horaActual)} · {horaActual + 1 > 0 ? (total / (horaActual + 1)).toFixed(1) : 0}/hora{total > 0 && <> · hora pico <b style={{ color: T.muted }}>{hh(pico)}</b> ({Math.round(tot(pico))})</>}</span>
+        </div>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "8px" }}>
+          {sucs.map((s) => <span key={s} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: T.muted }}><span style={{ width: "9px", height: "9px", borderRadius: "3px", background: COLORES[s] }} />{s} <b>{Math.round(resumen(s))}</b></span>)}
+        </div>
+        <div style={{ position: "relative" }}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} onMouseLeave={() => setHover(null)}>
+            {[0, 0.5, 1].map((p) => (
+              <g key={p}>
+                <line x1={pl} x2={W - pr} y1={y(techo * p)} y2={y(techo * p)} stroke={T.div} strokeWidth="1" strokeDasharray={p === 0 ? "0" : "3 4"} />
+                <text x={pl - 6} y={y(techo * p) + 3} textAnchor="end" fontSize="10" fill={T.faint}>{Math.round(techo * p)}</text>
+              </g>
+            ))}
+            {Array.from({ length: 24 }, (_, h) => {
+              const cx = pl + slot * h + slot / 2;
+              const futura = h > horaActual;
+              let acum = 0;
+              return (
+                <g key={h} opacity={hover == null || hover === h ? 1 : 0.45} style={{ transition: "opacity .12s" }}>
+                  {hover === h && <rect x={cx - slot / 2} y={pt} width={slot} height={ih} fill={T.div} opacity="0.5" rx="4" />}
+                  {!futura && sucs.map((s) => {
+                    const v = val(h, s);
+                    if (!v) return null;
+                    const y1 = y(acum + v), y0 = y(acum);
+                    acum += v;
+                    return <rect key={s} x={cx - bw / 2} y={y1} width={bw} height={Math.max(y0 - y1 - 1, 1)} fill={COLORES[s]} rx="2" />;
+                  })}
+                  {h % 2 === 0 && <text x={cx} y={H - 8} textAnchor="middle" fontSize="10" fill={h === horaActual ? T.text : T.faint} fontWeight={h === horaActual ? 700 : 400}>{h}</text>}
+                  <rect x={cx - slot / 2} y={0} width={slot} height={H} fill="transparent" onMouseEnter={() => !futura && setHover(h)} />
+                </g>
+              );
+            })}
+          </svg>
+          {hover != null && (() => {
+            const derecha = hover > 12;
+            const pos = (pl + slot * hover + slot / 2) / W;
+            return (
+              <div style={{ position: "absolute", top: 0, [derecha ? "right" : "left"]: `${(derecha ? 1 - pos : pos) * 100 + 3}%`, background: "#1c1f3a", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "10px", padding: "10px 12px", fontSize: "12px", color: "#fff", pointerEvents: "none", minWidth: "150px", zIndex: 2, boxShadow: "0 8px 24px rgba(0,0,0,0.35)" }}>
+                <div style={{ fontWeight: 700, marginBottom: "6px" }}>{hh(hover)} – {hh((hover + 1) % 24)}</div>
+                {sucs.filter((s) => val(hover, s) > 0).map((s) => (
+                  <div key={s} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "1.5px 0" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: COLORES[s] }} /><span style={{ flex: 1, color: "rgba(255,255,255,0.8)" }}>{s}</span><b>{Math.round(val(hover, s))}</b>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", marginTop: "6px", paddingTop: "6px" }}><span>Total</span><b>{Math.round(tot(hover))}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.6)", fontSize: "11px" }}><span>Gasto</span><span>${Math.round(gastoH(hover))}</span></div>
+              </div>
+            );
+          })()}
+        </div>
+        {total === 0 && <div style={{ fontSize: "12px", color: T.faint, marginTop: "6px" }}>Todavía no hay mensajes hoy. Meta tarda un poco en reportar las horas más recientes.</div>}
+      </>}
+    </div>
+  );
+}
+
 const VCOLOR = { Escalar: "#10b981", Replantear: "#ff6b6b", Mantener: null, "Pocos datos": null };
 
 // mes: "yyyy-mm". Lee de Meta (nivel anuncio) las cuentas configuradas en rendimiento.js.
 export default function RendimientoMeta({ mes, usuario }) {
-  const { T } = useT();
+  const { T: T0, light } = useT();
+  const T = { ...T0, text: light ? "#1a1f3c" : "#fff", bg: T0.dropBg }; // el tema base no define text ni bg
   const [ads, setAds] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [errores, setErrores] = useState([]); // [{cuenta, mensaje}]
@@ -83,6 +165,8 @@ export default function RendimientoMeta({ mes, usuario }) {
   const [tablaLista, setTablaLista] = useState(true);
   const [modal, setModal] = useState(false);
   const [tabla, setTabla] = useState(false);
+  const [modo, setModo] = useState("mes"); // "mes" | "hoy"
+  const [horas, setHoras] = useState([]); // mensajes de hoy por hora y sucursal
   const [graficos, setGraficos] = useState(() => new Set()); // sucursales con la vista de gráfico abierta
   const alternar = (s) => setGraficos((g) => { const n = new Set(g); n.has(s) ? n.delete(s) : n.add(s); return n; });
 
@@ -99,14 +183,20 @@ export default function RendimientoMeta({ mes, usuario }) {
     if (!META_TOKEN || CUENTAS.length === 0) { setErrores([{ cuenta: "Configuración", mensaje: "Falta VITE_META_TOKEN o VITE_META_ACCOUNT." }]); return; }
     setCargando(true);
     const [y, m] = mes.split("-").map(Number);
-    const since = `${mes}-01`;
+    const esHoy = modo === "hoy";
+    const since = esHoy ? hoy() : `${mes}-01`;
     const fin = `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
-    const until = fin > hoy() ? hoy() : fin;
-    const res = await Promise.all(CUENTAS.map(async (c) => ({ c, r: await anunciosDeCuenta(c, since, until) })));
+    const until = esHoy ? hoy() : fin > hoy() ? hoy() : fin;
+    const [res, hrs] = await Promise.all([
+      Promise.all(CUENTAS.map(async (c) => ({ c, r: await anunciosDeCuenta(c, since, until) }))),
+      esHoy ? Promise.all(CUENTAS.map(async (c) => ({ c, r: await mensajesPorHora(c, hoy()) }))) : Promise.resolve([]),
+    ]);
     setAds(res.flatMap(({ r }) => r.filas));
-    setErrores(res.filter(({ r }) => r.error).map(({ c, r }) => ({ cuenta: c.nombre, mensaje: r.error })));
+    setHoras(hrs.flatMap(({ r }) => r.filas));
+    const errs = [...res, ...hrs].filter(({ r }) => r.error).map(({ c, r }) => ({ cuenta: c.nombre, mensaje: r.error }));
+    setErrores(errs.filter((e, i) => errs.findIndex((x) => x.cuenta === e.cuenta) === i));
     setCargando(false);
-  }, [mes]);
+  }, [mes, modo]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -140,11 +230,12 @@ export default function RendimientoMeta({ mes, usuario }) {
   // Real = lo cobrado a la fecha (anticipo, o el total si ya liquidó). Esperado = precio completo de todo lo capturado.
   const resumenVentas = (l) => ({ n: l.length, real: l.reduce((a, v) => a + Number(v.monto), 0), esp: l.reduce((a, v) => a + esperadoVenta(v), 0) });
   const roi = (ing, gasto) => (gasto > 0 && ing > 0 ? ing / gasto : null);
-  const tv = resumenVentas(ventas);
+  const ventasV = modo === "hoy" ? ventas.filter((v) => v.fecha === hoy()) : ventas; // ventas del periodo visible
+  const tv = resumenVentas(ventasV);
   const claveServ = (v) => (v.servicio === "Bikini" && ["Valle", "Coapa", "Polanco"].includes(v.sucursal) ? "Bikini*" : v.servicio);
-  const vSuc = (s) => resumenVentas(ventas.filter((v) => v.sucursal === s));
-  const vSucServ = (s, sv) => resumenVentas(ventas.filter((v) => v.sucursal === s && claveServ(v) === sv));
-  const vServ = (sv) => resumenVentas(ventas.filter((v) => v.servicio === sv));
+  const vSuc = (s) => resumenVentas(ventasV.filter((v) => v.sucursal === s));
+  const vSucServ = (s, sv) => resumenVentas(ventasV.filter((v) => v.sucursal === s && claveServ(v) === sv));
+  const vServ = (sv) => resumenVentas(ventasV.filter((v) => v.servicio === sv));
   const x2 = (n) => (n == null ? "—" : `${n.toFixed(2)}×`);
   const mesTxt = new Date(mes + "-01T12:00:00").toLocaleDateString("es-MX", { month: "long", year: "numeric" });
   const ordenar = (k) => setOrden((o) => ({ k, dir: o.k === k ? -o.dir : -1 }));
@@ -153,10 +244,13 @@ export default function RendimientoMeta({ mes, usuario }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", border: `1px solid ${T.div}`, borderRadius: "8px", overflow: "hidden" }}>
+          {[["mes", "Este mes"], ["hoy", "Hoy"]].map(([k, l]) => <button key={k} onClick={() => setModo(k)} style={{ fontSize: "11px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, border: "none", color: modo === k ? "#fff" : T.muted, background: modo === k ? "#a855f7" : "transparent" }}>{l}</button>)}
+        </div>
         <button className="btn-ghost" style={{ fontSize: "11px", padding: "6px 12px" }} onClick={cargar} disabled={cargando}>↻ Sincronizar</button>
         <button onClick={() => setModal(true)} style={{ fontSize: "11px", padding: "6px 14px", borderRadius: "8px", border: "1px solid rgba(39,33,232,0.5)", background: "rgba(39,33,232,0.1)", color: "#2721E8", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>+ Registrar venta</button>
         <button onClick={() => setTabla(true)} className="btn-ghost" style={{ fontSize: "11px", padding: "6px 14px" }} title="Ver y editar las ventas día por día">📋 Ventas ({ventas.length})</button>
-        <span style={{ fontSize: "12px", color: T.sub, textTransform: "capitalize" }}>{cargando ? "Leyendo anuncios desde Meta…" : `${mesTxt} · ${t.anuncios} anuncios con gasto`}</span>
+        <span style={{ fontSize: "12px", color: T.sub, textTransform: "capitalize" }}>{cargando ? "Leyendo anuncios desde Meta…" : `${modo === "hoy" ? "Hoy, " + new Date(hoy() + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "long" }) : mesTxt} · ${t.anuncios} anuncios con gasto`}</span>
       </div>
 
       {tabla && <VentasTabla ventas={ventas} mes={mes} onCerrar={() => setTabla(false)} onCambio={cargarVentas} />}
@@ -167,6 +261,8 @@ export default function RendimientoMeta({ mes, usuario }) {
           No se pudo leer <b>{e.cuenta}</b>: {e.mensaje}
         </div>
       ))}
+
+      {modo === "hoy" && <PorHora filas={horas} cargando={cargando} T={T} />}
 
       {!cargando && ads.length === 0 && errores.length === 0 && <div style={{ textAlign: "center", padding: "50px", color: T.faint, fontSize: "13px" }}>Sin anuncios con gasto en este periodo.</div>}
 
