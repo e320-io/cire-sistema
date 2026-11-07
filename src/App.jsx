@@ -2618,7 +2618,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
               <span style={{fontSize:"11px",color:T.sub,letterSpacing:"0.5px"}}>Modo precio:</span>
               <button onClick={()=>{setUsarPromo(!usarPromo);setCarrito([]);}} style={{display:"flex",alignItems:"center",gap:"6px",padding:"5px 14px",borderRadius:"20px",border:`1px solid ${usarPromo?"#f59e0b":"rgba(255,255,255,0.15)"}`,background:usarPromo?"rgba(245,158,11,0.15)":"transparent",color:usarPromo?"#f59e0b":T.muted,fontSize:"11px",fontWeight:600,cursor:"pointer",transition:"all 0.2s"}}>
-                {usarPromo?"🔥 Hot Summer":"Precio normal"}
+                {usarPromo?"🔥 Buen Fin":"Precio normal"}
               </button>
               {usarPromo&&<span style={{fontSize:"10px",color:"#f59e0b",opacity:0.8}}>Aplican precios de promoción</span>}
             </div>
