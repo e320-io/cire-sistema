@@ -7,6 +7,10 @@ import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, f
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
+import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
+import { leerMeta } from "./lib/metaCuentas.js";
+import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
+import RegistrarVentaRecepcion from "./components/meta/RegistrarVentaRecepcion.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
 import { fetchHistorialMensualCacheado } from "./lib/zettle.js";
 import { getCatalogo, getCatalogoPorCategoria, cargarCatalogo, recargarCatalogo, asegurarCatalogo, useCatalogo } from "./lib/catalogo.js";
@@ -2510,6 +2514,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          {!isAdmin&&session.rol==="sucursal"&&["Valle","Metepec"].includes(session.nombre)&&<RegistrarVentaRecepcion session={session} sucursales={session.sucursalesRecepcion||[session.nombre]} inicial={sessionRec.nombre} light={light}/>}
           {view==="historial"&&tickets.length>0&&<div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.4)":T.faint}}>HOY <span style={{color:"#49B8D3",fontWeight:700}}>{fmt(totalHoy)}</span></div>}
           {isAdmin&&<button className="btn-ghost" onClick={onSwitchSucursal} style={{fontSize:"11px"}}>← Dashboard</button>}
           <button onClick={toggleTema} className="btn-ghost" style={{fontSize:"11px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
@@ -2613,7 +2618,7 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
             <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
               <span style={{fontSize:"11px",color:T.sub,letterSpacing:"0.5px"}}>Modo precio:</span>
               <button onClick={()=>{setUsarPromo(!usarPromo);setCarrito([]);}} style={{display:"flex",alignItems:"center",gap:"6px",padding:"5px 14px",borderRadius:"20px",border:`1px solid ${usarPromo?"#f59e0b":"rgba(255,255,255,0.15)"}`,background:usarPromo?"rgba(245,158,11,0.15)":"transparent",color:usarPromo?"#f59e0b":T.muted,fontSize:"11px",fontWeight:600,cursor:"pointer",transition:"all 0.2s"}}>
-                {usarPromo?"🔥 Hot Summer":"Precio normal"}
+                {usarPromo?"🔥 Buen Fin":"Precio normal"}
               </button>
               {usarPromo&&<span style={{fontSize:"10px",color:"#f59e0b",opacity:0.8}}>Aplican precios de promoción</span>}
             </div>
@@ -5726,6 +5731,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const{light,T,acc}=useT();
   useCSSInjection();
   const[tab,setTab]=useState("resumen");
+  const[metaSub,setMetaSub]=useState("resumen"); // sub-tab de Meta Ads: resumen | rendimiento
   const tabInicioRef=useRef(Date.now());
   const tabPrevRef=useRef("resumen");
   useEffect(()=>{
@@ -5745,6 +5751,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const[resumenCampanasMes,setResumenCampanasMes]=useState([]);
   const[resumenSucAbierto,setResumenSucAbierto]=useState(null); // nombre de la sucursal expandida, o null
   const[msgSucFiltro,setMsgSucFiltro]=useState("Todas");
+  const[msgsMesPasado,setMsgsMesPasado]=useState(null); // {ym,porSucursal:{suc:mensajes},gastoPorSucursal:{suc:$}} del mes anterior al seleccionado
   const[loadingMeta,setLoadingMeta]=useState(false);
   const[metaError,setMetaError]=useState("");
   const[metaDataMes,setMetaDataMes]=useState(null);
@@ -5832,11 +5839,14 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const JULIO26_VALLE_ADSET_IDS=new Set(["52519186761371","52517464244571"]);
   const repartoCinco=()=>{const f={};SUCURSALES_NAMES.forEach(s=>f[s]=1/SUCURSALES_NAMES.length);return f;};
   const fraccionSucursales=(r,fecha)=>{
+    if(r._fraccion)return r._fraccion; // desde nov 2026: reparto ya calculado por cuenta publicitaria (ver lib/metaCuentas.js)
     const nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;
     // Estos ids son únicos y solo existen en campañas de julio 2026, así que no dependen de `fecha`
     if(JULIO26_VALLE_ADSET_IDS.has(String(r.adset_id)))return{Valle:1};
     const esJulio2026=fecha&&fecha.slice(0,7)==="2026-07";
     if(esJulio2026&&String(r.adset_id)===JULIO26_MIXTO_ADSET_ID)return fecha<=JULIO26_MIXTO_CUTOFF?repartoCinco():{Valle:0.5,Polanco:0.5};
+    // Promo "Axila gratis CDMX" (oct 2026): aplica a las 5 sucursales, el nombre del adset no las menciona
+    if(cn.includes("axila gratis"))return repartoCinco();
     if(comb.includes("coapa"))return{Coapa:1};
     if(esJulio2026&&nm.includes("valle"))return{Valle:0.5,Polanco:0.5}; // solo julio 2026: ese mes targeteaba Valle+Polanco juntos
     if(nm.includes("5 sucursales"))return repartoCinco();
@@ -5854,6 +5864,25 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(entries.length===1)return entries[0][0];
     if(entries.length===SUCURSALES_NAMES.length)return"5 sucursales (÷5)";
     return entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(" + ");
+  };
+  // Insights diarios por adset en tramos de 5 días, en paralelo y con páginas chicas: pedir el mes
+  // completo en una sola consulta hace que Meta tarde >30s o falle (error 1504044) y el gráfico queda vacío.
+  const fetchDiarioMeta=async(since,until)=>{
+    const tramos=[];
+    for(let d=new Date(since+"T12:00:00"),fin=new Date(until+"T12:00:00");d<=fin;){
+      const ini=d.toISOString().slice(0,10);
+      const e=new Date(d);e.setDate(e.getDate()+4);
+      const fn=e>fin?fin:e;
+      tramos.push([ini,fn.toISOString().slice(0,10)]);
+      d=new Date(fn);d.setDate(d.getDate()+1);
+    }
+    let error=null;
+    const partes=await Promise.all(tramos.map(async([a,b])=>{
+      const j=await leerMeta({since:a,until:b,diario:true,fracAdset:fraccionSucursales});
+      if(j.error)error=error||j.error;
+      return j.data;
+    }));
+    return{data:partes.flat(),error};
   };
   const cargarMeta=async()=>{
     setLoadingMeta(true);setMetaError("");
@@ -5874,11 +5903,18 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           setLoadingMeta(false);return;
         }
       }
+      // Período con días en curso: pintar al instante lo último guardado en caché mientras Meta responde (lento)
+      else{
+        const{data:cachedLive}=await supabase.from("meta_diario").select("*").gte("fecha",since).lte("fecha",until);
+        if(cachedLive&&cachedLive.length>0){
+          let tS=0,tM=0;const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
+          cachedLive.forEach(r=>{tS+=Number(r.spend||0);tM+=Number(r.mensajes||0);if(pS[r.sucursal]){pS[r.sucursal].spend+=Number(r.spend||0);pS[r.sucursal].mensajes+=Number(r.mensajes||0);}});
+          setMetaData(prev=>prev||{spend:tS,mensajes:tM,impresiones:0,clics:0,alcance:0,porSucursal:pS});
+          setMetaDiario(cachedLive.map(r=>({fecha:r.fecha,sucursal:r.sucursal,mensajes:Number(r.mensajes),spend:Number(r.spend)})));
+        }
+      }
       // Fetch desde Meta API
-      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const urlDiario=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
-      const[res,resDiario]=await Promise.all([fetch(url),fetch(urlDiario)]);
-      const json=await res.json();let jsonDiario=await resDiario.json();
+      const[json,jsonDiario]=await Promise.all([leerMeta({since,until,fracAdset:fraccionSucursales}),fetchDiarioMeta(since,until)]);
       if(json.error){setMetaError(json.error.message);setLoadingMeta(false);return;}
       const rows=json.data||[];
       const getM=(a)=>{const f=(t)=>{const x=(a||[]).find(z=>z.action_type===t);return x?Number(x.value):0;};return f("onsite_conversion.messaging_conversation_started_7d")||f("onsite_conversion.total_messaging_connection")||f("onsite_conversion.messaging_first_reply")||f("contact");};
@@ -5895,9 +5931,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         const frac=fraccionSucursales(r,null);
         Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
       });
-      let allDiarioData=[...(jsonDiario.data||[])];
-      let nextUrl=jsonDiario.paging?.next;
-      while(nextUrl){try{const nr=await fetch(nextUrl);const nj=await nr.json();allDiarioData=[...allDiarioData,...(nj.data||[])];nextUrl=nj.paging?.next;}catch{break;}}
+      if(jsonDiario.error)setMetaError(`Detalle diario: ${jsonDiario.error.message}`);
+      const allDiarioData=jsonDiario.data;
       const mixtoDiario=allDiarioData.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
       if(jsonDiario.error||mixtoDiario.length===0){
         // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
@@ -5929,8 +5964,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
       });
       setMetaDiario(diario);
-      // Guardar datos diarios históricos en caché para futuras consultas
-      if(isAllHistorical&&diario.length>0){
+      // Guardar datos diarios en caché (también el mes en curso, para que la próxima carga pinte al instante)
+      if(diario.length>0&&!jsonDiario.error){
         const now=new Date().toISOString();
         supabase.from("meta_diario").upsert(
           diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:d.fecha.substring(0,7),mensajes:d.mensajes,spend:d.spend,updated_at:now})),
@@ -5965,10 +6000,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       const since=`${ym}-01`;
       const until=isPast?`${ym}-${new Date(y,m,0).getDate()}`:hoy();
       const fields="campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
-      const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-      const urlD=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${since}","until":"${until}"}&level=adset&time_increment=1&limit=500&access_token=${META_TOKEN}`;
-      const[res,resD]=await Promise.all([fetch(url),fetch(urlD)]);
-      const json=await res.json();const jsonD=await resD.json();
+      const[json,jsonD]=await Promise.all([leerMeta({since,until,fracAdset:fraccionSucursales}),fetchDiarioMeta(since,until)]);
       if(json.error){setMetaErrorMes(json.error.message);setLoadingMetaMes(false);return;}
       const rows=json.data||[];let tS=0,tM=0,tI=0,tC=0,tA=0;
       const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
@@ -5984,8 +6016,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         Object.entries(frac).forEach(([s,f])=>{pS[s].spend+=sp*f;pS[s].mensajes+=ms*f;entry.porSucursal[s]={spend:sp*f,mensajes:ms*f};});
       });
       // Datos diarios
-      let allD=[...(jsonD.data||[])];let nx=jsonD.paging?.next;
-      while(nx){try{const nr=await fetch(nx);const nj=await nr.json();allD=[...allD,...(nj.data||[])];nx=nj.paging?.next;}catch{break;}}
+      const allD=jsonD.data;
       const mixtoDiario=allD.filter(r=>String(r.adset_id)===JULIO26_MIXTO_ADSET_ID);
       if(jsonD.error||mixtoDiario.length===0){
         // La API de Meta falló o no devolvió datos diarios: usar reparto de respaldo (5 sucursales)
@@ -6024,7 +6055,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
       });
       setMetaDiarioMes(diario);
       // Guardar datos diarios en caché para meses pasados
-      if(isPast&&diario.length>0){
+      if(isPast&&diario.length>0&&!jsonD.error){
         const now=new Date().toISOString();
         supabase.from("meta_diario").upsert(
           diario.map(d=>({fecha:d.fecha,sucursal:d.sucursal,mes:ym,mensajes:d.mensajes,spend:d.spend,updated_at:now})),
@@ -6053,8 +6084,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         }
         // Fetch desde Meta API (mes actual o caché faltante)
         try{
-          const url=`https://graph.facebook.com/v19.0/act_${META_ACCOUNT}/insights?fields=campaign_name,adset_name,adset_id,spend,actions&time_range={"since":"${since}","until":"${until}"}&level=adset&limit=200&access_token=${META_TOKEN}`;
-          const res=await fetch(url);const json=await res.json();
+          const json=await leerMeta({since,until,fracAdset:fraccionSucursales});
           if(json.error)return{ym,label,spend:0,mensajes:0,porSucursal:{}};
           const pS={};SUCURSALES_NAMES.forEach(s=>{pS[s]={spend:0,mensajes:0};});
           let tS=0,tM=0,mixtoFallback=null;
@@ -6209,6 +6239,27 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   };
   useEffect(()=>{cargarDatos();cargarMeta();},[periodo,mesSel,customDesde,customHasta]);
   useEffect(()=>{cargarMetaMes(mesSel);},[mesSel]);
+  // Mensajes del mes anterior al seleccionado, por sucursal (una sola consulta agregada; se guarda en localStorage porque un mes cerrado no cambia)
+  useEffect(()=>{
+    const antY=mesM===1?mesY-1:mesY,antM=mesM===1?12:mesM-1;
+    const ym=`${antY}-${String(antM).padStart(2,"0")}`;
+    const key=`meta_mes_${ym}`;
+    let activo=true;setMsgsMesPasado(null);
+    try{const c=JSON.parse(localStorage.getItem(key)||"null");if(c?.mensajes){setMsgsMesPasado({ym,porSucursal:c.mensajes,gastoPorSucursal:c.gasto});return;}}catch{}
+    (async()=>{
+      try{
+        const until=`${ym}-${new Date(antY,antM,0).getDate()}`;
+        const json=await leerMeta({since:`${ym}-01`,until,fracAdset:fraccionSucursales});
+        if(json.error||!activo)return;
+        const pS={},pG={};SUCURSALES_NAMES.forEach(n=>{pS[n]=0;pG[n]=0;});
+        (json.data||[]).forEach(r=>{const ms=getMetaM(r.actions),sp=Number(r.spend||0);Object.entries(fraccionSucursales(r,null)).forEach(([n,f])=>{pS[n]+=ms*f;pG[n]+=sp*f;});});
+        SUCURSALES_NAMES.forEach(n=>{pS[n]=Math.round(pS[n]);pG[n]=Math.round(pG[n]);});
+        try{localStorage.setItem(key,JSON.stringify({mensajes:pS,gasto:pG}));}catch{}
+        setMsgsMesPasado({ym,porSucursal:pS,gastoPorSucursal:pG});
+      }catch{}
+    })();
+    return()=>{activo=false;};
+  },[mesSel]);
   useEffect(()=>{cargarMetaHistorial();},[]);
   useEffect(()=>{if(!sucursalesPropias)return;const suc=sucursalesPropias;const cargarSolicitudes=async()=>{const{data}=await supabase.from("solicitudes_reagendado").select("*").in("sucursal",suc).order("created_at",{ascending:false}).limit(50);setSolicitudesRe(data||[]);};cargarSolicitudes();const ch=supabase.channel("solicitudes_re_rt").on("postgres_changes",{event:"*",schema:"public",table:"solicitudes_reagendado"},()=>cargarSolicitudes()).subscribe();return()=>{supabase.removeChannel(ch);};},[]);
 
@@ -6262,6 +6313,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     if(periodo!=="mes"||!ventasMesAnteriorPorSuc)return null;
     const ant=ventasMesAnteriorPorSuc[suc];
     return ant>0?((ventasZettle[suc]-ant)/ant*100):null;
+  };
+
+  // Comparativo de sucursales: mismo mes del periodo seleccionado en los 3 años anteriores
+  // (de historialMensual) y venta del mes inmediato anterior.
+  const aniosComp=[1,2,3].map(i=>{const ym=`${mesY-i}-${String(mesM).padStart(2,"0")}`;const mesCorto=new Date(mesY-i,mesM-1,1).toLocaleDateString("es-MX",{month:"short"}).replace(".","").toUpperCase();return{ym,label:`${mesCorto} ${mesY-i}`};});
+  const ventaMesAnt=(suc)=>{
+    if(ventasMesAnteriorPorSuc?.[suc]!=null)return ventasMesAnteriorPorSuc[suc];
+    const d=new Date(mesY,mesM-2,1);
+    return historialMensual.find(h=>h.mes===`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`)?.[suc]??null;
   };
 
   // ─── Por sucursal ──────────────────────────────────────────────────────────
@@ -6338,6 +6398,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
             <button className="btn-ghost" style={{padding:"5px 12px",fontSize:"12px",flexShrink:0,display:"flex",alignItems:"center",gap:"6px"}} onClick={()=>{if(!loadingDB){cargarDatos();cargarMeta();}}} disabled={loadingDB}><span style={{display:"inline-block",animation:loadingDB?"meta-spin 0.8s linear infinite":"none"}}>↻</span>{ultimaActualizacion?<span style={{fontSize:"10px",opacity:0.45}}>Actualizado {ultimaActualizacion.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</span>:<span style={{fontSize:"10px",opacity:0.45}}>Actualizar</span>}</button>
             {esDuenaGeneral&&<button className="btn-ghost" onClick={()=>setPanelSolicRe(true)} style={{fontSize:"11px",flexShrink:0,position:"relative",color:solicitudesRe.filter(s=>s.estado==="pendiente").length>0?"#a855f7":undefined,borderColor:solicitudesRe.filter(s=>s.estado==="pendiente").length>0?"rgba(168,85,247,0.5)":undefined}}>🔔 Reagendados{solicitudesRe.filter(s=>s.estado==="pendiente").length>0&&<span style={{marginLeft:"5px",background:"#ef4444",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"9px",fontWeight:700}}>{solicitudesRe.filter(s=>s.estado==="pendiente").length}</span>}</button>}
             {sucursalesPropias&&<button className={soloMias?"btn-blue":"btn-ghost"} style={{fontSize:"11px",flexShrink:0,whiteSpace:"nowrap"}} onClick={()=>setSoloMias(v=>!v)}>{soloMias?`◉ ${sucursalesPropias.join(" & ")}`:`Mis sucursales`}</button>}
+            {session?.usuario==="jaz_vazquez"&&<RegistrarVentaRecepcion session={session} sucursales={SUCURSALES_NAMES} inicial="" light={light}/>}
             <button onClick={toggleTema} className="btn-ghost" style={{fontSize:"11px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
               {light?"🌙 Oscuro":"☀️ Claro"}
             </button>
@@ -6427,8 +6488,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               para no duplicar ese cálculo. */}
           <div className="glass" style={{padding:"22px"}}>
             <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub,marginBottom:"14px"}}>COMPARATIVO DE SUCURSALES</div>
-            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>
-              <span>SUCURSAL</span><span style={{textAlign:"right"}}>INGRESO</span><span style={{textAlign:"right"}}>MARGEN NETO</span><span style={{textAlign:"right"}}>VS. MES ANT.</span><span style={{textAlign:"right"}}>META DEL MES</span><span style={{textAlign:"center"}}>ESTADO</span><span/>
+            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",fontSize:"10px",color:T.faint,padding:"0 4px",marginBottom:"6px"}}>
+              <span>SUCURSAL</span><span style={{textAlign:"right"}}>INGRESO</span><span style={{textAlign:"right"}}>MES ANT.</span>{aniosComp.map(a=><span key={a.ym} style={{textAlign:"right"}}>{a.label}</span>)}<span style={{textAlign:"right"}}>VS. MES ANT.</span><span style={{textAlign:"right"}}>META DEL MES</span><span style={{textAlign:"center"}}>ESTADO</span><span/>
             </div>
             {porSuc.slice().sort((a,b)=>b.ventas-a.ventas).map(s=>{
               const crecSuc=crecimientoPorSuc(s.nombre);
@@ -6439,10 +6500,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               const estadoLabel=band?({sano:"Sano",ajustado:"Atención",riesgo:"Alerta",sin_datos:"—"}[band.key]):"—";
               const estadoColor=band?({sano:"#10b981",ajustado:"#f0c040",riesgo:"#ff6b6b",sin_datos:T.faint}[band.key]):T.faint;
               return(
-                <div key={s.nombre} style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",alignItems:"center",padding:"9px 4px",borderTop:`1px solid ${T.div}`,background:enAlerta?"rgba(255,107,107,0.05)":"transparent"}}>
+                <div key={s.nombre} style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 90px",gap:"8px",alignItems:"center",padding:"9px 4px",borderTop:`1px solid ${T.div}`,background:enAlerta?"rgba(255,107,107,0.05)":"transparent"}}>
                   <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s.nombre],flexShrink:0}}/><span style={{fontSize:"13px",fontWeight:600}}>{s.nombre}</span></div>
                   <div style={{textAlign:"right",fontSize:"13px",fontWeight:700,color:COLORES[s.nombre]}}>{fmt(s.ventas)}</div>
-                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:fin?.margenPct>=0?"#10b981":"#ff6b6b"}}>{fin?.margenPct!=null?`${fin.margenPct>=0?"+":""}${fin.margenPct.toFixed(1)}%`:"—"}</div>
+                  <div style={{textAlign:"right",fontSize:"12px",fontWeight:600,color:T.muted}}>{ventaMesAnt(s.nombre)!=null?fmt(ventaMesAnt(s.nombre)):"—"}</div>
+                  {aniosComp.map(a=>{const v=historialMensual.find(h=>h.mes===a.ym)?.[s.nombre];return<div key={a.ym} style={{textAlign:"right",fontSize:"12px",fontWeight:600,color:T.muted}}>{v!=null?fmt(v):"—"}</div>;})}
                   <div style={{textAlign:"right",fontSize:"12px",fontWeight:700,color:crecSuc==null?T.faint:creciendoSuc?"#10b981":"#ff6b6b"}}>{crecSuc==null?"—":`${creciendoSuc?"↑":"↓"} ${Math.abs(crecSuc).toFixed(1)}%`}</div>
                   <div style={{textAlign:"right",fontSize:"11.5px",fontWeight:600,color:T.muted}}>{fin?`${fmt(fin.puntoProyRealista)} – ${fmt(fin.puntoProyOptimista)}`:"—"}</div>
                   <div style={{textAlign:"center"}}><span style={{fontSize:"10px",fontWeight:700,color:estadoColor,background:`${estadoColor}22`,padding:"2px 9px",borderRadius:"99px"}}>{estadoLabel}</span></div>
@@ -6454,42 +6516,13 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
           {historialMensual.length>0&&<MetaAdsBudget historial={historialMensual} sucVisible={sucNames} periodo={mesSel}/>}
 
+          <MensajesDiarios datos={metaDiarioF} sucNames={sucNames} cargando={loadingMeta} error={metaError} periodoLabel={periodoLabel} mesPasado={msgsMesPasado} proyectar={periodo!=="personalizado"&&mesSel===curYM} hoy={hoy()}/>
+
           {/* ═══ SECCIÓN B — Ritmo operativo y pacing en tiempo real ═══ */}
           <div style={{fontSize:"12px",fontWeight:700,letterSpacing:"1px",color:light?"#1a1a2e":"#fff",paddingBottom:"2px",marginTop:"4px",borderBottom:`2px solid ${light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.1)"}`}}>
             ⏱ RITMO OPERATIVO Y PACING · MES EN CURSO
           </div>
           <ResumenFinanciero sucNames={sucNames} mesFiltro={mesSel} onVerDetalle={()=>setTab("finanzas")} onFilas={setFilasFinancieras}/>
-
-          {/* Gráfica mensajes recibidos por día */}
-          {metaDiarioF.length>0&&(()=>{
-            const filtrado=msgSucFiltro==="Todas"?metaDiarioF:metaDiarioF.filter(d=>d.sucursal===msgSucFiltro);
-            const porFecha={};filtrado.forEach(d=>{porFecha[d.fecha]=(porFecha[d.fecha]||0)+d.mensajes;});
-            const dias=Object.entries(porFecha).sort((a,b)=>a[0].localeCompare(b[0]));
-            const maxMsg=Math.max(...dias.map(d=>d[1]),1);
-            const totalMsgFilt=dias.reduce((s,d)=>s+d[1],0);
-            return<div className="glass" style={{padding:"24px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-                <div>
-                  <div style={{fontSize:"11px",letterSpacing:"2px",color:T.sub}}>MENSAJES RECIBIDOS POR DÍA</div>
-                  <div style={{fontSize:"20px",fontWeight:700,color:"#a855f7",marginTop:"4px"}}>{fmtN(totalMsgFilt)} <span style={{fontSize:"12px",fontWeight:400,color:T.sub}}>mensajes · {msgSucFiltro==="Todas"?"todas las sucursales":msgSucFiltro}</span></div>
-                </div>
-                <select value={msgSucFiltro} onChange={e=>setMsgSucFiltro(e.target.value)} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"8px 32px 8px 12px",color:light?"#1a1a2e":"#fff",fontSize:"12px",fontFamily:"'Albert Sans',sans-serif",outline:"none",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
-                  <option value="Todas" style={{background:"#22264A"}}>Todas las sucursales</option>
-                  {sucNames.map(s=><option key={s} value={s} style={{background:"#22264A"}}>{s}</option>)}
-                </select>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"160px"}}>
-                {dias.map(([f,m])=>{const p=m/maxMsg;return<div key={f} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
-                  <div style={{fontSize:"9px",fontWeight:600,color:"#a855f7",marginBottom:"4px"}}>{m}</div>
-                  <div style={{width:"100%",maxWidth:"32px",height:`${Math.max(p*100,4)}%`,background:"linear-gradient(180deg,#a855f7,#7c3aed)",borderRadius:"4px 4px 0 0",transition:"height 0.3s"}}/>
-                  <div style={{fontSize:"8px",color:T.faint,marginTop:"4px"}}>{new Date(f+"T12:00:00").toLocaleDateString("es-MX",{weekday:"narrow",day:"numeric"})}</div>
-                </div>;})}
-              </div>
-              {msgSucFiltro==="Todas"&&<div style={{display:"flex",gap:"12px",marginTop:"12px",justifyContent:"center",flexWrap:"wrap"}}>
-                {sucNames.map(s=>{const t=metaDiarioF.filter(d=>d.sucursal===s).reduce((a,d)=>a+d.mensajes,0);return t>0?<div key={s} style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:T.muted,cursor:"pointer"}} onClick={()=>setMsgSucFiltro(s)}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[s]}}/>{s}: {t}</div>:null;})}
-              </div>}
-            </div>;
-          })()}
         </div>}
 
         {/* ═══ SUCURSALES — tabla expandida ═══ */}
@@ -6562,6 +6595,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ META ADS ═══ */}
         {tab==="meta"&&<div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          <div style={{display:"flex",gap:"8px"}}>
+            {[["resumen","Resumen"],["rendimiento","Rendimiento"]].map(([k,l])=><button key={k} onClick={()=>setMetaSub(k)} style={{fontSize:"12px",padding:"6px 16px",borderRadius:"99px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,color:metaSub===k?"#fff":T.muted,background:metaSub===k?"#2721E8":"transparent",border:`1px solid ${metaSub===k?"#2721E8":T.div}`}}>{l}</button>)}
+          </div>
+          {metaSub==="rendimiento"&&<RendimientoMeta mes={mesSel} usuario={session?.usuario}/>}
+          {metaSub==="resumen"&&<>
           {/* Barra de acciones */}
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
             {loadingMetaDisplay
@@ -6748,6 +6786,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           {!loadingMetaDisplay&&!metaDisplay&&!metaErrorDisplay&&<div style={{textAlign:"center",padding:"60px 32px",color:T.faint,fontSize:"13px"}}>Sin datos para este período</div>}
           {!loadingMetaDisplay&&metaErrorDisplay&&<div style={{textAlign:"center",padding:"32px",color:"#ff6b6b",background:"rgba(255,80,80,0.05)",borderRadius:"12px",border:"1px solid rgba(255,80,80,0.2)"}}><div style={{fontSize:"16px",marginBottom:"8px"}}>⚠️ {metaErrorDisplay}</div></div>}
           </div>{/* /loading wrapper */}
+          </>}
         </div>}
 
         {/* ═══ VER POS ═══ */}
