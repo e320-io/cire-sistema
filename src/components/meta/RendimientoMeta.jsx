@@ -70,7 +70,7 @@ function Dona({ titulo, partes, total, formato, T }) {
 }
 
 // Mensajes de hoy hora por hora, apilados por sucursal. filas: [{ hora, sucursal, gasto, mensajes }]
-function PorHora({ filas, cargando, T }) {
+function PorHora({ filas, cargando, T, verMontos }) {
   const [hover, setHover] = useState(null);
   const horaActual = parseInt(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City", hour: "numeric", hour12: false }), 10) % 24;
   const horas = Array.from({ length: horaActual + 1 }, (_, h) => h);
@@ -139,7 +139,7 @@ function PorHora({ filas, cargando, T }) {
                   </div>
                 ))}
                 <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", marginTop: "6px", paddingTop: "6px" }}><span>Total</span><b>{Math.round(tot(hover))}</b></div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.6)", fontSize: "11px" }}><span>Gasto</span><span>${Math.round(gastoH(hover))}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.6)", fontSize: "11px" }}><span>Gasto</span><span>{verMontos ? "$" + Math.round(gastoH(hover)) : "•••••"}</span></div>
               </div>
             );
           })()}
@@ -166,6 +166,8 @@ export default function RendimientoMeta({ mes, usuario }) {
   const [modal, setModal] = useState(false);
   const [tabla, setTabla] = useState(false);
   const [modo, setModo] = useState("mes"); // "mes" | "hoy"
+  const [verMontos, setVerMontos] = useState(false); // dinero (gasto, cobrado, ROI) oculto al abrir; los mensajes siempre se ven
+  const M = (x) => (verMontos ? x : "•••••");
   const [horas, setHoras] = useState([]); // mensajes de hoy por hora y sucursal
   const [graficos, setGraficos] = useState(() => new Set()); // sucursales con la vista de gráfico abierta
   const alternar = (s) => setGraficos((g) => { const n = new Set(g); n.has(s) ? n.delete(s) : n.add(s); return n; });
@@ -250,6 +252,9 @@ export default function RendimientoMeta({ mes, usuario }) {
         <button className="btn-ghost" style={{ fontSize: "11px", padding: "6px 12px" }} onClick={cargar} disabled={cargando}>↻ Sincronizar</button>
         <button onClick={() => setModal(true)} style={{ fontSize: "11px", padding: "6px 14px", borderRadius: "8px", border: "1px solid rgba(39,33,232,0.5)", background: "rgba(39,33,232,0.1)", color: "#2721E8", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>+ Registrar venta</button>
         <button onClick={() => setTabla(true)} className="btn-ghost" style={{ fontSize: "11px", padding: "6px 14px" }} title="Ver y editar las ventas día por día">📋 Ventas ({ventas.length})</button>
+        <button className="btn-ghost" onClick={() => setVerMontos((x) => !x)} title={verMontos ? "Ocultar montos" : "Mostrar montos"} aria-label={verMontos ? "Ocultar montos" : "Mostrar montos"} style={{ padding: "5px 10px", display: "flex", alignItems: "center" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />{!verMontos && <line x1="3" y1="3" x2="21" y2="21" />}</svg>
+        </button>
         <span style={{ fontSize: "12px", color: T.sub, textTransform: "capitalize" }}>{cargando ? "Leyendo anuncios desde Meta…" : `${modo === "hoy" ? "Hoy, " + new Date(hoy() + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "long" }) : mesTxt} · ${t.anuncios} anuncios con gasto`}</span>
       </div>
 
@@ -262,19 +267,19 @@ export default function RendimientoMeta({ mes, usuario }) {
         </div>
       ))}
 
-      {modo === "hoy" && <PorHora filas={horas} cargando={cargando} T={T} />}
+      {modo === "hoy" && <PorHora filas={horas} cargando={cargando} T={T} verMontos={verMontos} />}
 
       {!cargando && ads.length === 0 && errores.length === 0 && <div style={{ textAlign: "center", padding: "50px", color: T.faint, fontSize: "13px" }}>Sin anuncios con gasto en este periodo.</div>}
 
       {ads.length > 0 && <>
         {/* Frase + KPIs */}
         <div className="glass" style={{ padding: "20px 24px", fontSize: "14px", lineHeight: 1.6, color: T.muted }}>
-          Se gastaron <b style={{ color: T.text }}>{fmt(t.gasto)}</b> y llegaron <b style={{ color: T.text }}>{fmtN(Math.round(t.mensajes))}</b> mensajes de WhatsApp: <b style={{ color: T.text }}>{$2(t.costoMensaje)}</b> por mensaje.
-          {t.mejor && <> El servicio con mensajes más baratos es <b style={{ color: "#10b981" }}>{t.mejor.servicio}</b> ({$2(t.mejor.costoMensaje)})</>}
-          {t.peor && <> y el más caro es <b style={{ color: "#ff6b6b" }}>{t.peor.servicio}</b> ({$2(t.peor.costoMensaje)})</>}{t.mejor && "."}
+          {verMontos ? <>Se gastaron <b style={{ color: T.text }}>{fmt(t.gasto)}</b> y llegaron</> : <>Llegaron</>} <b style={{ color: T.text }}>{fmtN(Math.round(t.mensajes))}</b> mensajes de WhatsApp{verMontos ? <>: <b style={{ color: T.text }}>{$2(t.costoMensaje)}</b> por mensaje.</> : "."}
+          {verMontos && t.mejor && <> El servicio con mensajes más baratos es <b style={{ color: "#10b981" }}>{t.mejor.servicio}</b> ({$2(t.mejor.costoMensaje)})</>}
+          {verMontos && t.peor && <> y el más caro es <b style={{ color: "#ff6b6b" }}>{t.peor.servicio}</b> ({$2(t.peor.costoMensaje)})</>}{verMontos && t.mejor && "."}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "14px" }}>
-          {[["GASTO", fmt(t.gasto), "#f97316"], ["MENSAJES", fmtN(Math.round(t.mensajes)), "#a855f7"], ["COSTO POR MENSAJE", $2(t.costoMensaje), "#49B8D3"], ["VENTAS REGISTRADAS", fmtN(tv.n), "#10b981"], ["COBRADO (REAL)", fmt(tv.real), "#10b981"], ["ESPERADO", fmt(tv.esp), "#49B8D3"], ["ROI REAL", x2(roi(tv.real, t.gasto)), "#10b981"], ["ROI ESPERADO", x2(roi(tv.esp, t.gasto)), "#49B8D3"]].map(([l, v, c]) => (
+          {[["GASTO", M(fmt(t.gasto)), "#f97316"], ["MENSAJES", fmtN(Math.round(t.mensajes)), "#a855f7"], ["COSTO POR MENSAJE", M($2(t.costoMensaje)), "#49B8D3"], ["VENTAS REGISTRADAS", fmtN(tv.n), "#10b981"], ["COBRADO (REAL)", M(fmt(tv.real)), "#10b981"], ["ESPERADO", M(fmt(tv.esp)), "#49B8D3"], ["ROI REAL", M(x2(roi(tv.real, t.gasto))), "#10b981"], ["ROI ESPERADO", M(x2(roi(tv.esp, t.gasto))), "#49B8D3"]].map(([l, v, c]) => (
             <div key={l} className="kpi"><div style={{ fontSize: "10px", letterSpacing: "2px", color: T.sub, marginBottom: "10px" }}>{l}</div><div style={{ fontSize: "26px", fontWeight: 700, color: c }}>{v}</div></div>
           ))}
         </div>
@@ -294,13 +299,13 @@ export default function RendimientoMeta({ mes, usuario }) {
                     <span style={{ fontSize: "14px", fontWeight: 700, color: COLORES[s] }}>{s}</span>
                     <button className="btn-ghost" style={{ fontSize: "11px", padding: "4px 10px" }} onClick={() => alternar(s)}>{graficos.has(s) ? "Ver tabla" : "Ver gráfico"}</button>
                   </div>
-                  <div style={{ fontSize: "12px", color: T.sub, margin: "2px 0 10px" }}><b style={{ color: T.text }}>{fmtN(Math.round(tot.mensajes))}</b> mensajes · <b style={{ color: T.text }}>{fmt(Math.round(tot.gasto))}</b> gastados</div>
+                  <div style={{ fontSize: "12px", color: T.sub, margin: "2px 0 10px" }}><b style={{ color: T.text }}>{fmtN(Math.round(tot.mensajes))}</b> mensajes{verMontos && <> · <b style={{ color: T.text }}>{fmt(Math.round(tot.gasto))}</b> gastados</>}</div>
                   {(() => { const v = vSuc(s); return <div style={{ fontSize: "12px", color: T.sub, margin: "-6px 0 10px", lineHeight: 1.6 }}>
-                    <b style={{ color: T.text }}>{v.n}</b> ventas · cobrado <b style={{ color: T.text }}>{fmt(v.real)}</b> · esperado <b style={{ color: T.text }}>{fmt(v.esp)}</b><br />
-                    ROI real <b style={{ color: v.real > 0 ? "#10b981" : T.text }}>{x2(roi(v.real, tot.gasto))}</b> · ROI esperado <b style={{ color: v.esp > 0 ? "#49B8D3" : T.text }}>{x2(roi(v.esp, tot.gasto))}</b></div>; })()}
+                    <b style={{ color: T.text }}>{v.n}</b> ventas · cobrado <b style={{ color: T.text }}>{M(fmt(v.real))}</b> · esperado <b style={{ color: T.text }}>{M(fmt(v.esp))}</b><br />
+                    ROI real <b style={{ color: v.real > 0 ? "#10b981" : T.text }}>{M(x2(roi(v.real, tot.gasto)))}</b> · ROI esperado <b style={{ color: v.esp > 0 ? "#49B8D3" : T.text }}>{M(x2(roi(v.esp, tot.gasto)))}</b></div>; })()}
                   {graficos.has(s) ? (
                     <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-                      <Dona T={T} titulo="% DEL GASTO" partes={filas.map((f) => ({ nombre: f.servicio, valor: f.gasto }))} total={tot.gasto} formato={(v) => fmt(Math.round(v))} />
+                      <Dona T={T} titulo="% DEL GASTO" partes={filas.map((f) => ({ nombre: f.servicio, valor: f.gasto }))} total={tot.gasto} formato={(v) => M(fmt(Math.round(v)))} />
                       <Dona T={T} titulo="% DE MENSAJES" partes={filas.map((f) => ({ nombre: f.servicio, valor: f.mensajes }))} total={tot.mensajes} formato={(v) => fmtN(Math.round(v))} />
                     </div>
                   ) : (
@@ -311,8 +316,8 @@ export default function RendimientoMeta({ mes, usuario }) {
                       <tr key={f.servicio}>
                         <td style={{ ...td, ...tl, padding: "8px 4px", overflow: "hidden", textOverflow: "ellipsis" }} title={f.servicio}>{f.servicio}<Barra v={f.gasto} max={maxG} c={COLORES[s]} />
 </td>
-                        <td style={{ ...td, padding: "8px 4px" }}>{fmtN(Math.round(f.mensajes))}</td><td style={{ ...td, padding: "8px 4px" }}>{fmt(Math.round(f.gasto))}</td><td style={{ ...td, padding: "8px 4px" }}>{f.costoMensaje == null ? "—" : `$${Math.round(f.costoMensaje)}`}</td>
-                        {(() => { const v = vSucServ(s, f.servicio); const tip = v.n === 0 ? "Sin ventas registradas" : `${v.n} ${v.n === 1 ? "venta" : "ventas"} · cobrado ${fmt(v.real)} · esperado ${fmt(v.esp)}`; return <><td style={{ ...td, padding: "8px 4px", fontWeight: v.real > 0 ? 700 : 400, color: v.real > 0 ? "#10b981" : T.faint }} title={tip}>{x2(roi(v.real, f.gasto))}</td><td style={{ ...td, padding: "8px 4px", fontWeight: v.esp > 0 ? 700 : 400, color: v.esp > 0 ? "#49B8D3" : T.faint }} title={tip}>{x2(roi(v.esp, f.gasto))}</td></>; })()}
+                        <td style={{ ...td, padding: "8px 4px" }}>{fmtN(Math.round(f.mensajes))}</td><td style={{ ...td, padding: "8px 4px" }}>{M(fmt(Math.round(f.gasto)))}</td><td style={{ ...td, padding: "8px 4px" }}>{f.costoMensaje == null ? "—" : M(`$${Math.round(f.costoMensaje)}`)}</td>
+                        {(() => { const v = vSucServ(s, f.servicio); const tip = !verMontos ? "" : v.n === 0 ? "Sin ventas registradas" : `${v.n} ${v.n === 1 ? "venta" : "ventas"} · cobrado ${fmt(v.real)} · esperado ${fmt(v.esp)}`; return <><td style={{ ...td, padding: "8px 4px", fontWeight: v.real > 0 ? 700 : 400, color: v.real > 0 ? "#10b981" : T.faint }} title={tip}>{M(x2(roi(v.real, f.gasto)))}</td><td style={{ ...td, padding: "8px 4px", fontWeight: v.esp > 0 ? 700 : 400, color: v.esp > 0 ? "#49B8D3" : T.faint }} title={tip}>{M(x2(roi(v.esp, f.gasto)))}</td></>; })()}
                       </tr>
                     ))}</tbody>
                   </table>
@@ -329,7 +334,7 @@ export default function RendimientoMeta({ mes, usuario }) {
             {titulo("POR CUENTA PUBLICITARIA")}
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr><th style={{ ...th, ...tl }}>CUENTA</th><th style={th}>GASTO</th><th style={th}>MENSAJES</th><th style={th}>C/MENSAJE</th><th style={th}>ANUNCIOS</th></tr></thead>
-              <tbody>{d.cuentas.map((f) => <tr key={f.cuenta}><td style={{ ...td, ...tl }}>{f.cuenta}</td><td style={td}>{fmt(f.gasto)}</td><td style={td}>{fmtN(Math.round(f.mensajes))}</td><td style={td}>{$2(f.costoMensaje)}</td><td style={td}>{f.anuncios}</td></tr>)}</tbody>
+              <tbody>{d.cuentas.map((f) => <tr key={f.cuenta}><td style={{ ...td, ...tl }}>{f.cuenta}</td><td style={td}>{M(fmt(f.gasto))}</td><td style={td}>{fmtN(Math.round(f.mensajes))}</td><td style={td}>{M($2(f.costoMensaje))}</td><td style={td}>{f.anuncios}</td></tr>)}</tbody>
             </table>
           </div>
           <div className="glass" style={{ padding: "20px", overflowX: "auto" }}>
@@ -338,9 +343,9 @@ export default function RendimientoMeta({ mes, usuario }) {
               <thead><tr><th style={{ ...th, ...tl }}>SERVICIO</th><th style={th}>GASTO</th><th style={th}>MENSAJES</th><th style={th}>C/MENSAJE</th><th style={th}>% GASTO</th><th style={th}>% MSJ</th><th style={th}>VENTAS</th><th style={th}>COBRADO</th><th style={th}>ESPERADO</th><th style={th}>ROI REAL</th><th style={th}>ROI ESP.</th></tr></thead>
               <tbody>{d.servicios.map((f) => (
                 <tr key={f.servicio}>
-                  <td style={{ ...td, ...tl }}>{f.servicio}</td><td style={td}>{fmt(f.gasto)}</td><td style={td}>{fmtN(Math.round(f.mensajes))}</td><td style={td}>{$2(f.costoMensaje)}</td>
+                  <td style={{ ...td, ...tl }}>{f.servicio}</td><td style={td}>{M(fmt(f.gasto))}</td><td style={td}>{fmtN(Math.round(f.mensajes))}</td><td style={td}>{M($2(f.costoMensaje))}</td>
                   <td style={td}>{t.gasto > 0 ? Math.round((f.gasto / t.gasto) * 100) : 0}%</td><td style={td}>{t.mensajes > 0 ? Math.round((f.mensajes / t.mensajes) * 100) : 0}%</td>
-                  {(() => { const v = vServ(f.servicio); return <><td style={td}>{v.n}</td><td style={td}>{fmt(v.real)}</td><td style={td}>{fmt(v.esp)}</td><td style={td}>{x2(roi(v.real, f.gasto))}</td><td style={td}>{x2(roi(v.esp, f.gasto))}</td></>; })()}
+                  {(() => { const v = vServ(f.servicio); return <><td style={td}>{v.n}</td><td style={td}>{M(fmt(v.real))}</td><td style={td}>{M(fmt(v.esp))}</td><td style={td}>{M(x2(roi(v.real, f.gasto)))}</td><td style={td}>{M(x2(roi(v.esp, f.gasto)))}</td></>; })()}
                 </tr>
               ))}</tbody>
             </table>
@@ -361,7 +366,7 @@ export default function RendimientoMeta({ mes, usuario }) {
               <tbody>{filtrados.map((a) => (
                 <tr key={a.adId}>
                   <td style={{ ...td, ...tl }}>{a.sucursal}</td><td style={{ ...td, ...tl }}>{a.servicio}</td><td style={{ ...td, ...tl, maxWidth: "320px", overflow: "hidden", textOverflow: "ellipsis" }} title={a.anuncio}>{a.anuncio}</td>
-                  <td style={td}>{fmt(a.gasto)}</td><td style={td}>{fmtN(a.mensajes)}</td><td style={td}>{$2(a.costoMensaje)}</td>
+                  <td style={td}>{M(fmt(a.gasto))}</td><td style={td}>{fmtN(a.mensajes)}</td><td style={td}>{M($2(a.costoMensaje))}</td>
                   <td style={{ ...td, fontWeight: VCOLOR[a.veredicto] ? 700 : 400, color: VCOLOR[a.veredicto] || T.sub }}>{a.veredicto}</td>
                 </tr>
               ))}</tbody>

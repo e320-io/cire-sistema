@@ -11,12 +11,15 @@ const diaLargo = (f) => new Date(f + "T12:00:00").toLocaleDateString("es-MX", { 
 
 // Tabla de ventas por anuncio del mes, día por día. Cada renglón se edita en línea y se guarda por separado.
 // sucursales: a cuáles se puede mover una venta (recepción solo ve la suya).
-export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursales = SUCURSALES }) {
+export default function VentasTabla({ ventas: todas, mes, onCambio, onCerrar, sucursales = SUCURSALES }) {
   const { T: T0, light } = useT();
   const T = { ...T0, text: light ? "#1a1f3c" : "#fff", bg: T0.dropBg }; // el tema base no define text ni bg
   const [drafts, setDrafts] = useState({}); // id -> campos modificados
   const [msg, setMsg] = useState("");
   const [guardando, setGuardando] = useState(null);
+  const [filtroSuc, setFiltroSuc] = useState("todas");
+  const [verMontos, setVerMontos] = useState(false); // montos ocultos al abrir
+  const ventas = useMemo(() => filtroSuc === "todas" ? todas : todas.filter((v) => v.sucursal === filtroSuc), [todas, filtroSuc]);
 
   const val = (v, k) => drafts[v.id]?.[k] ?? v[k];
   const cambiar = (v, k, x) => setDrafts((d) => {
@@ -77,6 +80,7 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursale
   const inp = { boxSizing: "border-box", width: "100%", padding: "5px 6px", borderRadius: "6px", border: `1px solid ${T.div}`, background: "transparent", color: T.text, fontFamily: "inherit", fontSize: "12px" };
   const th = { padding: "8px 6px", fontSize: "10px", letterSpacing: "1px", color: T.faint, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap" };
   const tdc = { padding: "6px 4px", verticalAlign: "middle" };
+  const oculto = "$•••••";
   const kpi = (l, v, c) => <div style={{ padding: "8px 14px", borderRadius: "10px", border: `1px solid ${T.div}` }}><div style={{ fontSize: "10px", letterSpacing: "1.5px", color: T.sub }}>{l}</div><div style={{ fontSize: "17px", fontWeight: 700, color: c }}>{v}</div></div>;
   const mesTxt = new Date(mes + "-01T12:00:00").toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 
@@ -93,8 +97,19 @@ export default function VentasTabla({ ventas, mes, onCambio, onCerrar, sucursale
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", margin: "14px 0" }}>
-          {kpi("VENTAS", tot.n, T.text)}{kpi("COBRADO", fmt(tot.cobrado), "#10b981")}{kpi("ESPERADO", fmt(tot.esperado), "#49B8D3")}
-          {kpi("POR COBRAR", fmt(tot.esperado - tot.cobrado), "#c99a00")}{kpi("PENDIENTES", tot.pendientes, "#c99a00")}{kpi("NO VINIERON", tot.noVino, "#ff6b6b")}
+          <select value={filtroSuc} onChange={(e) => setFiltroSuc(e.target.value)} style={{ ...inp, width: "auto", alignSelf: "stretch", padding: "8px 12px", borderRadius: "10px", fontWeight: 600 }}>
+            <option value="todas">Todas las sucursales</option>
+            {sucursales.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {kpi("VENTAS", tot.n, T.text)}{kpi("COBRADO", verMontos ? fmt(tot.cobrado) : oculto, "#10b981")}{kpi("ESPERADO", verMontos ? fmt(tot.esperado) : oculto, "#49B8D3")}
+          {kpi("POR COBRAR", verMontos ? fmt(tot.esperado - tot.cobrado) : oculto, "#c99a00")}
+          <button className="btn-ghost" onClick={() => setVerMontos((x) => !x)} title={verMontos ? "Ocultar montos" : "Mostrar montos"} aria-label={verMontos ? "Ocultar montos" : "Mostrar montos"} style={{ alignSelf: "stretch", padding: "0 12px", display: "flex", alignItems: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+              {!verMontos && <line x1="3" y1="3" x2="21" y2="21" />}
+            </svg>
+          </button>
+          {kpi("PENDIENTES", tot.pendientes, "#c99a00")}{kpi("NO VINIERON", tot.noVino, "#ff6b6b")}
         </div>
 
         <div style={{ overflow: "auto", flex: 1 }}>
