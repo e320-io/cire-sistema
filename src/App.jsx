@@ -8,7 +8,7 @@ import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
-import { leerMeta } from "./lib/metaCuentas.js";
+import { leerMeta, esRemarketing } from "./lib/metaCuentas.js";
 import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
 import RegistrarVentaRecepcion from "./components/meta/RegistrarVentaRecepcion.jsx";
 import { marginBand } from "./components/finanzas/utilidad.js";
@@ -5841,6 +5841,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const fraccionSucursales=(r,fecha)=>{
     if(r._fraccion)return r._fraccion; // desde nov 2026: reparto ya calculado por cuenta publicitaria (ver lib/metaCuentas.js)
     const nm=(r.adset_name||"").toLowerCase(),cn=(r.campaign_name||"").toLowerCase(),comb=nm+" "+cn;
+    if(esRemarketing(r.campaign_name,r.adset_name))return repartoCinco(); // remarketing: ÷5 siempre
     // Estos ids son únicos y solo existen en campañas de julio 2026, así que no dependen de `fecha`
     if(JULIO26_VALLE_ADSET_IDS.has(String(r.adset_id)))return{Valle:1};
     const esJulio2026=fecha&&fecha.slice(0,7)==="2026-07";
@@ -5862,6 +5863,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     const entries=Object.entries(frac);
     if(entries.length===0)return"Sin asignar";
     if(entries.length===1)return entries[0][0];
+    if(esRemarketing(r.campaign_name,r.adset_name))return"Remarketing · 5 sucursales (÷5)";
     if(entries.length===SUCURSALES_NAMES.length)return"5 sucursales (÷5)";
     return entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(" + ");
   };
@@ -6620,9 +6622,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
             const periodoDisp=isCustomPeriod?customLabel:new Date(mY,mM-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
             const porSucMes=sucNames.map(n=>{
               const ms=metaDisplay.porSucursal?.[n]?.mensajes||0;const sp=metaDisplay.porSucursal?.[n]?.spend||0;
-              let spNueva=0,spAnterior=0;
-              resumenCampanasDisplay.forEach(r=>{const aporte=r.porSucursal?.[n];if(!aporte)return;if(esCampanaNueva(r.campania))spNueva+=aporte.spend;else spAnterior+=aporte.spend;});
-              return{nombre:n,mensajes:ms,spend:sp,spNueva,spAnterior};
+              let spNueva=0,spAnterior=0,spRemarketing=0,msRemarketing=0;
+              resumenCampanasDisplay.forEach(r=>{const aporte=r.porSucursal?.[n];if(!aporte)return;if(esRemarketing(r.campania,r.adset)){spRemarketing+=aporte.spend;msRemarketing+=aporte.mensajes;}if(esCampanaNueva(r.campania))spNueva+=aporte.spend;else spAnterior+=aporte.spend;});
+              return{nombre:n,mensajes:ms,spend:sp,spNueva,spAnterior,spRemarketing,msRemarketing};
             });
             const maxSpendMes=Math.max(...porSucMes.map(s=>s.spend),1);
             const invMes=filtro?filtro.reduce((s,n)=>s+(metaDisplay.porSucursal?.[n]?.spend||0),0):metaDisplay.spend;
@@ -6652,10 +6654,29 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                       {s.spNueva>0&&<div style={{width:`${(s.spNueva/s.spend)*100}%`,background:"#f97316"}}/>}
                       {s.spAnterior>0&&<div style={{width:`${(s.spAnterior/s.spend)*100}%`,background:"#94a3b8"}}/>}
                     </div>}
+                    {s.spRemarketing>0&&<div style={{fontSize:"10px",color:"#ec4899",marginTop:"3px",fontWeight:600}}>incl. {fmt(s.spRemarketing)} remarketing</div>}
                     {(s.spNueva>0&&s.spAnterior>0)&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px",lineHeight:"1.5"}}>{fmt(s.spNueva)} nuevas<br/>{fmt(s.spAnterior)} anteriores</div>}
                   </div>
                 </div>)}
               </div>
+              {/* Remarketing: se divide en partes iguales entre las 5 sucursales */}
+              {(()=>{
+                const rm=resumenCampanasDisplay.filter(r=>esRemarketing(r.campania,r.adset));
+                if(!rm.length)return null;
+                const tot=rm.reduce((a,r)=>a+r.spend,0),msT=rm.reduce((a,r)=>a+r.mensajes,0);
+                return<div className="glass" style={{overflow:"hidden"}}>
+                  <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"8px"}}>
+                    <div style={{fontSize:"11px",letterSpacing:"2px",color:"#ec4899"}}>REMARKETING · REPARTIDO ENTRE LAS 5 SUCURSALES (÷5)</div>
+                    <div style={{fontSize:"13px",fontWeight:700,color:"#f97316"}}>{fmt(tot)} <span style={{fontSize:"11px",fontWeight:400,color:T.sub}}>· {fmtN(Math.round(msT))} msgs en total</span></div>
+                  </div>
+                  <div style={{padding:"10px 20px",fontSize:"11px",color:T.faint,borderBottom:"1px solid rgba(255,255,255,0.04)"}}>{[...new Set(rm.map(r=>r.campania))].join(" · ")}</div>
+                  {sucNames.map(n=>{const sp=rm.reduce((a,r)=>a+(r.porSucursal?.[n]?.spend||0),0),ms=rm.reduce((a,r)=>a+(r.porSucursal?.[n]?.mensajes||0),0);return<div key={n} style={{display:"grid",gridTemplateColumns:"1fr 100px 110px",padding:"10px 20px",borderBottom:"1px solid rgba(255,255,255,0.04)",fontSize:"13px"}}>
+                    <span style={{display:"flex",alignItems:"center",gap:"8px",fontWeight:600}}><div style={{width:"8px",height:"8px",borderRadius:"2px",background:COLORES[n]}}/>{n}</span>
+                    <span style={{textAlign:"right",color:T.sub,fontSize:"12px"}}>{fmtN(Math.round(ms))} msgs</span>
+                    <span style={{textAlign:"right",color:"#f97316",fontWeight:600}}>{fmt(sp)}</span>
+                  </div>;})}
+                </div>;
+              })()}
               {/* Resumen colapsable por sucursal: qué campañas/ad sets aportaron a cada una */}
               {resumenCampanasDisplay.length>0&&(()=>{
                 const sucursalesConDatos=porSucMes.filter(s=>s.spend>0||s.mensajes>0).sort((a,b)=>b.spend-a.spend);
@@ -6674,9 +6695,10 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                         </span>
                       </div>
                       {abierta&&<div style={{padding:"0 20px 12px 32px"}}>
-                        {aportes.map((a,i)=>{const nueva=esCampanaNueva(a.campania);return<div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px 90px",gap:"10px",padding:"7px 0",fontSize:"12px",borderTop:i>0?"1px solid rgba(255,255,255,0.03)":"none"}}>
+                        {aportes.map((a,i)=>{const nueva=esCampanaNueva(a.campania);const rmk=esRemarketing(a.campania,a.adset);return<div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px 90px",gap:"10px",padding:"7px 0",fontSize:"12px",borderTop:i>0?"1px solid rgba(255,255,255,0.03)":"none"}}>
                           <span style={{color:T.muted}}>
                             <span style={{fontSize:"8px",fontWeight:700,letterSpacing:"0.5px",padding:"1px 5px",borderRadius:"4px",marginRight:"6px",background:nueva?"rgba(249,115,22,0.15)":"rgba(148,163,184,0.15)",color:nueva?"#f97316":"#94a3b8"}}>{nueva?"NUEVA":"ANTERIOR"}</span>
+                            {rmk&&<span style={{fontSize:"8px",fontWeight:700,letterSpacing:"0.5px",padding:"1px 5px",borderRadius:"4px",marginRight:"6px",background:"rgba(236,72,153,0.15)",color:"#ec4899"}}>REMARKETING</span>}
                             {a.campania}<br/><span style={{fontSize:"11px",color:T.faint}}>{a.adset}</span>
                           </span>
                           <span style={{color:T.sub,fontSize:"11px"}}>{a.reparto}</span>
