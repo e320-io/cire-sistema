@@ -6143,6 +6143,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     const fmtNum=(n)=>new Intl.NumberFormat("es-MX").format(n||0);
     const colorMap={Coapa:"#2721E8",Valle:"#49B8D3",Oriente:"#a855f7",Polanco:"#f97316",Metepec:"#10b981"};
     const porSucAll=SUCURSALES_NAMES.map(n=>{const sp=dataExp.porSucursal?.[n]?.spend||0;const ms=dataExp.porSucursal?.[n]?.mensajes||0;return{nombre:n,spend:sp,mensajes:ms,cpm:ms>0?sp/ms:0};});
+    const rmkSuc=(n)=>resumenCampanasDisplay.filter(r=>esRemarketing(r.campania,r.adset)).reduce((a,r)=>a+(r.porSucursal?.[n]?.spend||0),0);
+    porSucAll.forEach(x=>{x.rmk=rmkSuc(x.nombre);x.propias=x.spend-x.rmk;});
+    const totalRmk=porSucAll.reduce((a,x)=>a+x.rmk,0);
     const sorted=[...porSucAll].filter(s=>s.spend>0||s.mensajes>0).sort((a,b)=>b.spend-a.spend);
     const totalSpend=dataExp.spend;const totalMsgs=dataExp.mensajes;const totalCPM=totalMsgs>0?totalSpend/totalMsgs:0;
     const maxSpend=Math.max(...sorted.map(s=>s.spend),1);
@@ -6207,14 +6210,15 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     </div>
     <div class="section-title">Distribución por Sucursal — Base de Cobro</div>
     <table class="table"><thead><tr>
-      <th>Sucursal</th><th class="r">Inversión</th><th class="r">% del Total</th><th class="r">Mensajes</th><th class="r">Costo / Mensaje</th>
+      <th>Sucursal</th>${totalRmk>0?'<th class="r">Campañas propias</th><th class="r">+ Remarketing</th>':''}<th class="r">${totalRmk>0?'= Inversión total':'Inversión'}</th><th class="r">% del Total</th><th class="r">Mensajes</th><th class="r">Costo / Mensaje</th>
     </tr></thead><tbody>
     ${sorted.map(s=>{const pct=totalSpend>0?(s.spend/totalSpend*100):0;const color=colorMap[s.nombre]||"#2721E8";const barW=maxSpend>0?(s.spend/maxSpend*100):0;const cpmColor=s.cpm<totalCPM?"#10b981":s.cpm>totalCPM*1.5?"#ef4444":"#f97316";
-    return`<tr><td><div class="suc-name"><div class="suc-dot" style="background:${color}"></div>${s.nombre}</div><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${color}80"></div></div></td><td class="r"><strong>${fmtPeso(s.spend)}</strong></td><td class="r"><span class="pct-badge" style="background:${color}18;color:${color}">${pct.toFixed(1)}%</span></td><td class="r">${fmtNum(s.mensajes)}</td><td class="r" style="font-weight:700;color:${cpmColor}">${s.mensajes>0?fmtPeso(s.cpm):"—"}</td></tr>`;
+    return`<tr><td><div class="suc-name"><div class="suc-dot" style="background:${color}"></div>${s.nombre}</div><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${color}80"></div></div></td>${totalRmk>0?`<td class="r">${fmtPeso(s.propias)}</td><td class="r" style="color:#ec4899;font-weight:600">${fmtPeso(s.rmk)}</td>`:''}<td class="r"><strong>${fmtPeso(s.spend)}</strong></td><td class="r"><span class="pct-badge" style="background:${color}18;color:${color}">${pct.toFixed(1)}%</span></td><td class="r">${fmtNum(s.mensajes)}</td><td class="r" style="font-weight:700;color:${cpmColor}">${s.mensajes>0?fmtPeso(s.cpm):"—"}</td></tr>`;
     }).join("")}
     </tbody><tfoot><tr>
-      <td>TOTAL</td><td class="r">${fmtPeso(totalSpend)}</td><td class="r">100%</td><td class="r">${fmtNum(totalMsgs)}</td><td class="r">${fmtPeso(totalCPM)}</td>
+      <td>TOTAL</td>${totalRmk>0?`<td class="r">${fmtPeso(totalSpend-totalRmk)}</td><td class="r" style="color:#ec4899">${fmtPeso(totalRmk)}</td>`:''}<td class="r">${fmtPeso(totalSpend)}</td><td class="r">100%</td><td class="r">${fmtNum(totalMsgs)}</td><td class="r">${fmtPeso(totalCPM)}</td>
     </tr></tfoot></table>
+    ${totalRmk>0?`<div class="nota" style="background:#fdf2f8;border-color:#fbcfe8;color:#9d174d"><strong>La columna "Inversión total" ya incluye el remarketing.</strong> Inversión total = Campañas propias + Remarketing. El remarketing (${fmtPeso(totalRmk)} en el período) es una campaña compartida entre las 5 sucursales que se reparte con porcentajes fijos: ${Object.entries(repartoRemarketing()).map(([n,f])=>`${n} ${Math.round(f*100)}%`).join(" · ")}.</div>`:""}
     ${masEficiente&&menosEficiente&&masEficiente.nombre!==menosEficiente.nombre?`
     <div class="section-title">Análisis de Eficiencia · Costo por Mensaje</div>
     <div class="eff">
@@ -6654,7 +6658,11 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                       {s.spNueva>0&&<div style={{width:`${(s.spNueva/s.spend)*100}%`,background:"#f97316"}}/>}
                       {s.spAnterior>0&&<div style={{width:`${(s.spAnterior/s.spend)*100}%`,background:"#94a3b8"}}/>}
                     </div>}
-                    {s.spRemarketing>0&&<div style={{fontSize:"10px",color:"#ec4899",marginTop:"3px",fontWeight:600}}>incl. {fmt(s.spRemarketing)} remarketing</div>}
+                    {s.spRemarketing>0&&<div style={{fontSize:"10px",marginTop:"4px",lineHeight:"1.6",fontWeight:600}}>
+                      <div style={{color:T.sub}}>{fmt(s.spend-s.spRemarketing)} campañas propias</div>
+                      <div style={{color:"#ec4899"}}>+ {fmt(s.spRemarketing)} remarketing</div>
+                      <div style={{color:T.faint,fontWeight:400}}>= total ya incluye remarketing</div>
+                    </div>}
                     {(s.spNueva>0&&s.spAnterior>0)&&<div style={{fontSize:"9px",color:T.faint,marginTop:"3px",lineHeight:"1.5"}}>{fmt(s.spNueva)} nuevas<br/>{fmt(s.spAnterior)} anteriores</div>}
                   </div>
                 </div>)}
