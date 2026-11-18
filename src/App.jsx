@@ -6218,7 +6218,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     </tbody><tfoot><tr>
       <td>TOTAL</td>${totalRmk>0?`<td class="r">${fmtPeso(totalSpend-totalRmk)}</td><td class="r" style="color:#ec4899">${fmtPeso(totalRmk)}</td>`:''}<td class="r">${fmtPeso(totalSpend)}</td><td class="r">100%</td><td class="r">${fmtNum(totalMsgs)}</td><td class="r">${fmtPeso(totalCPM)}</td>
     </tr></tfoot></table>
-    ${totalRmk>0?`<div class="nota" style="background:#fdf2f8;border-color:#fbcfe8;color:#9d174d"><strong>La columna "Inversión total" ya incluye el remarketing.</strong> Inversión total = Campañas propias + Remarketing. El remarketing (${fmtPeso(totalRmk)} en el período) es una campaña compartida entre las 5 sucursales que se reparte con porcentajes fijos: ${Object.entries(repartoRemarketing()).map(([n,f])=>`${n} ${Math.round(f*100)}%`).join(" · ")}.</div>`:""}
+    ${totalRmk>0?`<div class="nota" style="background:#fdf2f8;border-color:#fbcfe8;color:#9d174d"><strong>La columna "Inversión total" ya incluye el remarketing.</strong> Inversión total = Campañas propias + Remarketing. El remarketing (${fmtPeso(totalRmk)} en el período) es una campaña compartida entre las 5 sucursales que está publicada en la Cuenta Publicitaria Principal.</div>`:""}
     ${masEficiente&&menosEficiente&&masEficiente.nombre!==menosEficiente.nombre?`
     <div class="section-title">Análisis de Eficiencia · Costo por Mensaje</div>
     <div class="eff">
