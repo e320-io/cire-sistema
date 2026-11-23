@@ -188,18 +188,18 @@ async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, antic
 }
 
 // ---------- Agendar cita nueva ----------
-type Servicio = { id: string; nombre: string; categoria: string; precio: number; duracionMin: number; tipo: string };
+type Servicio = { id: string; nombre: string; categoria: string; precio: number; duracionMin: number; tipo: string; incluye: string | null };
 const fila = (r: Record<string, unknown>): Servicio => {
   const nombre = String(r.nombre), tipo = detectTipo(nombre);
   return {
-    id: String(r.id), nombre, categoria: String(r.categoria), tipo,
+    id: String(r.id), nombre, categoria: String(r.categoria), tipo, incluye: r.incluye ? String(r.incluye) : null,
     precio: precioVigente(Number(r.precio) || 0, r.precio_promo == null ? null : Number(r.precio_promo), (r.promo_hasta as string) ?? null),
     duracionMin: duracionServicio(nombre, tipo, r.duracion_min == null ? null : Number(r.duracion_min)),
   };
 };
-const VALORACION: Servicio = { id: "valoracion", nombre: "Valoración", categoria: "Empieza aquí", precio: 0, duracionMin: TIPOS.valoracion.duracion, tipo: "valoracion" };
+const VALORACION: Servicio = { id: "valoracion", nombre: "Valoración", categoria: "Empieza aquí", precio: 0, duracionMin: TIPOS.valoracion.duracion, tipo: "valoracion", incluye: null };
 const aplica = (r: Record<string, unknown>, cfg: Cfg) => !Array.isArray(r.sucursales) || r.sucursales.some((x) => sinAcentos(String(x)) === sinAcentos(cfg.nombre));
-const COLS = "id,nombre,categoria,precio,precio_promo,promo_hasta,duracion_min,sucursales,orden";
+const COLS = "id,nombre,categoria,precio,precio_promo,promo_hasta,duracion_min,sucursales,orden,incluye";
 
 async function listarServicios(cfg: Cfg): Promise<Servicio[]> {
   const r = await sb(`catalogo?select=${COLS}&activo=eq.true&tipo=eq.servicio&agenda_en_linea=eq.true&order=orden`);
@@ -291,7 +291,7 @@ async function accion(b: Record<string, string>) {
       for (const sv of await listarServicios(cfg)) {
         let g = grupos.find((x) => x.categoria === sv.categoria);
         if (!g) grupos.push((g = { categoria: sv.categoria, items: [] }));
-        g.items.push({ id: sv.id, nombre: sv.nombre, precio: sv.precio, duracionMin: sv.duracionMin });
+        g.items.push({ id: sv.id, nombre: sv.nombre, precio: sv.precio, duracionMin: sv.duracionMin, incluye: sv.incluye });
       }
       return { grupos };
     }
