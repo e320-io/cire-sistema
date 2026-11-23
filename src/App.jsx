@@ -9,6 +9,7 @@ import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
 import VentasDiaMes from "./components/finanzas/VentasDiaMes.jsx";
+import ServicioPorAnio from "./components/finanzas/ServicioPorAnio.jsx";
 import { leerMeta, esRemarketing, repartoRemarketing } from "./lib/metaCuentas.js";
 import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
 import RegistrarVentaRecepcion from "./components/meta/RegistrarVentaRecepcion.jsx";
@@ -5334,6 +5335,85 @@ const GERENTES_SUC=(()=>{
 })();
 const ROL_BADGE={admin:{label:"Admin",c:"#a855f7"},duena_general:{label:"Dueña",c:"#f0c040"},socia:{label:"Gerente",c:"#f97316"},sucursal:{label:"POS",c:"#49B8D3"}};
 
+// ══════════════════════════════════════════════════════════════════════════════
+// USUARIOS — solo admin: poner contraseña nueva / restablecer a la inicial
+// ══════════════════════════════════════════════════════════════════════════════
+function AdminUsuarios(){
+  const{light,T}=useT();
+  const[recs,setRecs]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[editando,setEditando]=useState(null);
+  const[np,setNp]=useState("");
+  const[pedirCambio,setPedirCambio]=useState(true);
+  const[msg,setMsg]=useState(null);
+  const[busy,setBusy]=useState(false);
+
+  const cargar=async()=>{
+    setLoading(true);
+    const{data,error}=await supabase.from("system_users").select("id,username,email,must_change_password");
+    if(error)setMsg({ok:false,t:"No se pudo leer system_users: "+error.message});
+    const m={};(data||[]).forEach(r=>{m[r.username]=r;});
+    setRecs(m);setLoading(false);
+  };
+  useEffect(()=>{cargar();},[]);
+
+  const guardar=async(u)=>{
+    if(np.length<8){setMsg({ok:false,t:"La contraseña debe tener mínimo 8 caracteres"});return;}
+    setBusy(true);setMsg(null);
+    const hash=await hashPassword(np);
+    const existe=!!recs[u.usuario];
+    const{error}=existe
+      ?await supabase.from("system_users").update({password_hash:hash,must_change_password:pedirCambio,reset_code:null,reset_expires:null}).eq("username",u.usuario)
+      :await supabase.from("system_users").insert([{id:u.id,username:u.usuario,password_hash:hash,must_change_password:pedirCambio}]);
+    setBusy(false);
+    if(error){setMsg({ok:false,t:"Error al guardar: "+error.message});return;}
+    setMsg({ok:true,t:`Contraseña de ${u.nombre} actualizada${pedirCambio?" (tendrá que cambiarla al entrar)":""}.`});
+    setEditando(null);setNp("");cargar();
+  };
+
+  const restablecer=async(u)=>{
+    if(!confirm(`¿Restablecer a ${u.nombre} a su contraseña inicial? Se borrará su contraseña y correo de recuperación actuales.`))return;
+    setBusy(true);setMsg(null);
+    const{error}=await supabase.from("system_users").delete().eq("username",u.usuario);
+    setBusy(false);
+    if(error){setMsg({ok:false,t:"Error al restablecer: "+error.message});return;}
+    setMsg({ok:true,t:`${u.nombre} volvió a su contraseña inicial y deberá cambiarla al entrar.`});
+    cargar();
+  };
+
+  const lista=[...USUARIOS].sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  return(
+    <div className="glass" style={{padding:"20px"}}>
+      <div style={{fontSize:"15px",fontWeight:700,marginBottom:"4px"}}>🔑 Contraseñas de usuarios</div>
+      <div style={{fontSize:"12px",color:T.muted,marginBottom:"14px"}}>Pon una contraseña nueva a cualquier usuario, o restablécelo a su contraseña inicial. Las contraseñas actuales no se pueden ver (se guardan cifradas).</div>
+      {msg&&<div style={{fontSize:"12px",padding:"10px 12px",borderRadius:"8px",marginBottom:"12px",background:msg.ok?"rgba(16,185,129,0.12)":"rgba(239,68,68,0.12)",color:msg.ok?"#10b981":"#ef4444"}}>{msg.t}</div>}
+      {loading?<div style={{color:T.faint,fontSize:12}}>Cargando…</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+        {lista.map(u=>{
+          const r=recs[u.usuario];const badge=ROL_BADGE[u.rol]||{label:u.rol,c:"#fff"};const abierto=editando===u.usuario;
+          return(
+            <div key={u.usuario} style={{border:"1px solid "+(light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)"),borderRadius:"10px",padding:"10px 14px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+                <div style={{flex:"1 1 200px",minWidth:0}}>
+                  <div style={{fontSize:"13px",fontWeight:600}}>{u.nombre} <span style={{fontSize:"10px",padding:"2px 7px",borderRadius:"10px",background:badge.c+"22",color:badge.c,marginLeft:"6px"}}>{badge.label}</span></div>
+                  <div style={{fontSize:"11px",color:T.faint}}>{u.usuario} · {r?(r.must_change_password?"pendiente de cambiar contraseña":"cuenta activa"):"sin activar (contraseña inicial)"}{r?.email?` · ${r.email}`:""}</div>
+                </div>
+                <button className="btn-ghost" disabled={busy} onClick={()=>{setEditando(abierto?null:u.usuario);setNp("");setMsg(null);}} style={{fontSize:"11px"}}>{abierto?"Cancelar":"Nueva contraseña"}</button>
+                <button className="btn-ghost" disabled={busy||!r} onClick={()=>restablecer(u)} style={{fontSize:"11px",color:"#f59e0b",borderColor:"rgba(245,158,11,0.4)",opacity:r?1:0.4}}>Restablecer a inicial</button>
+              </div>
+              {abierto&&<div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap",marginTop:"10px"}}>
+                <input className="inp" type="text" autoFocus placeholder="Nueva contraseña (mín. 8 caracteres)" value={np} onChange={e=>setNp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar(u)} style={{padding:"9px 12px",fontSize:"13px",flex:"1 1 220px"}}/>
+                <label style={{fontSize:"11px",color:T.muted,display:"flex",alignItems:"center",gap:"6px"}}><input type="checkbox" checked={pedirCambio} onChange={e=>setPedirCambio(e.target.checked)}/>Pedir que la cambie al entrar</label>
+                <button className="btn-blue" disabled={busy} onClick={()=>guardar(u)} style={{fontSize:"12px",padding:"9px 16px"}}>{busy?"Guardando…":"Guardar"}</button>
+              </div>}
+            </div>
+          );
+        })}
+      </div>}
+    </div>
+  );
+}
+
 function Analitica(){
   const{light,T}=useT();
   const[logs,setLogs]=useState([]);
@@ -6294,7 +6374,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const esDuenaGeneral=!!sucursalesPropias;
-  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","importar","reparar","analitica","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot)).filter(t=>!(t==="catalogo"&&!puedeEditarCatalogo(session)));
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","importar","reparar","analitica","usuarios","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot)).filter(t=>!(t==="catalogo"&&!puedeEditarCatalogo(session)));
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>t!=="zettle"&&!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -6414,7 +6494,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],catalogo:["🏷","Catálogo"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],catalogo:["🏷","Catálogo"],finanzas:["💰","Finanzas"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],usuarios:["🔑","Usuarios"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -6522,6 +6602,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
           </div>
 
           <VentasDiaMes mesY={mesY} mesM={mesM} hoy={hoy()}/>
+
+          <ServicioPorAnio mesY={mesY} mesM={mesM}/>
 
           {historialMensual.length>0&&<MetaAdsBudget historial={historialMensual} sucVisible={sucNames} periodo={mesSel}/>}
 
@@ -6944,6 +7026,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ ANALÍTICA ═══ */}
         {tab==="analitica"&&<Analitica/>}
+        {tab==="usuarios"&&esAdmin&&<AdminUsuarios/>}
 
         {/* ═══ BOT WHATSAPP ═══ */}
         {tab==="bot"&&<div style={{height:"calc(100vh - 165px)",display:"flex",flexDirection:"column",overflow:"hidden"}}><BotWhatsApp session={session}/></div>}
