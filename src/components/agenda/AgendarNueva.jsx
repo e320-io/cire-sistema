@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { C, S, cap, fechaLarga, Pasos, Calendario } from "./ui.jsx";
 import AseguraLugar, { guardarPendiente } from "./AseguraLugar.jsx";
-import ResumenCita from "./ResumenCita.jsx";
+import CierreCita from "./CierreCita.jsx";
 
 // Flujo "Agendar mi cita": datos -> servicio (catálogo del sistema) -> día/hora (duración del servicio) -> reservar.
 const ETAPAS = ["Tus datos", "Servicio", "Horario", "Asegura tu lugar"];
@@ -178,7 +178,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
             Te escribiremos por WhatsApp para confirmar tu cita{listo.servicio === "Valoración" ? "" : " y coordinar tu anticipo"}. Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (hasta {listo.reagendarHoras ?? 12} h antes).
           </div>
         </div>
-        <ResumenCita info={info || { nombre: sucursal }} fecha={listo.fecha} hora={listo.hora} horaFin={listo.horaFin} servicio={listo.servicio} />
+        <CierreCita info={info || { nombre: sucursal }} fecha={listo.fecha} hora={listo.hora} horaFin={listo.horaFin} servicio={listo.servicio} />
         </>
       )}
     </>
