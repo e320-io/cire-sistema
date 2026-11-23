@@ -48,7 +48,7 @@ const sb = (path: string, init: RequestInit = {}) =>
 type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
-  direccion: string | null; maps_url: string | null; estacionamiento: boolean;
+  direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
@@ -338,11 +338,14 @@ async function accion(b: Record<string, string>) {
       const sv = await servicioPorId(cfg, b.servicioId);
 
       // Antiabuso: máx. 3 reservas por celular al día, y no duplicar si esa misma persona ya tiene cita próxima.
-      const desde = new Date(Date.now() - 864e5).toISOString();
-      const rr = await (await sb(`agenda_reservas?select=id&telefono=eq.${tel}&created_at=gte.${desde}`)).json();
-      if (Array.isArray(rr) && rr.length >= 3) falla("Ya hiciste varias reservas hoy. Escríbenos por WhatsApp para ayudarte.");
-      const ya = (await listEvents(cfg.calendar_id, Date.now(), Date.now() + 120 * 864e5)).find((e) => e.status !== "cancelled" && e.start.dateTime && coincide(e, nombre, tel));
-      if (ya) { const [i] = rango(ya); falla(`Ya tienes una cita agendada el ${ymd(i)} a las ${hm(i)}. Si quieres cambiarla usa «Reagendar mi cita».`); }
+      // (se omiten en agenda_sucursales.modo_pruebas = true, mientras se prueba el sistema)
+      if (!cfg.modo_pruebas) {
+        const desde = new Date(Date.now() - 864e5).toISOString();
+        const rr = await (await sb(`agenda_reservas?select=id&telefono=eq.${tel}&created_at=gte.${desde}`)).json();
+        if (Array.isArray(rr) && rr.length >= 3) falla("Ya hiciste varias reservas hoy. Escríbenos por WhatsApp para ayudarte.");
+        const ya = (await listEvents(cfg.calendar_id, Date.now(), Date.now() + 120 * 864e5)).find((e) => e.status !== "cancelled" && e.start.dateTime && coincide(e, nombre, tel));
+        if (ya) { const [i] = rango(ya); falla(`Ya tienes una cita agendada el ${ymd(i)} a las ${hm(i)}. Si quieres cambiarla usa «Reagendar mi cita».`); }
+      }
 
       const libres = await horariosLibres(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas);
       if (!libres[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
