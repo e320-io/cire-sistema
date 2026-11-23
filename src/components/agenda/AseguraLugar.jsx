@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { C, S, cap, fechaLarga } from "./ui.jsx";
+import ResumenCita from "./ResumenCita.jsx";
 
-// Paso "Asegura tu lugar": datos para el apartado (copiar CLABE), y subir la captura del comprobante.
+// Paso "Asegura tu lugar": datos para el anticipo (copiar CLABE), y subir la captura del comprobante.
 // La clienta sale a su app del banco y regresa: la reserva se guarda en este dispositivo (localStorage) para poder retomarla.
 
 const KEY = "cire_apartado_pendiente";
@@ -59,7 +60,7 @@ const Dato = ({ k, v, copiar }) => (
 );
 
 /** d = { reservaId, telefono, servicio, fecha, hora, horaFin, anticipo, reagendarHoras, comprobante } */
-export default function AseguraLugar({ api, sucursal, d, setErr, onSalir }) {
+export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }) {
   const [vista, setVista] = useState(null); // dataURL comprimido listo para enviar
   const [enviando, setEnviando] = useState(false);
   const [listo, setListo] = useState(!!d.comprobante);
@@ -81,33 +82,35 @@ export default function AseguraLugar({ api, sucursal, d, setErr, onSalir }) {
   };
 
   if (listo) return (
+    <>
     <div style={S.tarjeta}>
       <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
         <div style={{ background: C.verde, color: "#fff", borderRadius: "50%", width: 52, height: 52, display: "grid", placeItems: "center", fontSize: 28, flex: "0 0 auto" }}>✓</div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 19, color: C.verde }}>¡Recibimos tu comprobante!</div>
-          <div style={{ fontSize: 14, color: C.suave }}>{cap(fechaLarga(d.fecha))} · {d.hora}</div>
-          <div style={{ fontSize: 13, color: C.suave }}>{d.servicio}</div>
+          <div style={{ fontWeight: 800, fontSize: 19, color: C.verde }}>¡Comprobante enviado!</div>
+          <div style={{ fontSize: 13, color: C.suave }}>Gracias por tu anticipo</div>
         </div>
       </div>
-      <div style={{ ...S.pildora, marginBottom: 10 }}>Validaremos tu apartado y te confirmaremos tu cita por WhatsApp. ¡Gracias!</div>
+      <div style={{ ...S.pildora, marginBottom: 10 }}>Hemos enviado tu comprobante a validación y te confirmamos tu cita por WhatsApp.</div>
       <div style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }}>Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (una sola vez, con al menos {d.reagendarHoras} h de anticipación).</div>
     </div>
+    <ResumenCita info={info || { nombre: sucursal }} fecha={d.fecha} hora={d.hora} horaFin={d.horaFin} servicio={d.servicio} estadoAnticipo="Comprobante en validación" />
+    </>
   );
 
   return (
     <>
       <div style={S.pildora}>
-        <b>✓ Tu horario está apartado:</b><br />{cap(fechaLarga(d.fecha))} · {d.hora} – {d.horaFin}<br /><span style={{ opacity: 0.85 }}>{d.servicio} · CIRE {sucursal}</span>
+        <b>✓ Tu horario está reservado:</b><br />{cap(fechaLarga(d.fecha))} · {d.hora} – {d.horaFin}<br /><span style={{ opacity: 0.85 }}>{d.servicio} · CIRE {sucursal}</span>
       </div>
 
       <div style={{ background: C.rosa, color: "#fff", borderRadius: 20, padding: "14px 16px", marginBottom: 14, fontSize: 14, lineHeight: 1.45 }}>
         <b style={{ fontSize: 16 }}>Falta un paso para garantizar tu cita</b><br />
-        Realiza un apartado de <b>{pesos(a.monto)}</b> por depósito o transferencia. <span style={{ opacity: 0.9 }}>(Se toman a cuenta de tu pago final).</span>
+        Realiza un anticipo de <b>{pesos(a.monto)}</b> por depósito o transferencia. <span style={{ opacity: 0.9 }}>(Se toman a cuenta de tu pago final).</span>
       </div>
 
       {a.sinDatos ? (
-        <div style={S.tarjeta}><div style={{ fontSize: 14, color: C.verde, fontWeight: 600 }}>Escríbenos por WhatsApp y te compartimos los datos para tu apartado de {pesos(a.monto)}. Después sube aquí tu comprobante.</div></div>
+        <div style={S.tarjeta}><div style={{ fontSize: 14, color: C.verde, fontWeight: 600 }}>Escríbenos por WhatsApp y te compartimos los datos para tu anticipo de {pesos(a.monto)}. Después sube aquí tu comprobante.</div></div>
       ) : (
         <div style={S.tarjeta}>
           <Num n="1">Copia los datos y transfiere</Num>
@@ -139,7 +142,7 @@ export default function AseguraLugar({ api, sucursal, d, setErr, onSalir }) {
       </div>
 
       <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, lineHeight: 1.4, margin: "0 4px 10px" }}>
-        Puedes reagendar <b>una sola vez</b> desde este link, con al menos <b>{d.reagendarHoras} horas</b> de anticipación; de lo contrario el apartado se pierde.
+        Puedes reagendar <b>una sola vez</b> desde este link, con al menos <b>{d.reagendarHoras} horas</b> de anticipación; de lo contrario el anticipo se pierde.
       </div>
 
       {luego
@@ -150,8 +153,8 @@ export default function AseguraLugar({ api, sucursal, d, setErr, onSalir }) {
   );
 }
 
-/** Retoma un apartado pendiente (la clienta volvió del banco o recargó la página). */
-export function RetomarApartado({ api, sucursal, pendiente, setErr, onSalir }) {
+/** Retoma un anticipo pendiente (la clienta volvió del banco o recargó la página). */
+export function RetomarApartado({ api, sucursal, info, pendiente, setErr, onSalir }) {
   const [d, setD] = useState(null);
   useEffect(() => {
     setErr("");
@@ -160,5 +163,5 @@ export function RetomarApartado({ api, sucursal, pendiente, setErr, onSalir }) {
       .catch((e) => { borrarPendiente(); setErr(e.message); onSalir(); });
   }, []); // eslint-disable-line
   if (!d) return <div style={{ color: "#fff", fontWeight: 600 }}>Cargando tu reserva…</div>;
-  return <AseguraLugar api={api} sucursal={sucursal} d={d} setErr={setErr} onSalir={onSalir} />;
+  return <AseguraLugar api={api} sucursal={sucursal} info={info} d={d} setErr={setErr} onSalir={onSalir} />;
 }

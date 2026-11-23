@@ -80,8 +80,11 @@ export function Calendario({ dias, dia, mes, setMes, onPick }) {
   const [y, m] = mes.split("-").map(Number);
   const offset = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // semana empieza en lunes
   const total = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const celdas = [...Array(offset).fill(null), ...Array.from({ length: total }, (_, k) => `${mes}-${String(k + 1).padStart(2, "0")}`)];
+  const resto = 6 - ((new Date(Date.UTC(y, m - 1, total)).getUTCDay() + 6) % 7);
+  // Semanas completas: se rellenan con los últimos días del mes anterior y los primeros del siguiente (también se pueden elegir).
+  const celdas = Array.from({ length: offset + total + resto }, (_, k) => new Date(Date.UTC(y, m - 1, 1 - offset + k)).toISOString().slice(0, 10));
   const nombreMes = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("es-MX", { month: "long", year: "numeric", timeZone: "UTC" });
+  const mesCorto = (f) => new Date(f + "T12:00:00Z").toLocaleDateString("es-MX", { month: "short", timeZone: "UTC" }).replace(".", "");
   const flecha = (on) => ({ width: 42, height: 42, fontSize: 22, fontFamily: FONT, border: "none", borderRadius: "50%", background: on ? C.verde : C.menta, color: on ? "#fff" : C.gris, cursor: on ? "pointer" : "default" });
   return (
     <div>
@@ -92,15 +95,16 @@ export function Calendario({ dias, dia, mes, setMes, onPick }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, textAlign: "center" }}>
         {["L", "M", "M", "J", "V", "S", "D"].map((l, k) => <div key={k} style={{ fontSize: 12, fontWeight: 700, color: C.suave, padding: "4px 0" }}>{l}</div>)}
-        {celdas.map((f, k) => {
-          if (!f) return <div key={k} />;
-          const libre = !!dias[f], sel = f === dia;
+        {celdas.map((f) => {
+          const libre = !!dias[f], sel = f === dia, fuera = !f.startsWith(mes), n = Number(f.slice(8));
           return (
-            <button key={f} disabled={!libre} onClick={() => onPick(f)} aria-label={libre ? `Elegir ${fechaLarga(f)}` : undefined}
+            <button key={f} disabled={!libre} onClick={() => { onPick(f); if (fuera) setMes(f.slice(0, 7)); }} aria-label={libre ? `Elegir ${fechaLarga(f)}` : undefined}
               style={{ aspectRatio: "1", fontSize: 15, fontFamily: FONT, borderRadius: "50%", border: sel ? `3px solid ${C.rosa}` : "3px solid transparent",
                 background: sel ? C.verde : libre ? C.menta : "transparent", color: sel ? "#fff" : libre ? C.verde : C.gris,
-                fontWeight: libre ? 700 : 500, cursor: libre ? "pointer" : "default", padding: 0 }}>
-              {Number(f.slice(8))}
+                fontWeight: libre ? 700 : 500, cursor: libre ? "pointer" : "default", padding: 0, opacity: fuera && !sel ? 0.75 : 1,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+              {n}
+              {(n === 1 || (fuera && f === celdas.find((x) => x.startsWith(f.slice(0, 7))))) && <span style={{ fontSize: 9, fontWeight: 600, marginTop: 1, textTransform: "uppercase" }}>{mesCorto(f)}</span>}
             </button>
           );
         })}
