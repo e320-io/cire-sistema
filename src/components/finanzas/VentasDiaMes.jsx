@@ -153,6 +153,12 @@ export default function VentasDiaMes({ mesY, mesM, hoy }) {
     );
   };
 
+  const btn = (activo) => ({
+    padding: "9px 18px", fontSize: "13px", cursor: "pointer", border: "none",
+    background: activo ? "#111" : "transparent", color: activo ? "#fff" : T.text, fontWeight: activo ? 600 : 400,
+  });
+  const grupo = { display: "inline-flex", borderRadius: "10px", overflow: "hidden", border: `1px solid ${T.div}` };
+
   return (
     <div className="glass" style={{ padding: "22px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "8px" }}>
