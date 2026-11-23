@@ -10,7 +10,9 @@
 //   sucursales    {}                                              -> { sucursales: [{ slug, nombre }] }
 //   servicios     { slug }                                        -> { grupos: [{ categoria, items: [{ id, nombre, precio, duracionMin }] }] }
 //   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias }
-//   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio }
+//   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio, reservaId, anticipo, reagendarHoras }
+//   reserva       { slug, reservaId, telefono }                   -> { servicio, fecha, hora, horaFin, comprobante, anticipo, reagendarHoras }  (retomar "Asegura tu lugar")
+//   comprobante   { slug, reservaId, telefono, imagen }           -> { ok }   imagen = dataURL jpeg/png; se guarda en Storage (bucket privado "comprobantes") y el enlace va a la descripción del evento
 //
 // Convención de títulos de CIRE: 🧊 = aún sin anticipo, 💰 = ya mandó anticipo, 🔁 = reagendada.
 //
@@ -46,6 +48,7 @@ const sb = (path: string, init: RequestInit = {}) =>
 type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
+  anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
   const r = await sb(`agenda_sucursales?slug=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
@@ -221,6 +224,30 @@ const nombreLimpio = (n: string) =>
   String(n ?? "").replace(/[\p{Extended_Pictographic}\u200d\ufe0f\d]/gu, "").replace(/[^\p{L}\s'.-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 60);
 const pesos = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
+// ---------- Anticipo y comprobante ----------
+const SK = () => env("SUPABASE_SERVICE_ROLE_KEY");
+const concepto = (servicio: string) => "SERVICIO DE " + servicio.replace(/\([^)]*\)/g, "").replace(/\bMujer\b/i, "").replace(/\s+/g, " ").trim().toUpperCase();
+function infoAnticipo(cfg: Cfg, servicio: string) {
+  if (servicio === VALORACION.nombre) return null; // la valoración no lleva anticipo
+  if (!cfg.clabe) return { monto: cfg.anticipo_monto, sinDatos: true };
+  return { monto: cfg.anticipo_monto, banco: cfg.banco, beneficiario: cfg.beneficiario, cuenta: cfg.cuenta, clabe: cfg.clabe, concepto: concepto(servicio) };
+}
+type Reserva = { id: string; event_id: string; servicio: string; telefono: string; comprobante_at: string | null };
+async function reservaValida(cfg: Cfg, b: Record<string, string>): Promise<Reserva> {
+  const id = String(b.reservaId ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) falla("No encontramos esa reserva.");
+  const rows = await (await sb(`agenda_reservas?select=id,event_id,servicio,telefono,comprobante_at&id=eq.${id}&slug=eq.${cfg.slug}`)).json();
+  const r = Array.isArray(rows) ? rows[0] : null;
+  if (!r || r.telefono !== tel10(b.telefono)) falla("No encontramos esa reserva.");
+  return r as Reserva;
+}
+const eventoDe = async (cfg: Cfg, r: Reserva): Promise<Ev> => {
+  let e: Ev;
+  try { e = await gcal(cfg.calendar_id, `/${encodeURIComponent(r.event_id)}`); } catch { return falla("Esta reserva ya no está activa. Si necesitas ayuda escríbenos por WhatsApp."); }
+  if (e.status === "cancelled") falla("Esta reserva ya no está activa. Si necesitas ayuda escríbenos por WhatsApp.");
+  return e;
+};
+
 // ---------- Acciones ----------
 async function accion(b: Record<string, string>) {
   if (b.accion === "sucursales") {
@@ -342,8 +369,39 @@ async function accion(b: Record<string, string>) {
         await gcal(cfg.calendar_id, `/${encodeURIComponent(ev.id)}`, { method: "DELETE" }).catch(() => {});
         falla("Alguien más acaba de tomar ese horario. Elige otro.");
       }
-      await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) });
-      return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre };
+      const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) })).json();
+      return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
+    }
+
+    case "reserva": {
+      const r = await reservaValida(cfg, b);
+      const e = await eventoDe(cfg, r);
+      const [ini, fin] = rango(e);
+      return { servicio: r.servicio, fecha: ymd(ini), hora: hm(ini), horaFin: hm(fin), comprobante: !!r.comprobante_at, anticipo: infoAnticipo(cfg, r.servicio), reagendarHoras: cfg.anticipacion_horas };
+    }
+
+    case "comprobante": {
+      const r = await reservaValida(cfg, b);
+      const m = /^data:image\/(jpeg|png);base64,(.+)$/.exec(String(b.imagen ?? ""));
+      if (!m) falla("Sube una imagen JPG o PNG.");
+      const bytes = Uint8Array.from(atob(m![2]), (c) => c.charCodeAt(0));
+      const esJpg = bytes[0] === 0xff && bytes[1] === 0xd8, esPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+      if (!esJpg && !esPng) falla("Sube una imagen JPG o PNG.");
+      if (bytes.length > 4 * 1024 * 1024) falla("La imagen es muy pesada. Intenta con otra captura.");
+      const e = await eventoDe(cfg, r);
+      const path = `${r.id}.${esJpg ? "jpg" : "png"}`;
+      const base = `${env("SUPABASE_URL")}/storage/v1`;
+      const auth = { apikey: SK(), Authorization: `Bearer ${SK()}` };
+      const up = await fetch(`${base}/object/comprobantes/${path}`, { method: "POST", headers: { ...auth, "Content-Type": esJpg ? "image/jpeg" : "image/png", "x-upsert": "true" }, body: bytes });
+      if (!up.ok) throw new Error("storage: " + (await up.text()).slice(0, 200));
+      const sg = await (await fetch(`${base}/object/sign/comprobantes/${path}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn: 15_552_000 }) })).json(); // 180 días
+      if (!sg.signedURL) throw new Error("storage sign: " + JSON.stringify(sg).slice(0, 200));
+      await sb(`agenda_reservas?id=eq.${r.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ comprobante_path: path, comprobante_at: new Date().toISOString() }) });
+      // Recepción lo ve en el evento: revisa el comprobante y cambia 🧊 por 💰 al validar el anticipo.
+      const resto = (e.description ?? "").replace(/^📎 COMPROBANTE[^\n]*\n?/, "");
+      await gcal(cfg.calendar_id, `/${encodeURIComponent(e.id)}`, { method: "PATCH", body: JSON.stringify({ description: `📎 COMPROBANTE RECIBIDO (revisar y cambiar 🧊 por 💰): ${base}${sg.signedURL}\n${resto}` }) }, { sendUpdates: "none" })
+        .catch((err) => console.error("no pude anotar el comprobante en el evento", err));
+      return { ok: true };
     }
 
     default:
