@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { C, S, cap, fechaLarga, partes, Pasos, Calendario } from "./ui.jsx";
-import ResumenCita from "./ResumenCita.jsx";
+import CierreCita from "./CierreCita.jsx";
 
 // Flujo "Reagendar mi cita": nombre + celular -> su cita -> nuevo día/hora (misma duración) -> confirmar.
 export default function Reagendar({ api, sucursal, info, onVolver, setErr }) {
@@ -113,7 +113,7 @@ export default function Reagendar({ api, sucursal, info, onVolver, setErr }) {
           </div>
           <div style={{ ...S.pildora, marginBottom: 0 }}>Tu cita en CIRE {sucursal} quedó reagendada. ¡Te esperamos!</div>
         </div>
-        <ResumenCita info={info || { nombre: sucursal }} fecha={nuevo.fecha} hora={nuevo.hora} horaFin={nuevo.horaFin} />
+        <CierreCita info={info || { nombre: sucursal }} fecha={nuevo.fecha} hora={nuevo.hora} horaFin={nuevo.horaFin} />
         </>
       )}
     </>

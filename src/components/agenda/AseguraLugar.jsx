@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { C, S, cap, fechaLarga } from "./ui.jsx";
-import ResumenCita from "./ResumenCita.jsx";
+import CierreCita from "./CierreCita.jsx";
 
 // Paso "Asegura tu lugar": datos para el anticipo (copiar CLABE), y subir la captura del comprobante.
 // La clienta sale a su app del banco y regresa: la reserva se guarda en este dispositivo (localStorage) para poder retomarla.
@@ -94,7 +94,7 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
       <div style={{ ...S.pildora, marginBottom: 10 }}>Hemos enviado tu comprobante a validación y te confirmamos tu cita por WhatsApp.</div>
       <div style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }}>Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (una sola vez, con al menos {d.reagendarHoras} h de anticipación).</div>
     </div>
-    <ResumenCita info={info || { nombre: sucursal }} fecha={d.fecha} hora={d.hora} horaFin={d.horaFin} servicio={d.servicio} estadoAnticipo="Comprobante en validación" />
+    <CierreCita info={info || { nombre: sucursal }} fecha={d.fecha} hora={d.hora} horaFin={d.horaFin} servicio={d.servicio} estadoAnticipo="Comprobante en validación" />
     </>
   );
 
