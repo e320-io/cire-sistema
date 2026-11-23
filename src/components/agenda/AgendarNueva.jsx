@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { C, S, cap, fechaLarga, Pasos, Calendario } from "./ui.jsx";
+import AseguraLugar, { guardarPendiente } from "./AseguraLugar.jsx";
 
 // Flujo "Agendar mi cita": datos -> servicio (catálogo del sistema) -> día/hora (duración del servicio) -> reservar.
-const ETAPAS = ["Tus datos", "Servicio", "Horario"];
+const ETAPAS = ["Tus datos", "Servicio", "Horario", "Asegura tu lugar"];
 const pesos = (n) => (n > 0 ? "$" + Math.round(n).toLocaleString("en-US") : "");
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -10,8 +11,8 @@ const esCombo = (g) => /^combo/i.test(g.categoria);
 const esZona = (g) => /^l[aá]ser/i.test(g.categoria);
 const nombreZona = (c) => c.replace(/^l[aá]ser\s+\w+\s*-\s*/i, ""); // "Láser Mujer - Rostro" -> "Rostro"
 
-export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
-  const [paso, setPaso] = useState("datos"); // datos | servicio | horarios | listo
+export default function AgendarNueva({ api, slug, sucursal, onVolver, setErr, setTitulo }) {
+  const [paso, setPaso] = useState("datos"); // datos | servicio | horarios | asegura | listo
   const [nombre, setNombre] = useState("");
   const [tel, setTel] = useState("");
   const [web, setWeb] = useState(""); // honeypot: las personas no lo ven ni lo llenan
@@ -27,6 +28,8 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
   const [listo, setListo] = useState(null);
 
   const correr = async (fn) => { setErr(""); setCargando(true); try { await fn(); } catch (e) { setErr(e.message); } setCargando(false); };
+
+  useEffect(() => { setTitulo?.(paso === "asegura" ? "asegura" : ""); }, [paso]); // eslint-disable-line
 
   useEffect(() => {
     if (paso !== "servicio" || grupos) return;
@@ -47,7 +50,9 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
   });
   const reservar = () => correr(async () => {
     const j = await api("agendar", { nombre, telefono: tel, servicioId: sv.id, fecha: dia, hora, web });
-    setListo(j); setPaso("listo");
+    setListo(j);
+    if (j.anticipo && j.reservaId) { guardarPendiente({ slug, reservaId: j.reservaId, telefono: tel }); setPaso("asegura"); } // la valoración no lleva anticipo
+    else setPaso("listo");
   });
 
   const valoracion = grupos?.flatMap((g) => g.items).find((i) => i.id === "valoracion");
@@ -83,7 +88,7 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
 
   return (
     <>
-      {paso !== "listo" && <Pasos n={paso === "datos" ? 1 : paso === "servicio" ? 2 : 3} etapas={ETAPAS} />}
+      {paso !== "listo" && <Pasos n={paso === "datos" ? 1 : paso === "servicio" ? 2 : paso === "horarios" ? 3 : 4} etapas={sv?.id === "valoracion" ? ETAPAS.slice(0, 3) : ETAPAS} />}
 
       {paso === "datos" && (
         <>
@@ -150,6 +155,10 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
           </button>
           <button style={S.link} onClick={() => { setPaso("servicio"); setErr(""); }}>← Cambiar servicio</button>
         </>
+      )}
+
+      {paso === "asegura" && listo && (
+        <AseguraLugar api={api} sucursal={sucursal} d={{ ...listo, telefono: tel }} setErr={setErr} onSalir={onVolver} />
       )}
 
       {paso === "listo" && listo && (

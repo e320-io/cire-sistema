@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { C, S, FONT, Loto, Pin, Titulo, crearApi } from "./ui.jsx";
 import Reagendar from "./Reagendar.jsx";
 import AgendarNueva from "./AgendarNueva.jsx";
+import { RetomarApartado, leerPendiente } from "./AseguraLugar.jsx";
 
 // Página pública:
 //   /agendar            -> elige sucursal
@@ -14,7 +15,9 @@ export default function AgendarPublico() {
   const [slug, setSlug] = useState(slugUrl());
   const [sucursal, setSucursal] = useState("");
   const [lista, setLista] = useState(null);
-  const [modo, setModo] = useState("inicio"); // inicio | nueva | reagendar
+  const [modo, setModo] = useState("inicio"); // inicio | nueva | reagendar | asegurar
+  const [titulo2, setTitulo2] = useState("");
+  const pendiente = slug ? leerPendiente(slug) : null; // apartado sin comprobante (se guardó en este dispositivo)
   const [err, setErr] = useState("");
   const api = useMemo(() => crearApi(slug), [slug]);
 
@@ -35,7 +38,7 @@ export default function AgendarPublico() {
   const volver = () => { setModo("inicio"); setErr(""); };
   const sinSlug = !slug;
 
-  const titulo = modo === "nueva" ? <>Agenda<br />tu cita</> : modo === "reagendar" ? <>Reagenda<br />tu cita</> : <>Agenda tu<br />cita en CIRE</>;
+  const titulo = (titulo2 === "asegura" || modo === "asegurar") ? <>Asegura<br />tu lugar</> : modo === "nueva" ? <>Agenda<br />tu cita</> : modo === "reagendar" ? <>Reagenda<br />tu cita</> : <>Agenda tu<br />cita en CIRE</>;
 
   const opcion = (emoji, titulo, texto, onClick, resaltada) => (
     <button onClick={onClick} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT, padding: "18px 20px", background: resaltada ? C.verde : "#fff" }}>
@@ -92,12 +95,22 @@ export default function AgendarPublico() {
 
         {!sinSlug && sucursal && modo === "inicio" && (
           <>
+            {pendiente && (
+              <button onClick={() => { setErr(""); setModo("asegurar"); }} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT, padding: "18px 20px", background: C.rosa }}>
+                <span style={{ fontSize: 30 }}>📎</span>
+                <span>
+                  <span style={{ display: "block", fontWeight: 800, fontSize: 18, color: "#fff" }}>Subir mi comprobante</span>
+                  <span style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,.9)", marginTop: 2 }}>Tienes un apartado pendiente de confirmar</span>
+                </span>
+              </button>
+            )}
             {opcion("✨", "Agendar mi cita", "Elige tu servicio, día y hora", () => { setErr(""); setModo("nueva"); }, true)}
             {opcion("🔁", "Reagendar mi cita", "Ya tengo cita y quiero cambiarla", () => { setErr(""); setModo("reagendar"); })}
           </>
         )}
 
-        {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} sucursal={sucursal} onVolver={volver} setErr={setErr} />}
+        {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
+        {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
         {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} onVolver={volver} setErr={setErr} />}
       </div>
     </div>
