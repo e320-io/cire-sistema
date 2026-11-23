@@ -104,9 +104,10 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
         <b>✓ Tu horario está reservado:</b><br />{cap(fechaLarga(d.fecha))} · {d.hora} – {d.horaFin}<br /><span style={{ opacity: 0.85 }}>{d.servicio} · CIRE {sucursal}</span>
       </div>
 
-      <div style={{ background: C.rosa, color: "#fff", borderRadius: 20, padding: "14px 16px", marginBottom: 14, fontSize: 14, lineHeight: 1.45 }}>
-        <b style={{ fontSize: 16 }}>Falta un paso para garantizar tu cita</b><br />
-        Realiza un anticipo de <b>{pesos(a.monto)}</b> por depósito o transferencia. <span style={{ opacity: 0.9 }}>(Se toman a cuenta de tu pago final).</span>
+      <div style={{ background: C.rosa, color: "#fff", borderRadius: 20, padding: "16px 18px", marginBottom: 14, fontSize: 14, lineHeight: 1.5 }}>
+        <b style={{ fontSize: 16 }}>Información para agendar 🌟🩷</b><br />
+        <span style={{ display: "block", marginTop: 6 }}>Te comentamos que afortunadamente tenemos la agenda saturada. Para garantizar tu cita deberás realizar un anticipo de <b>{pesos(a.monto)} por depósito o transferencia</b> a la siguiente cuenta:</span>
+        <span style={{ display: "block", marginTop: 6, opacity: 0.92 }}>(Mismos que se toman a cuenta de tu pago final)</span>
       </div>
 
       {a.sinDatos ? (
