@@ -31,6 +31,42 @@ const S = {
   hora: (on) => ({ padding: "10px 0", fontSize: 15, borderRadius: 10, cursor: "pointer", border: `1px solid ${on ? C.acento : C.borde}`, background: on ? C.acento : "#fff", color: on ? "#fff" : C.texto }),
 };
 
+// Calendario mensual: solo se pueden tocar los días que tienen horarios libres.
+function Calendario({ dias, dia, mes, setMes, onPick }) {
+  const meses = [...new Set(Object.keys(dias).map((f) => f.slice(0, 7)))].sort();
+  const i = meses.indexOf(mes);
+  const [y, m] = mes.split("-").map(Number);
+  const offset = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // semana empieza en lunes
+  const total = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const celdas = [...Array(offset).fill(null), ...Array.from({ length: total }, (_, k) => `${mes}-${String(k + 1).padStart(2, "0")}`)];
+  const nombreMes = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("es-MX", { month: "long", year: "numeric", timeZone: "UTC" });
+  const flecha = (on) => ({ width: 40, height: 40, fontSize: 20, border: `1px solid ${C.borde}`, borderRadius: 10, background: "#fff", color: on ? C.texto : C.borde, cursor: on ? "pointer" : "default" });
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <button style={flecha(i > 0)} disabled={i <= 0} onClick={() => setMes(meses[i - 1])} aria-label="Mes anterior">‹</button>
+        <div style={{ fontWeight: 600, textTransform: "capitalize" }}>{nombreMes}</div>
+        <button style={flecha(i < meses.length - 1)} disabled={i >= meses.length - 1} onClick={() => setMes(meses[i + 1])} aria-label="Mes siguiente">›</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, textAlign: "center" }}>
+        {["L", "M", "M", "J", "V", "S", "D"].map((l, k) => <div key={k} style={{ fontSize: 12, color: C.suave, padding: "4px 0" }}>{l}</div>)}
+        {celdas.map((f, k) => {
+          if (!f) return <div key={k} />;
+          const libre = !!dias[f], sel = f === dia;
+          return (
+            <button key={f} disabled={!libre} onClick={() => onPick(f)} aria-label={libre ? `Elegir ${fechaLarga(f)}` : undefined}
+              style={{ aspectRatio: "1", fontSize: 15, borderRadius: 10, border: sel ? `1px solid ${C.acento}` : "1px solid transparent",
+                background: sel ? C.acento : libre ? "#efedff" : "transparent", color: sel ? "#fff" : libre ? C.texto : "#c4c0d4",
+                fontWeight: libre ? 600 : 400, cursor: libre ? "pointer" : "default" }}>
+              {Number(f.slice(8))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AgendarPublico() {
   const [sucursal, setSucursal] = useState("");
   const [paso, setPaso] = useState("buscar"); // buscar | citas | horarios | listo
@@ -40,6 +76,7 @@ export default function AgendarPublico() {
   const [cita, setCita] = useState(null);
   const [dias, setDias] = useState({});
   const [dia, setDia] = useState("");
+  const [mes, setMes] = useState("");
   const [hora, setHora] = useState("");
   const [cargando, setCargando] = useState(false);
   const [err, setErr] = useState("");
@@ -59,7 +96,7 @@ export default function AgendarPublico() {
     const j = await api("disponibilidad", { ...credenciales, eventId: c.id });
     const fechas = Object.keys(j.dias);
     if (!fechas.length) throw new Error("No hay horarios disponibles en los próximos días. Escríbenos por WhatsApp.");
-    setCita(c); setDias(j.dias); setDia(fechas[0]); setHora(""); setPaso("horarios");
+    setCita(c); setDias(j.dias); setDia(fechas[0]); setMes(fechas[0].slice(0, 7)); setHora(""); setPaso("horarios");
   });
   const confirmar = () => correr(async () => {
     const j = await api("reagendar", { ...credenciales, eventId: cita.id, fecha: dia, hora });
@@ -108,10 +145,8 @@ export default function AgendarPublico() {
             </div>
             <div style={S.tarjeta}>
               <div style={{ fontWeight: 600, marginBottom: 10 }}>Elige el nuevo día</div>
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8 }}>
-                {Object.keys(dias).map((d) => <button key={d} style={S.chip(d === dia)} onClick={() => { setDia(d); setHora(""); }}>{cap(fechaCorta(d))}</button>)}
-              </div>
-              <div style={{ fontWeight: 600, margin: "14px 0 10px" }}>Y la hora</div>
+              <Calendario dias={dias} dia={dia} mes={mes} setMes={setMes} onPick={(d) => { setDia(d); setHora(""); }} />
+              <div style={{ fontWeight: 600, margin: "18px 0 10px" }}>Horarios para el {fechaLarga(dia)}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {(dias[dia] || []).map((h) => <button key={h} style={S.hora(h === hora)} onClick={() => setHora(h)}>{h}</button>)}
               </div>
