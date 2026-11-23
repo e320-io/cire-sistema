@@ -105,9 +105,11 @@ export default function VentasDiaMes({ mesY, mesM, hoy }) {
     const comps = [mesY - 1, mesY - 2, mesY - 3].filter((a) => porAnio[a].tiene && cum[a][diaCorte] > 0)
       .map((a) => ({ a, v: cum[a][diaCorte], pct: ((cum[mesY][diaCorte] - cum[a][diaCorte]) / cum[a][diaCorte]) * 100, cierre: cum[a][diasMes] }));
     let proy = null;
-    if (hoyMes && diaCorte >= 5 && comps.length) {
+    if (hoyMes && diaCorte >= 5 && comps.length >= 2) {
       const ratios = comps.map((c) => c.cierre / c.v);
-      proy = cum[mesY][diaCorte] * (ratios.reduce((x, y) => x + y, 0) / ratios.length);
+      // Rango: del año que menos creció al que más creció en lo que resta del mes (con ≥2 años de base)
+      const base = cum[mesY][diaCorte];
+      proy = { min: base * Math.min(...ratios), max: base * Math.max(...ratios), años: ratios.length };
     }
     return { data, series, resumen: { diaCorte, actual: cum[mesY][diaCorte], comps, proy, hoyMes }, cum };
   }, [tickets, suc, acum, tickMode, mesY, mm, diasMes, hoy]);
@@ -182,7 +184,9 @@ export default function VentasDiaMes({ mesY, mesM, hoy }) {
             </span>
           ))}
           {resumen.proy != null && (
-            <span style={{ fontSize: "13px", color: T.sub }}>· ritmo de cierre ≈ <b style={{ color: T.text }}>{fmtVal(resumen.proy)}</b></span>
+            <span title={`Rango según cómo cerraron ${resumen.proy.años} años anteriores desde este mismo día: del que menos creció al que más. Es una estimación, no un pronóstico.`} style={{ fontSize: "13px", color: T.sub, cursor: "help" }}>
+              · cierre estimado <b style={{ color: T.text }}>{fmtVal(resumen.proy.min)} – {fmtVal(resumen.proy.max)}</b>
+            </span>
           )}
         </div>
       )}
