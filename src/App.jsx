@@ -8,6 +8,7 @@ import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
 import MensajesDiarios from "./components/finanzas/MensajesDiarios.jsx";
+import VentasDiaMes from "./components/finanzas/VentasDiaMes.jsx";
 import { leerMeta, esRemarketing, repartoRemarketing } from "./lib/metaCuentas.js";
 import RendimientoMeta from "./components/meta/RendimientoMeta.jsx";
 import RegistrarVentaRecepcion from "./components/meta/RegistrarVentaRecepcion.jsx";
@@ -6519,6 +6520,8 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
               );
             })}
           </div>
+
+          <VentasDiaMes mesY={mesY} mesM={mesM} hoy={hoy()}/>
 
           {historialMensual.length>0&&<MetaAdsBudget historial={historialMensual} sucVisible={sucNames} periodo={mesSel}/>}
 

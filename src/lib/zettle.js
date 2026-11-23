@@ -59,6 +59,16 @@ export const fetchHistorialMensualCacheado = async (sucursales = SUCURSALES_NAME
     faltantes.forEach((m) => { nuevosPorMes[m] = {}; sucursales.forEach((s) => { nuevosPorMes[m][s] = 0; }); });
     fetchedPorAño.forEach((t) => { const m = t.fecha.slice(0, 7); if (nuevosPorMes[m] && nuevosPorMes[m][t.sucursal] !== undefined) nuevosPorMes[m][t.sucursal] += Number(t.total); });
 
+    // Meses fuera del alcance de Zettle (~3 años) devuelven 0 tickets: se completan con `tickets`
+    // (respaldo en Supabase) en vez de guardar ceros en la caché.
+    for (const m of faltantes) {
+      if (sucursales.some((s) => nuevosPorMes[m][s] > 0)) continue;
+      const fin = new Date(Number(m.slice(0, 4)), Number(m.slice(5)), 0).getDate();
+      const { data: resp } = await supabase.from("tickets").select("sucursal_nombre,total").eq("fuente", "zettle")
+        .gte("fecha", `${m}-01`).lte("fecha", `${m}-${String(fin).padStart(2, "0")}`).limit(5000);
+      (resp || []).forEach((t) => { if (nuevosPorMes[m][t.sucursal_nombre] !== undefined) nuevosPorMes[m][t.sucursal_nombre] += Number(t.total) || 0; });
+    }
+
     const filasCache = [];
     faltantes.forEach((m) => { sucursales.forEach((s) => { byMes[m] = byMes[m] || {}; byMes[m][s] = nuevosPorMes[m][s]; filasCache.push({ mes: m, sucursal: s, total: nuevosPorMes[m][s] }); }); });
     if (filasCache.length) await supabase.from("ventas_mensuales_cache").upsert(filasCache, { onConflict: "mes,sucursal" });
