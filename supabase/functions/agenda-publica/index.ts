@@ -202,15 +202,17 @@ const aplica = (r: Record<string, unknown>, cfg: Cfg) => !Array.isArray(r.sucurs
 const COLS = "id,nombre,categoria,precio,precio_promo,promo_hasta,duracion_min,sucursales,orden";
 
 async function listarServicios(cfg: Cfg): Promise<Servicio[]> {
-  const r = await sb(`catalogo?select=${COLS}&activo=eq.true&tipo=eq.servicio&order=orden`);
+  const r = await sb(`catalogo?select=${COLS}&activo=eq.true&tipo=eq.servicio&agenda_en_linea=eq.true&order=orden`);
   const rows = await r.json();
   if (!Array.isArray(rows)) throw new Error("catalogo: " + JSON.stringify(rows).slice(0, 150));
-  return [VALORACION, ...rows.filter((x) => aplica(x, cfg)).map(fila)];
+  const lista = rows.filter((x) => aplica(x, cfg)).map(fila);
+  lista.sort((a, b) => Number(/^combo/i.test(b.categoria)) - Number(/^combo/i.test(a.categoria))); // sort estable: combos (promos) primero
+  return [VALORACION, ...lista];
 }
 async function servicioPorId(cfg: Cfg, id: string): Promise<Servicio> {
   if (id === "valoracion") return VALORACION;
   if (!/^\d+$/.test(String(id))) falla("Elige un servicio.");
-  const r = await sb(`catalogo?select=${COLS}&id=eq.${id}&activo=eq.true&tipo=eq.servicio`);
+  const r = await sb(`catalogo?select=${COLS}&id=eq.${id}&activo=eq.true&tipo=eq.servicio&agenda_en_linea=eq.true`);
   const rows = await r.json();
   if (!Array.isArray(rows) || !rows[0] || !aplica(rows[0], cfg)) falla("Ese servicio ya no está disponible. Elige otro.");
   return fila(rows[0]);

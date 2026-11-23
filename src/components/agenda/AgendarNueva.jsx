@@ -26,7 +26,7 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
 
   useEffect(() => {
     if (paso !== "servicio" || grupos) return;
-    correr(async () => { const j = await api("servicios"); setGrupos(j.grupos); });
+    correr(async () => { const j = await api("servicios"); setGrupos(j.grupos); setAbierta(j.grupos.find((g) => g.categoria !== "Empieza aquí")?.categoria || ""); });
   }, [paso]); // eslint-disable-line
 
   const continuar = (ev) => {
