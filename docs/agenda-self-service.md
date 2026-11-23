@@ -37,3 +37,6 @@ La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma
 - Anticipación mínima para citas nuevas: `agenda_sucursales.anticipacion_nueva_horas` (24 por defecto; `anticipacion_horas` = 12 para reagendar).
 - Antiabuso: máx. 3 reservas por celular al día, no duplica si la misma persona (nombre + celular) ya tiene cita próxima, campo trampa (honeypot) para bots, y si dos clientas toman el mismo hueco a la vez gana la que se creó primero (la otra se borra y se le avisa).
 - Bitácora de reservas en la tabla `agenda_reservas` (migración 038).
+
+## Modo pruebas
+`agenda_sucursales.modo_pruebas = true` desactiva los candados antiabuso (máx. 3 reservas por celular al día y "ya tienes una cita agendada") para poder probar con el mismo nombre y celular. **Ponerlo en false antes de compartir los links con clientas** (Table Editor > agenda_sucursales).
