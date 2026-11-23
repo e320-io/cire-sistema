@@ -5352,7 +5352,7 @@ function AdminUsuarios(){
     setLoading(true);
     const{data,error}=await supabase.from("system_users").select("id,username,email,must_change_password");
     if(error)setMsg({ok:false,t:"No se pudo leer system_users: "+error.message});
-    const m={};(data||[]).forEach(r=>{m[r.username]=r;});
+    const m={};(data||[]).forEach(r=>{m[r.username]=r;m["#"+r.id]=r;});
     setRecs(m);setLoading(false);
   };
   useEffect(()=>{cargar();},[]);
@@ -5361,10 +5361,7 @@ function AdminUsuarios(){
     if(np.length<8){setMsg({ok:false,t:"La contraseña debe tener mínimo 8 caracteres"});return;}
     setBusy(true);setMsg(null);
     const hash=await hashPassword(np);
-    const existe=!!recs[u.usuario];
-    const{error}=existe
-      ?await supabase.from("system_users").update({password_hash:hash,must_change_password:pedirCambio,reset_code:null,reset_expires:null}).eq("username",u.usuario)
-      :await supabase.from("system_users").insert([{id:u.id,username:u.usuario,password_hash:hash,must_change_password:pedirCambio}]);
+    const{error}=await supabase.from("system_users").upsert({id:u.id,username:u.usuario,password_hash:hash,must_change_password:pedirCambio,reset_code:null,reset_expires:null},{onConflict:"id"});
     setBusy(false);
     if(error){setMsg({ok:false,t:"Error al guardar: "+error.message});return;}
     setMsg({ok:true,t:`Contraseña de ${u.nombre} actualizada${pedirCambio?" (tendrá que cambiarla al entrar)":""}.`});
@@ -5374,7 +5371,7 @@ function AdminUsuarios(){
   const restablecer=async(u)=>{
     if(!confirm(`¿Restablecer a ${u.nombre} a su contraseña inicial? Se borrará su contraseña y correo de recuperación actuales.`))return;
     setBusy(true);setMsg(null);
-    const{error}=await supabase.from("system_users").delete().eq("username",u.usuario);
+    const{error}=await supabase.from("system_users").delete().eq("id",u.id);
     setBusy(false);
     if(error){setMsg({ok:false,t:"Error al restablecer: "+error.message});return;}
     setMsg({ok:true,t:`${u.nombre} volvió a su contraseña inicial y deberá cambiarla al entrar.`});
@@ -5390,7 +5387,7 @@ function AdminUsuarios(){
       {loading?<div style={{color:T.faint,fontSize:12}}>Cargando…</div>:
       <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
         {lista.map(u=>{
-          const r=recs[u.usuario];const badge=ROL_BADGE[u.rol]||{label:u.rol,c:"#fff"};const abierto=editando===u.usuario;
+          const r=recs[u.usuario]||recs["#"+u.id];const badge=ROL_BADGE[u.rol]||{label:u.rol,c:"#fff"};const abierto=editando===u.usuario;
           return(
             <div key={u.usuario} style={{border:"1px solid "+(light?"rgba(0,0,0,0.08)":"rgba(255,255,255,0.08)"),borderRadius:"10px",padding:"10px 14px"}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
