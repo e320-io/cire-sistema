@@ -75,6 +75,10 @@ function ComoAsistir() {
 
 export default function CierreCita({ info, fecha, hora, horaFin, servicio, estadoAnticipo }) {
   const dir = info?.direccion;
+  // Mapa de la FICHA del negocio (no de la dirección): URL oficial si existe; si no, búsqueda por nombre + coordenadas.
+  const mapaSrc = info?.mapsEmbed
+    || (info?.mapaNombre ? `https://maps.google.com/maps?q=${encodeURIComponent(info.mapaNombre)}${info.lat != null && info.lng != null ? `&ll=${info.lat},${info.lng}` : ""}&z=17&output=embed`
+      : dir ? `https://maps.google.com/maps?q=${encodeURIComponent(dir)}&z=16&output=embed` : "");
   const conIndicaciones = servicio !== "Valoración"; // las indicaciones son para la sesión de láser
   return (
     <>
@@ -88,11 +92,11 @@ export default function CierreCita({ info, fecha, hora, horaFin, servicio, estad
 
       <Colapsable icono="📍" titulo="¿Cómo llegar?">
         {dir && <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto, marginBottom: 10 }}><b>CIRE {info.nombre}</b><br />{dir}{info.estacionamiento && <><br /><span style={{ fontWeight: 600, color: C.verdeMedio }}>🚗 Con estacionamiento</span></>}</div>}
-        {dir && (
+        {mapaSrc && (
           <div style={{ height: 240, background: C.menta, display: "grid", placeItems: "center", color: C.suave, fontSize: 13, position: "relative", borderRadius: 16, overflow: "hidden" }}>
             Cargando mapa…
             <iframe title={`Mapa de CIRE ${info.nombre}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen
-              src={`https://maps.google.com/maps?q=${encodeURIComponent(dir)}&z=16&output=embed`}
+              src={mapaSrc}
               style={{ position: "absolute", inset: 0, border: 0, width: "100%", height: "100%" }} />
           </div>
         )}
