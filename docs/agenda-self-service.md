@@ -1,4 +1,4 @@
-# Reagendado self-service por sucursal
+# Agenda en línea por sucursal (agendar y reagendar)
 
 Link por sucursal: `https://<dominio>/agendar/<slug>` con slug `coapa`, `valle`, `oriente`, `polanco`, `metepec`.
 La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma duración) y queda movida en el Google Calendar de la sucursal.
@@ -24,6 +24,16 @@ La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma
 `agenda_sucursales`: `intervalo_min` (paso de horarios), `capacidad`, `anticipacion_horas`, `dias_adelante`, `activa`.
 
 ## Límites conocidos
-- Si dos clientas eligen el mismo hueco en el mismo segundo, la verificación de disponibilidad no es transaccional; la ventana es de milisegundos.
+- Reagendar: si dos clientas eligen el mismo hueco en el mismo segundo, la verificación no es transaccional (ventana de milisegundos). Agendar nuevo sí revisa y resuelve el choque después de crear el evento.
 - No hay límite de intentos de búsqueda por IP; si hay abuso, agregar rate limiting (Vercel Firewall o tabla de intentos).
 - No sincroniza con la tabla `citas` del sistema (fuente de verdad = Google Calendar).
+
+## Agendar cita nueva (`/agendar` y `/agendar/<slug>`)
+- `/agendar` deja elegir sucursal (solo las que tienen `calendar_id`); `/agendar/<slug>` ofrece "Agendar mi cita" y "Reagendar mi cita".
+- Servicios: salen de la tabla `catalogo` (activos, tipo servicio, filtrados por `sucursales`) + una "Valoración" de 30 min. La cita es la 1ª sesión.
+- Duración: `catalogo.duracion_min` si existe; si no, por zona/tipo (copia de `TIEMPOS_ZONA` en `supabase/functions/agenda-publica/duraciones.ts`; si cambias las tablas en `App.jsx`, cámbialas allá también). Precio = promo vigente (misma regla que `getPrecioActual`).
+- Evento creado: título `🧊Nombre 5512345678` (🧊 = sin anticipo; la valoración va sin emoji), descripción `Sucursal Servicio $Precio Pendiente Anticipo` + `📲 AGENDADA EN LÍNEA`, color por tipo (1ª sesión láser = rojo), recordatorio 30 min antes. Recepción cambia 🧊 por 💰 al recibir el anticipo.
+- Reagendar ahora antepone 🔁 al título.
+- Anticipación mínima para citas nuevas: `agenda_sucursales.anticipacion_nueva_horas` (24 por defecto).
+- Antiabuso: máx. 3 reservas por celular al día, no duplica si la misma persona (nombre + celular) ya tiene cita próxima, campo trampa (honeypot) para bots, y si dos clientas toman el mismo hueco a la vez gana la que se creó primero (la otra se borra y se le avisa).
+- Bitácora de reservas en la tabla `agenda_reservas` (migración 038).
