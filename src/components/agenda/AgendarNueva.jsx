@@ -6,6 +6,10 @@ const ETAPAS = ["Tus datos", "Servicio", "Horario"];
 const pesos = (n) => (n > 0 ? "$" + Math.round(n).toLocaleString("en-US") : "");
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
+const esCombo = (g) => /^combo/i.test(g.categoria);
+const esZona = (g) => /^l[aá]ser/i.test(g.categoria);
+const nombreZona = (c) => c.replace(/^l[aá]ser\s+\w+\s*-\s*/i, ""); // "Láser Mujer - Rostro" -> "Rostro"
+
 export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
   const [paso, setPaso] = useState("datos"); // datos | servicio | horarios | listo
   const [nombre, setNombre] = useState("");
@@ -26,7 +30,7 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
 
   useEffect(() => {
     if (paso !== "servicio" || grupos) return;
-    correr(async () => { const j = await api("servicios"); setGrupos(j.grupos); setAbierta(j.grupos.find((g) => g.categoria !== "Empieza aquí")?.categoria || ""); });
+    correr(async () => { const j = await api("servicios"); setGrupos(j.grupos); setAbierta(j.grupos.find((g) => esCombo(g))?.categoria || "zonas"); });
   }, [paso]); // eslint-disable-line
 
   const continuar = (ev) => {
@@ -54,12 +58,28 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
   const fila = (i) => (
     <button key={i.id} disabled={cargando} onClick={() => elegir(i)}
       style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: C.menta, border: "none", borderRadius: 14, padding: "12px 14px", marginBottom: 8, cursor: "pointer", fontFamily: "inherit", color: C.verde }}>
-      <span style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>{i.nombre}</span>
+      <span>
+        <span style={{ display: "block", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>{i.nombre}</span>
+        {i.incluye && <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: C.suave, marginTop: 3, lineHeight: 1.35 }}>Incluye: {i.incluye}</span>}
+      </span>
       <span style={{ fontSize: 12, color: C.suave, textAlign: "right", flex: "0 0 auto" }}>
         {pesos(i.precio) && <b style={{ display: "block", color: C.verde, fontSize: 14 }}>{pesos(i.precio)}</b>}{i.duracionMin} min
       </span>
     </button>
   );
+
+  const desplegable = (clave, titulo, contenido) => {
+    const abiertaG = !!busca || abierta === clave;
+    return (
+      <div key={clave} style={{ marginBottom: 8 }}>
+        <button onClick={() => setAbierta(abiertaG && !busca ? "" : clave)}
+          style={{ display: "flex", justifyContent: "space-between", width: "100%", background: abiertaG ? C.verde : C.verdeMedio, color: "#fff", border: "none", borderRadius: 14, padding: "12px 14px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", marginBottom: abiertaG ? 8 : 0, textAlign: "left" }}>
+          <span>{titulo}</span><span>{abiertaG ? "–" : "+"}</span>
+        </button>
+        {abiertaG && contenido}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -85,21 +105,17 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
           <div style={S.tarjeta}>
             <div style={{ fontWeight: 800, fontSize: 20, color: C.verde, marginBottom: 4 }}>Elige tu servicio</div>
             <div style={{ fontSize: 13, color: C.suave, marginBottom: 12 }}>Agendas tu 1ª sesión. La duración es la de cada sesión.</div>
-            <input style={S.input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar: axilas, bikini, facial…" />
+            <input style={S.input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar: axilas, bikini, piernas…" />
             {!grupos && <div style={{ color: C.suave, fontSize: 14 }}>Cargando servicios…</div>}
             {grupos && !resultados.length && <div style={{ color: C.suave, fontSize: 14 }}>No encontramos ese servicio. Prueba con otra palabra.</div>}
-            {resultados.map((g) => {
-              const abiertaG = !!busca || abierta === g.categoria;
-              return (
-                <div key={g.categoria} style={{ marginBottom: 8 }}>
-                  <button onClick={() => setAbierta(abiertaG && !busca ? "" : g.categoria)}
-                    style={{ display: "flex", justifyContent: "space-between", width: "100%", background: abiertaG ? C.verde : C.verdeMedio, color: "#fff", border: "none", borderRadius: 14, padding: "12px 14px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", marginBottom: abiertaG ? 8 : 0 }}>
-                    <span>{g.categoria}</span><span>{abiertaG ? "–" : "+"}</span>
-                  </button>
-                  {abiertaG && g.items.map(fila)}
-                </div>
-              );
-            })}
+            {resultados.filter(esCombo).map((g) => desplegable(g.categoria, g.categoria, g.items.map(fila)))}
+            {resultados.some(esZona) && desplegable("zonas", "O si prefieres zonas individuales…", resultados.filter(esZona).map((g) => (
+              <div key={g.categoria}>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: C.suave, margin: "8px 4px" }}>{nombreZona(g.categoria)}</div>
+                {g.items.map(fila)}
+              </div>
+            )))}
+            {resultados.filter((g) => !esCombo(g) && !esZona(g)).map((g) => desplegable(g.categoria, g.categoria, g.items.map(fila)))}
           </div>
           {valoracion && (
             <button disabled={cargando} onClick={() => elegir(valoracion)}
