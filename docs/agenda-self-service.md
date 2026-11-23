@@ -7,7 +7,7 @@ La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma
 - Búsqueda: el celular (10 dígitos) debe estar en el **título** del evento y al menos una palabra del nombre debe coincidir.
 - Duración = fin − inicio del evento original.
 - Solo 1 reagendado por cita (`agenda_reagendas.event_id` es unique + marca `reagendada=1` en el evento).
-- Solo si faltan ≥ 24 h para la cita, y el nuevo horario también debe estar a ≥ 24 h.
+- Solo si faltan ≥ 12 h para la cita (`anticipacion_horas`), y el nuevo horario también debe estar a ≥ 12 h.
 - Un horario está libre si no hay eventos que se le traslapen (eventos de día completo bloquean el día; los marcados "Disponible" no bloquean). `capacidad` permite N citas simultáneas por sucursal.
 - Al reagendar se antepone "🔁 REAGENDADA POR LA CLIENTA… (antes: fecha hora)" a la descripción del evento para que recepción lo vea.
 
@@ -34,6 +34,6 @@ La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma
 - Duración: `catalogo.duracion_min` si existe; si no, por zona/tipo (copia de `TIEMPOS_ZONA` en `supabase/functions/agenda-publica/duraciones.ts`; si cambias las tablas en `App.jsx`, cámbialas allá también). Precio = promo vigente (misma regla que `getPrecioActual`).
 - Evento creado: título `🧊Nombre 5512345678` (🧊 = sin anticipo; la valoración va sin emoji), descripción `Sucursal Servicio $Precio Pendiente Anticipo` + `📲 AGENDADA EN LÍNEA`, color por tipo (1ª sesión láser = rojo), recordatorio 30 min antes. Recepción cambia 🧊 por 💰 al recibir el anticipo.
 - Reagendar ahora antepone 🔁 al título.
-- Anticipación mínima para citas nuevas: `agenda_sucursales.anticipacion_nueva_horas` (24 por defecto).
+- Anticipación mínima para citas nuevas: `agenda_sucursales.anticipacion_nueva_horas` (24 por defecto; `anticipacion_horas` = 12 para reagendar).
 - Antiabuso: máx. 3 reservas por celular al día, no duplica si la misma persona (nombre + celular) ya tiene cita próxima, campo trampa (honeypot) para bots, y si dos clientas toman el mismo hueco a la vez gana la que se creó primero (la otra se borra y se le avisa).
 - Bitácora de reservas en la tabla `agenda_reservas` (migración 038).
