@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/agendar/:slug", "destination": "/index.html" }]
+}
