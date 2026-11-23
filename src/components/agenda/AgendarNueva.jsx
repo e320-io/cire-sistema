@@ -82,16 +82,8 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
 
       {paso === "servicio" && (
         <>
-          {valoracion && (
-            <button disabled={cargando} onClick={() => elegir(valoracion)}
-              style={{ ...S.tarjeta, display: "block", width: "100%", textAlign: "left", border: `3px solid ${C.rosa}`, cursor: "pointer", fontFamily: "inherit" }}>
-              <span style={{ background: C.rosa, color: "#fff", borderRadius: 10, padding: "3px 9px", fontSize: 11, fontWeight: 800 }}>EMPIEZA AQUÍ</span>
-              <div style={{ fontWeight: 800, fontSize: 20, color: C.verde, margin: "8px 0 2px" }}>Agenda tu valoración</div>
-              <div style={{ fontSize: 13, color: C.suave }}>¿Primera vez o no sabes qué necesitas? Te asesoramos · {valoracion.duracionMin} min</div>
-            </button>
-          )}
           <div style={S.tarjeta}>
-            <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 4 }}>O elige tu servicio</div>
+            <div style={{ fontWeight: 800, fontSize: 20, color: C.verde, marginBottom: 4 }}>Elige tu servicio</div>
             <div style={{ fontSize: 13, color: C.suave, marginBottom: 12 }}>Agendas tu 1ª sesión. La duración es la de cada sesión.</div>
             <input style={S.input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar: axilas, bikini, facial…" />
             {!grupos && <div style={{ color: C.suave, fontSize: 14 }}>Cargando servicios…</div>}
@@ -109,6 +101,16 @@ export default function AgendarNueva({ api, sucursal, onVolver, setErr }) {
               );
             })}
           </div>
+          {valoracion && (
+            <button disabled={cargando} onClick={() => elegir(valoracion)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "rgba(255,255,255,.35)", border: "2px dashed #fff", borderRadius: 20, padding: "14px 16px", marginBottom: 6, cursor: "pointer", fontFamily: "inherit", color: C.verde }}>
+              <span style={{ fontSize: 26 }}>💬</span>
+              <span>
+                <span style={{ display: "block", fontWeight: 800, fontSize: 15 }}>¿No sabes qué necesitas?</span>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500 }}>Agenda una valoración y te asesoramos · {valoracion.duracionMin} min</span>
+              </span>
+            </button>
+          )}
           <button style={S.link} onClick={() => { setPaso("datos"); setErr(""); }}>← Volver</button>
         </>
       )}
