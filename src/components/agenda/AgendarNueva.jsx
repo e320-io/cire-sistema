@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { C, S, cap, fechaLarga, Pasos, Calendario } from "./ui.jsx";
 import AseguraLugar, { guardarPendiente } from "./AseguraLugar.jsx";
+import ResumenCita from "./ResumenCita.jsx";
 
 // Flujo "Agendar mi cita": datos -> servicio (catálogo del sistema) -> día/hora (duración del servicio) -> reservar.
 const ETAPAS = ["Tus datos", "Servicio", "Horario", "Asegura tu lugar"];
@@ -11,7 +12,7 @@ const esCombo = (g) => /^combo/i.test(g.categoria);
 const esZona = (g) => /^l[aá]ser/i.test(g.categoria);
 const nombreZona = (c) => c.replace(/^l[aá]ser\s+\w+\s*-\s*/i, ""); // "Láser Mujer - Rostro" -> "Rostro"
 
-export default function AgendarNueva({ api, slug, sucursal, onVolver, setErr, setTitulo }) {
+export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setErr, setTitulo }) {
   const [paso, setPaso] = useState("datos"); // datos | servicio | horarios | asegura | listo
   const [nombre, setNombre] = useState("");
   const [tel, setTel] = useState("");
@@ -158,10 +159,11 @@ export default function AgendarNueva({ api, slug, sucursal, onVolver, setErr, se
       )}
 
       {paso === "asegura" && listo && (
-        <AseguraLugar api={api} sucursal={sucursal} d={{ ...listo, telefono: tel }} setErr={setErr} onSalir={onVolver} />
+        <AseguraLugar api={api} sucursal={sucursal} info={info} d={{ ...listo, telefono: tel }} setErr={setErr} onSalir={onVolver} />
       )}
 
       {paso === "listo" && listo && (
+        <>
         <div style={S.tarjeta}>
           <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
             <div style={{ background: C.verde, color: "#fff", borderRadius: "50%", width: 52, height: 52, display: "grid", placeItems: "center", fontSize: 28, flex: "0 0 auto" }}>✓</div>
@@ -173,9 +175,11 @@ export default function AgendarNueva({ api, slug, sucursal, onVolver, setErr, se
           </div>
           <div style={{ ...S.pildora, marginBottom: 10 }}>Tu cita en CIRE {sucursal} quedó reservada.</div>
           <div style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }}>
-            Te escribiremos por WhatsApp para confirmar tu cita{listo.servicio === "Valoración" ? "" : " y coordinar tu anticipo"}. Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (hasta 24 h antes).
+            Te escribiremos por WhatsApp para confirmar tu cita{listo.servicio === "Valoración" ? "" : " y coordinar tu anticipo"}. Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (hasta {listo.reagendarHoras ?? 12} h antes).
           </div>
         </div>
+        <ResumenCita info={info || { nombre: sucursal }} fecha={listo.fecha} hora={listo.hora} horaFin={listo.horaFin} servicio={listo.servicio} />
+        </>
       )}
     </>
   );

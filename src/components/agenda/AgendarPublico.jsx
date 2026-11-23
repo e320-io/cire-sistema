@@ -13,11 +13,12 @@ const slugUrl = () => (location.pathname.match(/^\/agendar\/([^/]+)/) || [])[1] 
 
 export default function AgendarPublico() {
   const [slug, setSlug] = useState(slugUrl());
-  const [sucursal, setSucursal] = useState("");
+  const [info, setInfo] = useState(null); // { nombre, direccion, mapsUrl, estacionamiento }
+  const sucursal = info?.nombre || "";
   const [lista, setLista] = useState(null);
   const [modo, setModo] = useState("inicio"); // inicio | nueva | reagendar | asegurar
   const [titulo2, setTitulo2] = useState("");
-  const pendiente = slug ? leerPendiente(slug) : null; // apartado sin comprobante (se guardó en este dispositivo)
+  const pendiente = slug ? leerPendiente(slug) : null; // anticipo sin comprobante (se guardó en este dispositivo)
   const [err, setErr] = useState("");
   const api = useMemo(() => crearApi(slug), [slug]);
 
@@ -30,11 +31,11 @@ export default function AgendarPublico() {
   }, []);
   useEffect(() => {
     setErr("");
-    if (slug) api("info").then((j) => setSucursal(j.nombre)).catch((e) => setErr(e.message));
+    if (slug) api("info").then((j) => setInfo(j)).catch((e) => setErr(e.message));
     else api("sucursales").then((j) => setLista(j.sucursales)).catch((e) => setErr(e.message));
   }, [slug]); // eslint-disable-line
 
-  const elegirSucursal = (s) => { history.pushState(null, "", `/agendar/${s.slug}`); setSucursal(s.nombre); setSlug(s.slug); setModo("inicio"); };
+  const elegirSucursal = (s) => { history.pushState(null, "", `/agendar/${s.slug}`); setInfo({ nombre: s.nombre }); setSlug(s.slug); setModo("inicio"); };
   const volver = () => { setModo("inicio"); setErr(""); };
   const sinSlug = !slug;
 
@@ -73,7 +74,7 @@ export default function AgendarPublico() {
               <div style={{ fontSize: 20, fontWeight: 800, color: C.verde, lineHeight: 1.1 }}>Sucursal {sucursal}</div>
               <div style={{ fontSize: 13, color: C.suave }}>Agenda en línea</div>
             </div>
-            <button style={{ ...S.link, padding: 4, fontSize: 12 }} onClick={() => { history.pushState(null, "", "/agendar"); setSlug(""); setSucursal(""); setModo("inicio"); setErr(""); }}>Cambiar</button>
+            <button style={{ ...S.link, padding: 4, fontSize: 12 }} onClick={() => { history.pushState(null, "", "/agendar"); setSlug(""); setInfo(null); setModo("inicio"); setErr(""); }}>Cambiar</button>
           </div>
         )}
 
@@ -100,7 +101,7 @@ export default function AgendarPublico() {
                 <span style={{ fontSize: 30 }}>📎</span>
                 <span>
                   <span style={{ display: "block", fontWeight: 800, fontSize: 18, color: "#fff" }}>Subir mi comprobante</span>
-                  <span style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,.9)", marginTop: 2 }}>Tienes un apartado pendiente de confirmar</span>
+                  <span style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,.9)", marginTop: 2 }}>Tienes un anticipo pendiente de confirmar</span>
                 </span>
               </button>
             )}
@@ -109,9 +110,9 @@ export default function AgendarPublico() {
           </>
         )}
 
-        {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
-        {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
-        {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} onVolver={volver} setErr={setErr} />}
+        {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} info={info} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
+        {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} info={info} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
+        {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} info={info} onVolver={volver} setErr={setErr} />}
       </div>
     </div>
   );

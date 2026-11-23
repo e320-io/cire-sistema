@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { C, S, cap, fechaLarga, partes, Pasos, Calendario } from "./ui.jsx";
+import ResumenCita from "./ResumenCita.jsx";
 
 // Flujo "Reagendar mi cita": nombre + celular -> su cita -> nuevo día/hora (misma duración) -> confirmar.
-export default function Reagendar({ api, sucursal, onVolver, setErr }) {
+export default function Reagendar({ api, sucursal, info, onVolver, setErr }) {
   const [paso, setPaso] = useState("buscar"); // buscar | citas | horarios | listo
   const [nombre, setNombre] = useState("");
   const [tel, setTel] = useState("");
@@ -101,6 +102,7 @@ export default function Reagendar({ api, sucursal, onVolver, setErr }) {
       )}
 
       {paso === "listo" && nuevo && (
+        <>
         <div style={S.tarjeta}>
           <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
             <div style={{ background: C.verde, color: "#fff", borderRadius: "50%", width: 52, height: 52, display: "grid", placeItems: "center", fontSize: 28, flex: "0 0 auto" }}>✓</div>
@@ -111,6 +113,8 @@ export default function Reagendar({ api, sucursal, onVolver, setErr }) {
           </div>
           <div style={{ ...S.pildora, marginBottom: 0 }}>Tu cita en CIRE {sucursal} quedó reagendada. ¡Te esperamos!</div>
         </div>
+        <ResumenCita info={info || { nombre: sucursal }} fecha={nuevo.fecha} hora={nuevo.hora} horaFin={nuevo.horaFin} />
+        </>
       )}
     </>
   );
