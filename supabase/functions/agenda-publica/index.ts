@@ -7,10 +7,18 @@
 //   buscar        { slug, nombre, telefono }                      -> { citas: [...] }
 //   disponibilidad{ slug, nombre, telefono, eventId }             -> { duracionMin, dias: { "YYYY-MM-DD": ["10:00", ...] } }
 //   reagendar     { slug, nombre, telefono, eventId, fecha, hora }-> { ok, fecha, hora }
+//   sucursales    {}                                              -> { sucursales: [{ slug, nombre }] }
+//   servicios     { slug }                                        -> { grupos: [{ categoria, items: [{ id, nombre, precio, duracionMin }] }] }
+//   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias }
+//   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio }
+//
+// Convención de títulos de CIRE: 🧊 = aún sin anticipo, 💰 = ya mandó anticipo, 🔁 = reagendada.
 //
 // Secretos: GOOGLE_SERVICE_ACCOUNT_JSON (JSON completo de la cuenta de servicio). SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY ya existen.
 // Cada calendario de sucursal debe estar compartido con el client_email de la cuenta de servicio ("Hacer cambios en eventos").
 // Formato esperado del evento: el celular va en el título (ej. "Ximena Bustillo Díaz 5611115676").
+
+import { TIPOS, detectTipo, duracionServicio, precioVigente } from "./duraciones.ts";
 
 const TZ = "America/Mexico_City";
 const OFFSET = "-06:00"; // México no tiene horario de verano desde 2022
@@ -37,7 +45,7 @@ const sb = (path: string, init: RequestInit = {}) =>
 
 type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
-  intervalo_min: number; capacidad: number; anticipacion_horas: number; dias_adelante: number;
+  intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
 };
 async function getCfg(slug: string): Promise<Cfg> {
   const r = await sb(`agenda_sucursales?slug=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
@@ -79,8 +87,9 @@ const gcal = async (calId: string, path: string, init: RequestInit = {}, qs: Rec
   const u = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events${path}`);
   Object.entries(qs).forEach(([k, v]) => u.searchParams.set(k, v));
   const r = await fetch(u, { ...init, headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" } });
-  const j = await r.json();
-  if (!r.ok) throw new Error(`Google Calendar ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
+  const t = await r.text(); // DELETE responde 204 sin cuerpo
+  const j = t ? JSON.parse(t) : {};
+  if (!r.ok) throw new Error(`Google Calendar ${r.status}: ${t.slice(0, 200)}`);
   return j;
 };
 
@@ -153,13 +162,13 @@ async function miEvento(cfg: Cfg, nombre: string, telRaw: string, eventId: strin
 }
 
 // ---------- Horarios libres ----------
-async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string): Promise<Record<string, string[]>> {
+async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, anticipacionH = cfg.anticipacion_horas): Promise<Record<string, string[]>> {
   const ahora = Date.now();
   const evs = await listEvents(cfg.calendar_id, ahora, ahora + (cfg.dias_adelante + 2) * 864e5);
   const ocupados = evs
     .filter((e) => e.status !== "cancelled" && e.id !== ignorarId && e.transparency !== "transparent")
     .map(rango);
-  const minInicio = ahora + cfg.anticipacion_horas * 3600e3;
+  const minInicio = ahora + anticipacionH * 3600e3;
   const hoy = ymd(ahora);
   const dias: Record<string, string[]> = {};
   for (let i = 0; i < cfg.dias_adelante; i++) {
@@ -178,8 +187,45 @@ async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string): Prom
   return dias;
 }
 
+// ---------- Agendar cita nueva ----------
+type Servicio = { id: string; nombre: string; categoria: string; precio: number; duracionMin: number; tipo: string };
+const fila = (r: Record<string, unknown>): Servicio => {
+  const nombre = String(r.nombre), tipo = detectTipo(nombre);
+  return {
+    id: String(r.id), nombre, categoria: String(r.categoria), tipo,
+    precio: precioVigente(Number(r.precio) || 0, r.precio_promo == null ? null : Number(r.precio_promo), (r.promo_hasta as string) ?? null),
+    duracionMin: duracionServicio(nombre, tipo, r.duracion_min == null ? null : Number(r.duracion_min)),
+  };
+};
+const VALORACION: Servicio = { id: "valoracion", nombre: "Valoración", categoria: "Empieza aquí", precio: 0, duracionMin: TIPOS.valoracion.duracion, tipo: "valoracion" };
+const aplica = (r: Record<string, unknown>, cfg: Cfg) => !Array.isArray(r.sucursales) || r.sucursales.some((x) => sinAcentos(String(x)) === sinAcentos(cfg.nombre));
+const COLS = "id,nombre,categoria,precio,precio_promo,promo_hasta,duracion_min,sucursales,orden";
+
+async function listarServicios(cfg: Cfg): Promise<Servicio[]> {
+  const r = await sb(`catalogo?select=${COLS}&activo=eq.true&tipo=eq.servicio&order=orden`);
+  const rows = await r.json();
+  if (!Array.isArray(rows)) throw new Error("catalogo: " + JSON.stringify(rows).slice(0, 150));
+  return [VALORACION, ...rows.filter((x) => aplica(x, cfg)).map(fila)];
+}
+async function servicioPorId(cfg: Cfg, id: string): Promise<Servicio> {
+  if (id === "valoracion") return VALORACION;
+  if (!/^\d+$/.test(String(id))) falla("Elige un servicio.");
+  const r = await sb(`catalogo?select=${COLS}&id=eq.${id}&activo=eq.true&tipo=eq.servicio`);
+  const rows = await r.json();
+  if (!Array.isArray(rows) || !rows[0] || !aplica(rows[0], cfg)) falla("Ese servicio ya no está disponible. Elige otro.");
+  return fila(rows[0]);
+}
+const nombreLimpio = (n: string) =>
+  String(n ?? "").replace(/[\p{Extended_Pictographic}\u200d\ufe0f\d]/gu, "").replace(/[^\p{L}\s'.-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 60);
+const pesos = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+
 // ---------- Acciones ----------
 async function accion(b: Record<string, string>) {
+  if (b.accion === "sucursales") {
+    const r = await sb("agenda_sucursales?select=slug,nombre&activa=eq.true&calendar_id=not.is.null&order=nombre");
+    const rows = await r.json();
+    return { sucursales: Array.isArray(rows) ? rows : [] };
+  }
   const cfg = await getCfg(String(b.slug ?? ""));
   switch (b.accion) {
     case "info":
@@ -227,6 +273,7 @@ async function accion(b: Record<string, string>) {
           method: "PATCH",
           body: JSON.stringify({
             start: { dateTime: iso(nuevoIni), timeZone: TZ }, end: { dateTime: iso(nuevoFin), timeZone: TZ },
+            summary: (e.summary ?? "").startsWith("🔁") ? e.summary : `🔁${e.summary ?? ""}`, // 🔁 = reagendada
             description: `🔁 REAGENDADA POR LA CLIENTA desde el link (antes: ${antes}).\n${e.description ?? ""}`,
             extendedProperties: { private: { ...(e.extendedProperties?.private ?? {}), reagendada: "1" } },
           }),
@@ -237,6 +284,66 @@ async function accion(b: Record<string, string>) {
       }
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(nuevoFin) };
     }
+    case "servicios": {
+      const grupos: { categoria: string; items: Omit<Servicio, "categoria" | "tipo">[] }[] = [];
+      for (const sv of await listarServicios(cfg)) {
+        let g = grupos.find((x) => x.categoria === sv.categoria);
+        if (!g) grupos.push((g = { categoria: sv.categoria, items: [] }));
+        g.items.push({ id: sv.id, nombre: sv.nombre, precio: sv.precio, duracionMin: sv.duracionMin });
+      }
+      return { grupos };
+    }
+
+    case "disponibilidad_nueva": {
+      const sv = await servicioPorId(cfg, b.servicioId);
+      return { duracionMin: sv.duracionMin, dias: await horariosLibres(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas) };
+    }
+
+    case "agendar": {
+      if (b.web) return { ok: true }; // honeypot: los bots llenan este campo oculto
+      const nombre = nombreLimpio(b.nombre), tel = tel10(b.telefono);
+      if (nombre.length < 3 || !nombre.includes(" ")) falla("Escribe tu nombre y apellido.");
+      if (!tel) falla("Escribe tu celular a 10 dígitos.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(b.fecha) || !/^\d{2}:\d{2}$/.test(b.hora)) falla("Horario inválido.");
+      const sv = await servicioPorId(cfg, b.servicioId);
+
+      // Antiabuso: máx. 3 reservas por celular al día, y no duplicar si esa misma persona ya tiene cita próxima.
+      const desde = new Date(Date.now() - 864e5).toISOString();
+      const rr = await (await sb(`agenda_reservas?select=id&telefono=eq.${tel}&created_at=gte.${desde}`)).json();
+      if (Array.isArray(rr) && rr.length >= 3) falla("Ya hiciste varias reservas hoy. Escríbenos por WhatsApp para ayudarte.");
+      const ya = (await listEvents(cfg.calendar_id, Date.now(), Date.now() + 120 * 864e5)).find((e) => e.status !== "cancelled" && e.start.dateTime && coincide(e, nombre, tel));
+      if (ya) { const [i] = rango(ya); falla(`Ya tienes una cita agendada el ${ymd(i)} a las ${hm(i)}. Si quieres cambiarla usa «Reagendar mi cita».`); }
+
+      const libres = await horariosLibres(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas);
+      if (!libres[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
+      const ini = inst(b.fecha, toMin(b.hora)), fin = ini + sv.duracionMin * 60_000;
+
+      const valoracion = sv.id === "valoracion";
+      const ev = await gcal(cfg.calendar_id, "", {
+        method: "POST",
+        body: JSON.stringify({
+          // Convención CIRE: 🧊 = todavía sin anticipo (la valoración no lleva anticipo)
+          summary: `${valoracion ? "" : "🧊"}${nombre} ${tel}`,
+          description: `${cfg.nombre} ${sv.nombre}${sv.precio > 0 ? " " + pesos(sv.precio) : ""}${valoracion ? "" : " Pendiente Anticipo"}\n📲 AGENDADA EN LÍNEA por la clienta.`,
+          start: { dateTime: iso(ini), timeZone: TZ }, end: { dateTime: iso(fin), timeZone: TZ },
+          colorId: TIPOS[sv.tipo]?.colorId ?? "11",
+          reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
+          extendedProperties: { private: { origen: "online", servicio_id: sv.id } },
+        }),
+      }, { sendUpdates: "none" });
+
+      // Google no tiene candados: si dos clientas reservaron el mismo hueco a la vez, gana la que se creó primero.
+      const traslapan = (await listEvents(cfg.calendar_id, ini, fin))
+        .filter((e) => e.status !== "cancelled" && e.transparency !== "transparent" && e.start.dateTime && rango(e)[0] < fin && rango(e)[1] > ini)
+        .sort((x, y) => String((x as Ev & { created?: string }).created).localeCompare(String((y as Ev & { created?: string }).created)) || x.id.localeCompare(y.id));
+      if (traslapan.findIndex((e) => e.id === ev.id) >= cfg.capacidad) {
+        await gcal(cfg.calendar_id, `/${encodeURIComponent(ev.id)}`, { method: "DELETE" }).catch(() => {});
+        falla("Alguien más acaba de tomar ese horario. Elige otro.");
+      }
+      await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) });
+      return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre };
+    }
+
     default:
       return falla("Acción desconocida.");
   }
