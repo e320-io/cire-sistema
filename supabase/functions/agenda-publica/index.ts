@@ -472,6 +472,9 @@ async function accion(b: Record<string, string>) {
       }
       const ins = await sb("agenda_lista_espera", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ slug: cfg.slug, nombre, telefono: tel, servicio_id: sv.id, servicio: sv.nombre, dias, franja, comentario }) });
       if (!ins.ok) throw new Error("no pude guardar la lista de espera: " + (await ins.text()).slice(0, 200));
+      const ORDEN = ["lun", "mar", "mie", "jue", "vie", "sab"], ETQ: Record<string, string> = { lun: "Lun", mar: "Mar", mie: "Mié", jue: "Jue", vie: "Vie", sab: "Sáb" };
+      const FRANJA_TXT: Record<string, string> = { manana: "Por la mañana", tarde: "Por la tarde", cualquiera: "Cualquier hora" };
+      avisar(cfg, PLANTILLAS.espera, [cfg.nombre, nombre, tel, sv.nombre, ORDEN.filter((d) => dias.includes(d)).map((d) => ETQ[d]).join(", "), FRANJA_TXT[franja], comentario ?? "Sin comentarios"]);
       return { ok: true };
     }
 

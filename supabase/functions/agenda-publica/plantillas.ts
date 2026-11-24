@@ -3,7 +3,7 @@
 
 export type Plantilla = { name: string; body: string; ejemplo: string[] };
 
-export const PLANTILLAS: Record<"nueva" | "comprobante" | "reagendada", Plantilla> = {
+export const PLANTILLAS: Record<"nueva" | "comprobante" | "reagendada" | "espera", Plantilla> = {
   nueva: {
     name: "agenda_cita_nueva",
     body: "📅 Nueva cita agendada en línea en CIRE {{1}}.\n\nClienta: {{2}}\nCelular: {{3}}\nServicio: {{4}}\nCuándo: {{5}}\nEstatus: {{6}}\n\nYa quedó en el calendario de la sucursal.",
@@ -18,5 +18,10 @@ export const PLANTILLAS: Record<"nueva" | "comprobante" | "reagendada", Plantill
     name: "agenda_cita_reagendada",
     body: "🔁 Una clienta reagendó su cita en CIRE {{1}}.\n\nClienta: {{2}}\nCelular: {{3}}\nAntes: {{4}}\nAhora: {{5}}\n\nEl calendario ya está actualizado.",
     ejemplo: ["Coapa", "María López", "5512345678", "Jueves 26 de noviembre · 13:00 – 13:45", "Viernes 27 de noviembre · 16:00 – 16:45"],
+  },
+  espera: {
+    name: "agenda_lista_espera_nueva",
+    body: "⏳ Nueva clienta en la lista de espera de CIRE {{1}}.\n\nClienta: {{2}}\nCelular: {{3}}\nServicio: {{4}}\nDías que le acomodan: {{5}}\nHorario: {{6}}\nComentario: {{7}}\n\nContáctala cuando se abra un lugar. La lista está en la pestaña Espera del sistema.",
+    ejemplo: ["Coapa", "María López", "5512345678", "Combo Sexy Básico Mujer (8 ses)", "Sáb", "Por la mañana", "Solo puedo los sábados temprano"],
   },
 };
