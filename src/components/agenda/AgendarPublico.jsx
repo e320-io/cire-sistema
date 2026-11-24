@@ -113,6 +113,11 @@ export default function AgendarPublico() {
         {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} info={info} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
         {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} info={info} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
         {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} info={info} onVolver={volver} setErr={setErr} />}
+
+        {/* Pie en todas las pantallas */}
+        <div style={{ textAlign: "center", marginTop: 32, fontSize: 12, fontWeight: 500, color: C.sobre, opacity: 0.9, textShadow: "0 1px 6px rgba(var(--c-sombra),.25)" }}>
+          <a href="https://e320-landing.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Creado por e320.tech</a>
+        </div>
       </div>
     </div>
   );
