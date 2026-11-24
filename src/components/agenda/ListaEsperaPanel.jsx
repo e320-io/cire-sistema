@@ -108,3 +108,35 @@ export default function ListaEsperaPanel({ sucursal, onCambio }) {
     </div>
   );
 }
+
+/** Pestaña "Espera" del panel principal (dueñas, socias, admin): una sucursal a la vez, con selector y pendientes por sucursal. */
+export function EsperaDashboard({ sucursales }) {
+  const { T } = useT();
+  const [suc, setSuc] = useState(sucursales[0]);
+  const [cuentas, setCuentas] = useState({});
+  useEffect(() => { if (!sucursales.includes(suc)) setSuc(sucursales[0]); }, [sucursales.join("|")]); // eslint-disable-line
+  useEffect(() => {
+    let vivo = true;
+    const cargar = async () => {
+      const r = await Promise.all(sucursales.map(async (n) => { try { return [n, (await apiEspera("conteo", { slug: slugSucursal(n) })).pendientes]; } catch { return [n, null]; } }));
+      if (vivo) setCuentas(Object.fromEntries(r));
+    };
+    const t0 = setTimeout(cargar, 800), t = setInterval(cargar, 45000);
+    return () => { vivo = false; clearTimeout(t0); clearInterval(t); };
+  }, [sucursales.join("|")]); // eslint-disable-line
+  if (!sucursales.length) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {sucursales.length > 1 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "16px 24px 0" }}>
+          {sucursales.map((n) => (
+            <button key={n} onClick={() => setSuc(n)} style={{ padding: "6px 16px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 700, border: `1px solid ${suc === n ? "#2721E8" : T.cardBdr}`, background: suc === n ? "#2721E8" : "transparent", color: suc === n ? "#fff" : T.sub }}>
+              {n}{cuentas[n] > 0 && <span style={{ marginLeft: 8, background: "#ef4444", color: "#fff", borderRadius: 999, fontSize: 11, padding: "1px 7px" }}>{cuentas[n]}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <ListaEsperaPanel key={suc} sucursal={suc} onCambio={(n) => setCuentas((c) => ({ ...c, [suc]: n }))} />
+    </div>
+  );
+}

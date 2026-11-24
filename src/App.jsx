@@ -10,7 +10,7 @@ import { setCredencialesLealtad, tokenDe } from "./lib/lealtad.js";
 import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES, puedeEditarCatalogo } from "./lib/constantes.js";
 import PanelOpiniones from "./components/opiniones/PanelOpiniones.jsx";
 import { setCredencialesOpiniones } from "./lib/opiniones.js";
-import ListaEsperaPanel from "./components/agenda/ListaEsperaPanel.jsx";
+import ListaEsperaPanel, { EsperaDashboard } from "./components/agenda/ListaEsperaPanel.jsx";
 import { setCredencialesEspera, apiEspera, slugSucursal } from "./lib/espera.js";
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
@@ -6385,7 +6385,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
   const esSocia=!!sucursalesFiltro&&!sucursalesPropias;
   const esAdmin=!sucursalesFiltro&&!sucursalesPropias;
   const esDuenaGeneral=!!sucursalesPropias;
-  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","opiniones","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","opiniones","importar","reparar","analitica","usuarios","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","opiniones","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot)).filter(t=>!(t==="catalogo"&&!puedeEditarCatalogo(session)));
+  const tabsBase=(esSocia?["resumen","sucursales","servicios","meta","finanzas","opiniones","espera","preventa","bot"]:esAdmin?["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","opiniones","espera","importar","reparar","analitica","usuarios","preventa","bot"]:["resumen","sucursales","servicios","meta","pos","catalogo","finanzas","opiniones","espera","preventa","bot"]).filter(t=>!(t==="bot"&&session?.noBot)).filter(t=>!(t==="catalogo"&&!puedeEditarCatalogo(session)));
   const TABS_DASH=esSocia&&session?.tabsExtra?[...tabsBase,...session.tabsExtra.filter(t=>t!=="zettle"&&!tabsBase.includes(t))]:tabsBase;
   const USUARIOS_DASH=filtro?USUARIOS.filter(u=>u.rol==="sucursal"&&filtro.includes(u.nombre)):USUARIOS.filter(u=>u.rol==="sucursal");
 
@@ -6505,7 +6505,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         </div>
         {/* Fila 2: tabs */}
         <div style={{padding:"0 24px",display:"flex",borderTop:`1px solid ${light?"rgba(0,0,0,0.05)":"rgba(255,255,255,0.04)"}`,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],catalogo:["🏷","Catálogo"],finanzas:["💰","Finanzas"],opiniones:["⭐","Opiniones"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],usuarios:["🔑","Usuarios"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
+          {TABS_DASH.map(t=>{const labels={resumen:["📊","Resumen"],sucursales:["🏪","Sucursales"],servicios:["🪒","Servicios"],meta:["📣","Meta Ads"],pos:["🖥","POS"],catalogo:["🏷","Catálogo"],finanzas:["💰","Finanzas"],opiniones:["⭐","Opiniones"],espera:["⏳","Espera"],importar:["📥","Importar"],reparar:["🔧","Reparar"],analitica:["🔬","Analítica"],usuarios:["🔑","Usuarios"],preventa:["🔥","Preventa"],bot:["💬","Bot WhatsApp"]};const[ico,lbl]=labels[t]||["",t];return<div key={t} className={`tab-dash${tab===t?" active":""}`} style={{borderBottomColor:tab===t?"#2721E8":"transparent",fontSize:"12px",padding:"10px 16px"}} onClick={()=>setTab(t)}><span style={{fontSize:"13px"}}>{ico}</span><span>{lbl}</span></div>;})}
         </div>
       </div>
 
@@ -6939,6 +6939,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
 
         {/* ═══ PREVENTA ═══ */}
         {tab==="opiniones"&&<PanelOpiniones sucursalesFiltro={filtro}/>}
+        {tab==="espera"&&<EsperaDashboard sucursales={USUARIOS_DASH.map(u=>u.nombre)}/>}
         {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro} session={session}/>}
 
         {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
