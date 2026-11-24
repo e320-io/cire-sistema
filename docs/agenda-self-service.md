@@ -53,3 +53,10 @@ Al agendar, subir comprobante o reagendar, `agenda-publica` manda una plantilla 
 Los textos exactos y los ejemplos están en `supabase/functions/agenda-publica/plantillas.ts`. Las plantillas deben existir y estar **aprobadas** en Meta (WhatsApp Manager > Plantillas) con ese nombre; si no, el envío falla y solo queda el error en los logs de la función (la reserva no se afecta).
 Los números van con el mismo formato que `RESUMEN_DESTINOS`. Con el número de **prueba** de Meta, cada destinatario debe estar verificado (máx. 5 en total).
 La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊 por 💰).
+
+## Lista de espera
+- **Clienta (`/agendar`, paso de horarios):** bajo el calendario aparece "¿No está disponible el horario que buscas? Entra a la lista de espera, ¡puede abrirse un lugar para ti!". Elige los días que le acomodan (lun–sáb), la franja (mañana / tarde / cualquiera) y un comentario opcional; usa el nombre y celular que ya escribió. Si no hay ningún espacio para ese servicio, en lugar de un error se muestra la lista de espera ya abierta.
+- **Recepción (sistema → pestaña "⏳ Espera"):** cada sucursal ve sus pendientes con globo rojo en la pestaña. Por clienta: botón WhatsApp (mensaje prellenado), Llamar, nota del equipo, y estados *Pendiente → Contactada → Agendada* o *Descartada*. Quien atiende varias sucursales cambia de sucursal con el selector de la pestaña.
+- **Datos:** tabla `agenda_lista_espera` (migración 051), cerrada al público (RLS sin policies). Solo la función `agenda-publica` la toca: acción pública `espera` y acciones del equipo `espera_listar`, `espera_conteo`, `espera_actualizar` (usuario + hash de `system_users`, igual que `lealtad` y `opiniones`).
+- **Antiabuso:** campo trampa para bots; si la misma clienta (mismo celular y sucursal) ya está pendiente se actualiza su solicitud en vez de duplicarla; máx. 3 anotaciones nuevas por celular al día (se omite con `modo_pruebas`).
+- **No incluido (posible siguiente paso):** aviso por WhatsApp al equipo cuando alguien se anota (requiere una plantilla nueva aprobada por Meta) y la lista de espera en el reagendado.

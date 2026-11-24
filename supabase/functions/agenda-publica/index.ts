@@ -11,6 +11,8 @@
 //   servicios     { slug }                                        -> { grupos: [{ categoria, items: [{ id, nombre, precio, duracionMin }] }] }
 //   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias }
 //   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio, reservaId, anticipo, reagendarHoras }
+//   espera        { slug, nombre, telefono, servicioId, dias: ['sab'], franja, comentario } -> { ok }  (lista de espera: la clienta que no encontró horario)
+//   espera_listar / espera_conteo / espera_actualizar  { usuario, hash, ... }  -> equipo (recepción) con usuario + hash de system_users
 //   reserva       { slug, reservaId, telefono }                   -> { servicio, fecha, hora, horaFin, comprobante, anticipo, reagendarHoras }  (retomar "Asegura tu lugar")
 //   comprobante   { slug, reservaId, telefono, imagen }           -> { ok }   imagen = dataURL jpeg/png; se guarda en Storage (bucket privado "comprobantes") y el enlace va a la descripción del evento
 //
@@ -274,6 +276,47 @@ const eventoDe = async (cfg: Cfg, r: Reserva): Promise<Ev> => {
   return e;
 };
 
+// ---------- Lista de espera: acciones del EQUIPO (recepción) ----------
+// Se validan igual que en las funciones `lealtad` y `opiniones`: usuario + hash de system_users.
+async function staff(b: Record<string, unknown>): Promise<string> {
+  const u = String(b.usuario ?? ""), h = String(b.hash ?? "");
+  if (!u || !/^[0-9a-f]{64}$/.test(h)) falla("Sesión no válida. Vuelve a entrar al sistema.");
+  const r = await (await sb(`system_users?select=username&username=eq.${encodeURIComponent(u)}&password_hash=eq.${h}`)).json();
+  if (!Array.isArray(r) || !r.length) falla("Sesión no válida. Vuelve a entrar al sistema.");
+  return u;
+}
+const SLUG_OK = (v: unknown) => { const x = String(v ?? ""); if (!/^[a-z0-9-]{2,30}$/.test(x)) falla("Sucursal no válida."); return x; };
+const ESTADOS_ESPERA = ["pendiente", "contactada", "agendada", "descartada"];
+async function esperaEquipo(b: Record<string, unknown>) {
+  const usuario = await staff(b);
+  switch (b.accion) {
+    case "espera_listar": {
+      const slug = SLUG_OK(b.slug);
+      const r = await (await sb(`agenda_lista_espera?select=id,nombre,telefono,servicio,dias,franja,comentario,estado,nota_equipo,atendida_por,atendida_en,created_at&slug=eq.${slug}&order=created_at.desc&limit=300`)).json();
+      return { espera: Array.isArray(r) ? r : [] };
+    }
+    case "espera_conteo": {
+      const slug = SLUG_OK(b.slug);
+      const r = await (await sb(`agenda_lista_espera?select=id&slug=eq.${slug}&estado=eq.pendiente&limit=500`)).json();
+      return { pendientes: Array.isArray(r) ? r.length : 0 };
+    }
+    case "espera_actualizar": {
+      const id = String(b.id ?? ""), estado = String(b.estado ?? "");
+      if (!/^[0-9a-f-]{36}$/i.test(id)) falla("Registro no válido.");
+      if (!ESTADOS_ESPERA.includes(estado)) falla("Estado no válido.");
+      const nota = b.nota == null ? undefined : String(b.nota).replace(/\s+/g, " ").trim().slice(0, 500);
+      const ahora = new Date().toISOString();
+      const cambios: Record<string, unknown> = { estado, actualizado_en: ahora, atendida_por: estado === "pendiente" ? null : usuario, atendida_en: estado === "pendiente" ? null : ahora };
+      if (nota !== undefined) cambios.nota_equipo = nota || null;
+      const r = await sb(`agenda_lista_espera?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(cambios) });
+      if (!r.ok) throw new Error("no pude actualizar la lista de espera: " + (await r.text()).slice(0, 200));
+      return { ok: true };
+    }
+    default:
+      return falla("Acción desconocida.");
+  }
+}
+
 // ---------- Acciones ----------
 async function accion(b: Record<string, string>) {
   if (b.accion === "sucursales") {
@@ -281,6 +324,7 @@ async function accion(b: Record<string, string>) {
     const rows = await r.json();
     return { sucursales: Array.isArray(rows) ? rows : [] };
   }
+  if (String(b.accion ?? "").startsWith("espera_")) return await esperaEquipo(b as unknown as Record<string, unknown>);
   const cfg = await getCfg(String(b.slug ?? ""));
   switch (b.accion) {
     case "info":
@@ -402,6 +446,33 @@ async function accion(b: Record<string, string>) {
       const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) })).json();
       avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin), valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo"]);
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
+    }
+
+    case "espera": {
+      if (b.web) return { ok: true }; // honeypot
+      const nombre = nombreLimpio(b.nombre), tel = tel10(b.telefono);
+      if (nombre.length < 3 || !nombre.includes(" ")) falla("Escribe tu nombre y apellido.");
+      if (!tel) falla("Escribe tu celular a 10 dígitos.");
+      const sv = await servicioPorId(cfg, b.servicioId);
+      const crudo = (b as unknown as { dias?: unknown }).dias;
+      const dias = (Array.isArray(crudo) ? crudo : []).map(String).filter((d, i, a) => ["lun", "mar", "mie", "jue", "vie", "sab"].includes(d) && a.indexOf(d) === i);
+      if (!dias.length) falla("Elige al menos un día que te acomode.");
+      const franja = ["manana", "tarde", "cualquiera"].includes(b.franja) ? b.franja : "cualquiera";
+      const comentario = String(b.comentario ?? "").replace(/\s+/g, " ").trim().slice(0, 300) || null;
+      // Misma anotación vigente (mismo celular y sucursal): se actualiza, no se duplica.
+      const previa = await (await sb(`agenda_lista_espera?select=id&slug=eq.${cfg.slug}&telefono=eq.${tel}&estado=eq.pendiente&limit=1`)).json();
+      if (Array.isArray(previa) && previa[0]) {
+        await sb(`agenda_lista_espera?id=eq.${previa[0].id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ nombre, servicio_id: sv.id, servicio: sv.nombre, dias, franja, comentario, actualizado_en: new Date().toISOString() }) });
+        return { ok: true, actualizada: true };
+      }
+      if (!cfg.modo_pruebas) { // antiabuso: máx. 3 anotaciones nuevas por celular al día
+        const desde = new Date(Date.now() - 864e5).toISOString();
+        const rr = await (await sb(`agenda_lista_espera?select=id&telefono=eq.${tel}&created_at=gte.${desde}`)).json();
+        if (Array.isArray(rr) && rr.length >= 3) falla("Ya te anotaste en varias listas hoy. Escríbenos por WhatsApp para ayudarte.");
+      }
+      const ins = await sb("agenda_lista_espera", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ slug: cfg.slug, nombre, telefono: tel, servicio_id: sv.id, servicio: sv.nombre, dias, franja, comentario }) });
+      if (!ins.ok) throw new Error("no pude guardar la lista de espera: " + (await ins.text()).slice(0, 200));
+      return { ok: true };
     }
 
     case "reserva": {

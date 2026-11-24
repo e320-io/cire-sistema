@@ -10,6 +10,8 @@ import { setCredencialesLealtad, tokenDe } from "./lib/lealtad.js";
 import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES, puedeEditarCatalogo } from "./lib/constantes.js";
 import PanelOpiniones from "./components/opiniones/PanelOpiniones.jsx";
 import { setCredencialesOpiniones } from "./lib/opiniones.js";
+import ListaEsperaPanel from "./components/agenda/ListaEsperaPanel.jsx";
+import { setCredencialesEspera, apiEspera, slugSucursal } from "./lib/espera.js";
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
@@ -2289,6 +2291,9 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
   const sessionRec=session.sucursalesRecepcion
     ?{...session,...(USUARIOS.find(u=>u.nombre===sucursalRecepNombre&&u.rol==="sucursal")||{id:session.id,nombre:session.nombre,color:session.color})}
     :session;
+  // Lista de espera de la agenda en línea: conteo de pendientes de la sucursal activa (punto rojo en la pestaña "Espera")
+  const[esperaPend,setEsperaPend]=useState(0);
+  useEffect(()=>{let vivo=true;const cargar=async()=>{try{const j=await apiEspera("conteo",{slug:slugSucursal(sessionRec.nombre)});if(vivo)setEsperaPend(j.pendientes||0);}catch(e){/* sin sesión todavía: se reintenta */}};const t0=setTimeout(cargar,1500);const t=setInterval(cargar,45000);return()=>{vivo=false;clearTimeout(t0);clearInterval(t);};},[sessionRec.nombre]);
   const[view,setView]=useState("pos");const[carrito,setCarrito]=useState([]);const[filtro,setFiltro]=useState("Todos");const[busq,setBusq]=useState("");
   const[tipoTicket,setTipoTicket]=useState("nueva"); // "nueva" | "recompra"
   const[clientaSel,setClientaSel]=useState(null);const[busqCli,setBusqCli]=useState("");const[cliResults,setCliResults]=useState([]);
@@ -2516,10 +2521,11 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           <div style={{fontSize:"18px",fontWeight:700,letterSpacing:"4px"}}>CIRE</div><div style={{width:"1px",height:"18px",background:light?"rgba(0,0,0,0.1)":"rgba(255,255,255,0.1)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}><div style={{width:"8px",height:"8px",borderRadius:"50%",background:session.color}}/><div style={{fontSize:"13px",color:light?"rgba(26,31,60,0.45)":T.sub,fontWeight:300}}>{session.nombre}</div></div>
           <div style={{display:"flex"}}>
-            {["pos","agenda","confirmar","clientas","historial","preventa","ajustes","bot",...(session.id===1?["reparar"]:[])].filter(v=>!(v==="bot"&&session.noBot)).map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
+            {["pos","agenda","confirmar","clientas","historial","preventa","espera","ajustes","bot",...(session.id===1?["reparar"]:[])].filter(v=>!(v==="bot"&&session.noBot)).map(v=><div key={v} className="nav-tab" style={{borderBottomColor:view===v?"#2721E8":"transparent",color:view===v?(light?"#1a1f3c":"#fff"):(light?"rgba(26,31,60,0.45)":T.sub),position:"relative"}}
               onClick={()=>{logActividad(session,`pos:vista`,v);setView(v);setFichaId(null);if(v==="historial"){const hoyStr=hoy();setHistorialFecha(hoyStr);cargarT(session.id,hoyStr);}if(v==="clientas")cargarCli("");}}>
               {v==="agenda"&&notifDatos.length>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#f59e0b",color:"#000",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifDatos.length}</span>}
-              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":v==="reparar"?"🔧 Reparar":"Historial"}</div>)}
+              {v==="espera"&&esperaPend>0&&<span style={{position:"absolute",top:"6px",right:"6px",background:"#ef4444",color:"#fff",fontSize:"9px",fontWeight:800,borderRadius:"50%",width:"16px",height:"16px",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{esperaPend}</span>}
+              {v==="pos"?"Punto de Venta":v==="agenda"?"📅 Agenda":v==="confirmar"?"📲 Confirmar":v==="clientas"?"👤 Clientas":v==="preventa"?"🔥 Preventa":v==="espera"?"⏳ Espera":v==="ajustes"?"⚙ Ajustes":v==="bot"?"💬 Bot WhatsApp":v==="reparar"?"🔧 Reparar":"Historial"}</div>)}
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -2548,10 +2554,11 @@ function POS({session,onSwitchSucursal,isAdmin,tema="dark",toggleTema=()=>{}}){
           </div>)}
         </div>}
       </div>}
-      {session.sucursalesRecepcion&&(view==="agenda"||view==="confirmar")&&<div style={{display:"flex",gap:"6px",padding:"8px 20px",borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`,background:light?"rgba(255,255,255,0.95)":"rgba(0,0,0,0.3)",flexShrink:0,flexWrap:"wrap"}}>
+      {session.sucursalesRecepcion&&(view==="agenda"||view==="confirmar"||view==="espera")&&<div style={{display:"flex",gap:"6px",padding:"8px 20px",borderBottom:`1px solid ${light?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.06)"}`,background:light?"rgba(255,255,255,0.95)":"rgba(0,0,0,0.3)",flexShrink:0,flexWrap:"wrap"}}>
         {session.sucursalesRecepcion.map(s=>{const c=COLORES[s]||"#49B8D3";return<button key={s} onClick={()=>setSucursalRecepNombre(s)} style={{padding:"4px 14px",borderRadius:"20px",border:`1px solid ${sucursalRecepNombre===s?c:"rgba(255,255,255,0.1)"}`,background:sucursalRecepNombre===s?`${c}22`:"transparent",color:sucursalRecepNombre===s?c:T.faint,fontSize:"11px",fontWeight:600,cursor:"pointer",fontFamily:"'Albert Sans',sans-serif"}}>{s}</button>;})}
       </div>}
       {view==="agenda"&&<AgendaCalendar key={`ag-${sessionRec.id}`} session={sessionRec} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
+      {view==="espera"&&<ListaEsperaPanel key={`es-${sessionRec.id}`} sucursal={sessionRec.nombre} onCambio={setEsperaPend}/>}
       {view==="preventa"&&<PreventaView key="pv" session={session} isAdmin={isAdmin} onVerFicha={id=>{setFichaId(id);setView("clientas");}}/>}
       {view==="reparar"&&<div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}><div className="glass" style={{padding:"0",overflow:"hidden"}}><RepararImport sucursalId={session.id} sucursalNombre={session.nombre}/></div></div>}
 
@@ -7584,7 +7591,7 @@ export default function App(){
   const[mustChange,setMustChange]=useState(false);
   // Tarjeta de lealtad: token del QR escaneado (también si abrieron /sello/<token> y tuvieron que iniciar sesión)
   const[tokenSello,setTokenSello]=useState(()=>/^\/sello\//.test(location.pathname)?tokenDe(location.pathname):null);
-  useEffect(()=>{setCredencialesLealtad(session?.usuario,supaUser?.password_hash);setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
+  useEffect(()=>{setCredencialesLealtad(session?.usuario,supaUser?.password_hash);setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);setCredencialesEspera(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
   const cerrarSello=()=>{setTokenSello(null);if(/^\/sello\//.test(location.pathname))history.replaceState(null,"","/");};
 
   async function login(){

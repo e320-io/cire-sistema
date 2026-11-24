@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { C, S, cap, fechaLarga, Pasos, Calendario } from "./ui.jsx";
 import AseguraLugar, { guardarPendiente } from "./AseguraLugar.jsx";
 import CierreCita from "./CierreCita.jsx";
+import EsperaPublica from "./EsperaPublica.jsx";
 
 // Flujo "Agendar mi cita": datos -> servicio (catálogo del sistema) -> día/hora (duración del servicio) -> reservar.
 const ETAPAS = ["Tus datos", "Servicio", "Horario", "Asegura tu lugar"];
@@ -46,8 +47,8 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
   const elegir = (s) => correr(async () => {
     const j = await api("disponibilidad_nueva", { servicioId: s.id });
     const fechas = Object.keys(j.dias);
-    if (!fechas.length) throw new Error("No hay horarios disponibles para ese servicio en los próximos días. Escríbenos por WhatsApp.");
-    setSv({ ...s, duracionMin: j.duracionMin }); setDias(j.dias); setDia(fechas[0]); setMes(fechas[0].slice(0, 7)); setHora(""); setPaso("horarios");
+    // Si no hay ningún espacio no es un error sin salida: la clienta ve la lista de espera en el paso de horarios.
+    setSv({ ...s, duracionMin: j.duracionMin }); setDias(j.dias); setDia(fechas[0] || ""); setMes(fechas[0] ? fechas[0].slice(0, 7) : ""); setHora(""); setPaso("horarios");
   });
   const reservar = () => correr(async () => {
     const j = await api("agendar", { nombre, telefono: tel, servicioId: sv.id, fecha: dia, hora, web });
@@ -142,6 +143,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
           <div style={S.pildora}>
             <span style={{ opacity: 0.85 }}>Tu servicio:</span> <b>{sv.nombre}</b> · {sv.duracionMin} min{pesos(sv.precio) ? ` · ${pesos(sv.precio)}` : ""}
           </div>
+          {Object.keys(dias).length > 0 ? (
           <div style={S.tarjeta}>
             <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 12 }}>Elige el día</div>
             <Calendario dias={dias} dia={dia} mes={mes} setMes={setMes} onPick={(d) => { setDia(d); setHora(""); }} />
@@ -151,9 +153,18 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
               {(dias[dia] || []).map((h) => <button key={h} style={S.hora(h === hora)} onClick={() => setHora(h)}>{h}</button>)}
             </div>
           </div>
+          ) : (
+          <div style={S.tarjeta}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 6 }}>Por ahora no hay horarios libres</div>
+            <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto }}>Para este servicio no hay espacio en los próximos días. Anótate en la lista de espera y te avisamos en cuanto se abra un lugar.</div>
+          </div>
+          )}
+          <EsperaPublica api={api} nombre={nombre} tel={tel} servicio={sv} abierta0={Object.keys(dias).length === 0} />
+          {Object.keys(dias).length > 0 && (
           <button style={S.boton(!!hora && !cargando)} disabled={!hora || cargando} onClick={reservar}>
             {cargando ? "Reservando…" : hora ? `Reservar ${cap(fechaLarga(dia))} · ${hora}` : "Elige una hora"}
           </button>
+          )}
           <button style={S.link} onClick={() => { setPaso("servicio"); setErr(""); }}>← Cambiar servicio</button>
         </>
       )}
