@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { C, S, FONT, Loto, estiloTema, fechaLarga, cap } from "../agenda/ui.jsx";
+import { C, S, FONT, estiloTema, fechaLarga, cap } from "../agenda/ui.jsx";
+import LogoCire from "../agenda/LogoCire.jsx";
 import { apiLealtad, tokenDe, urlSello } from "../../lib/lealtad.js";
 
 // Página pública /tarjeta/<token>: la tarjeta de la clienta con un sello por cada sesión de sus paquetes y un QR
@@ -41,10 +42,9 @@ export default function TarjetaPublica() {
   return (
     <div style={{ ...S.pagina, ...estiloTema("turquesa") }}>
       <div style={S.caja}>
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <Loto size={52} />
-          <div style={{ color: "#fff", fontSize: 26, fontWeight: 800, letterSpacing: 4 }}>CIRE</div>
-          <div style={{ color: "#fff", opacity: .9, fontSize: 13 }}>Tu tarjeta de sesiones</div>
+        <div style={{ textAlign: "center", marginBottom: 18, color: "#fff" }}>
+          <LogoCire size={150} />
+          <div style={{ opacity: .95, fontSize: 14, fontWeight: 600, marginTop: 4 }}>Tu tarjeta de sesiones</div>
         </div>
 
         {err && <div style={S.pildora}>{err}</div>}
