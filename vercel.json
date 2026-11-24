@@ -3,6 +3,8 @@
     { "source": "/agendar", "destination": "/index.html" },
     { "source": "/agendar/:slug", "destination": "/index.html" },
     { "source": "/opinion", "destination": "/index.html" },
-    { "source": "/opinion/:slug", "destination": "/index.html" }
+    { "source": "/opinion/:slug", "destination": "/index.html" },
+    { "source": "/tarjeta/:token", "destination": "/index.html" },
+    { "source": "/sello/:token", "destination": "/index.html" }
   ]
 }

@@ -3,6 +3,10 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { SUPABASE_URL, SUPABASE_KEY, META_TOKEN, META_ACCOUNT, CLAUDE_KEY, supabase, BOT_SB_URL, BOT_SB_KEY, BOT_API_URL, botSB } from "./lib/supabase.js";
 import { ThemeCtx, mkT, useT } from "./lib/theme.jsx";
+import SelloRecepcion from "./components/lealtad/SelloRecepcion.jsx";
+import EscanerTarjeta from "./components/lealtad/EscanerTarjeta.jsx";
+import BotonTarjetaClienta from "./components/lealtad/BotonTarjetaClienta.jsx";
+import { setCredencialesLealtad, tokenDe } from "./lib/lealtad.js";
 import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES, puedeEditarCatalogo } from "./lib/constantes.js";
 import PanelOpiniones from "./components/opiniones/PanelOpiniones.jsx";
 import { setCredencialesOpiniones } from "./lib/opiniones.js";
@@ -500,6 +504,7 @@ function FichaClienta({clientaId,session,onClose,isAdmin=false}){
         {paquetes.some(p=>p.activo)&&<button onClick={abrirAgendarSig} style={{fontSize:"12px",padding:"8px 18px",borderRadius:"10px",border:`1px solid ${prox?"rgba(16,185,129,0.4)":"rgba(16,185,129,0.7)"}`,background:prox?"rgba(16,185,129,0.08)":"rgba(16,185,129,0.15)",color:"#10b981",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>＋ Agendar sesión</button>}
         <button onClick={()=>{setSesExtraMotivo("");setFechaSesExtra("");setHoraSesExtra("");setModalSesExtra(true);}} style={{fontSize:"12px",padding:"8px 18px",borderRadius:"10px",border:"1px solid rgba(245,158,11,0.45)",background:"rgba(245,158,11,0.08)",color:"#f59e0b",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>＋ Sesión extra</button>
         <button className="btn-ghost" onClick={abrirEdit} style={{fontSize:"12px",borderColor:"rgba(39,33,232,0.4)",color:"#a5b4fc",padding:"8px 18px"}}>✏ Editar ficha</button>
+        <BotonTarjetaClienta clienta={clienta}/>
       </div>
 
       {/* HEADER CLIENTE */}
@@ -7577,7 +7582,10 @@ export default function App(){
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
   const[showForgot,setShowForgot]=useState(false);
   const[mustChange,setMustChange]=useState(false);
-  useEffect(()=>{setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
+  // Tarjeta de lealtad: token del QR escaneado (también si abrieron /sello/<token> y tuvieron que iniciar sesión)
+  const[tokenSello,setTokenSello]=useState(()=>/^\/sello\//.test(location.pathname)?tokenDe(location.pathname):null);
+  useEffect(()=>{setCredencialesLealtad(session?.usuario,supaUser?.password_hash);setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
+  const cerrarSello=()=>{setTokenSello(null);if(/^\/sello\//.test(location.pathname))history.replaceState(null,"","/");};
 
   async function login(){
     if(!user.trim()||!pass){setErr("Completa usuario y contraseña");return;}
@@ -7656,5 +7664,6 @@ export default function App(){
     content=<><POS session={session} onSwitchSucursal={logout} isAdmin={false} tema={tema} toggleTema={toggleTema}/><AsistenteVirtual session={session}/></>;
   }
 
-  return <ThemeCtx.Provider value={{light,acc}}>{content}</ThemeCtx.Provider>;
+  const hayTarjeta=session&&!mustChange;
+  return <ThemeCtx.Provider value={{light,acc}}>{content}{hayTarjeta&&<EscanerTarjeta onToken={setTokenSello}/>}{hayTarjeta&&tokenSello&&<SelloRecepcion session={session} token={tokenSello} onClose={cerrarSello}/>}</ThemeCtx.Provider>;
 }
