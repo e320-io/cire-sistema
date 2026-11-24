@@ -21,6 +21,7 @@
 // Formato esperado del evento: el celular va en el título (ej. "Ximena Bustillo Díaz 5611115676").
 
 import { TIPOS, detectTipo, duracionServicio, precioVigente } from "./duraciones.ts";
+import { PLANTILLAS, type Plantilla } from "./plantillas.ts";
 
 const TZ = "America/Mexico_City";
 const OFFSET = "-06:00"; // México no tiene horario de verano desde 2022
@@ -49,7 +50,7 @@ type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
   direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
-  tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
+  avisos_tel: string[] | null; tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
@@ -192,6 +193,29 @@ async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, antic
   return dias;
 }
 
+// ---------- Avisos por WhatsApp al equipo ----------
+// Plantillas aprobadas por Meta (ver plantillas.ts). Nunca rompen la reserva: si falla el envío solo se registra el error.
+const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const cuandoTxt = (ini: number, fin: number) =>
+  `${cap1(new Date(ini).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }))} · ${hm(ini)} – ${hm(fin)}`;
+const paraWA = (t: unknown) => String(t ?? "").replace(/[\n\r\t]+/g, " ").replace(/ {4,}/g, "   ").trim().slice(0, 300) || "-";
+async function mandarPlantilla(tel: string, p: Plantilla, vars: string[]) {
+  const r = await fetch(`https://graph.facebook.com/v21.0/${env("WA_PHONE_ID")}/messages`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("WA_TOKEN")}` },
+    body: JSON.stringify({
+      messaging_product: "whatsapp", to: tel.replace(/\D/g, ""), type: "template",
+      template: { name: p.name, language: { code: "es_MX" }, components: [{ type: "body", parameters: vars.map((t) => ({ type: "text", text: paraWA(t) })) }] },
+    }),
+  });
+  if (!r.ok) console.error(`aviso WhatsApp (${p.name}) falló para …${tel.slice(-4)}:`, (await r.text()).slice(0, 300));
+}
+function avisar(cfg: Cfg, p: Plantilla, vars: string[]) {
+  const tels = cfg.avisos_tel ?? [];
+  if (!tels.length || !env("WA_TOKEN") || !env("WA_PHONE_ID")) return; // sin destinatarios = no se manda nada
+  const trabajo = Promise.allSettled(tels.map((t) => mandarPlantilla(t, p, vars)));
+  (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil?.(trabajo); // sigue después de responder
+}
+
 // ---------- Agendar cita nueva ----------
 type Servicio = { id: string; nombre: string; categoria: string; precio: number; duracionMin: number; tipo: string; incluye: string | null };
 const fila = (r: Record<string, unknown>): Servicio => {
@@ -234,11 +258,11 @@ function infoAnticipo(cfg: Cfg, servicio: string) {
   if (!cfg.clabe) return { monto: cfg.anticipo_monto, sinDatos: true };
   return { monto: cfg.anticipo_monto, banco: cfg.banco, beneficiario: cfg.beneficiario, cuenta: cfg.cuenta, clabe: cfg.clabe, concepto: cfg.anticipo_concepto || concepto(servicio) };
 }
-type Reserva = { id: string; event_id: string; servicio: string; telefono: string; comprobante_at: string | null };
+type Reserva = { id: string; event_id: string; servicio: string; telefono: string; nombre: string; inicio: string; comprobante_at: string | null };
 async function reservaValida(cfg: Cfg, b: Record<string, string>): Promise<Reserva> {
   const id = String(b.reservaId ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) falla("No encontramos esa reserva.");
-  const rows = await (await sb(`agenda_reservas?select=id,event_id,servicio,telefono,comprobante_at&id=eq.${id}&slug=eq.${cfg.slug}`)).json();
+  const rows = await (await sb(`agenda_reservas?select=id,event_id,servicio,telefono,nombre,inicio,comprobante_at&id=eq.${id}&slug=eq.${cfg.slug}`)).json();
   const r = Array.isArray(rows) ? rows[0] : null;
   if (!r || r.telefono !== tel10(b.telefono)) falla("No encontramos esa reserva.");
   return r as Reserva;
@@ -313,6 +337,7 @@ async function accion(b: Record<string, string>) {
         await sb(`agenda_reagendas?event_id=eq.${encodeURIComponent(e.id)}`, { method: "DELETE" }); // no consumir su único reagendado
         throw err;
       }
+      avisar(cfg, PLANTILLAS.reagendada, [cfg.nombre, nombreLimpio(e.summary ?? "") || "Clienta", tel10(b.telefono), cuandoTxt(ini, fin), cuandoTxt(nuevoIni, nuevoFin)]);
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(nuevoFin) };
     }
     case "servicios": {
@@ -375,6 +400,7 @@ async function accion(b: Record<string, string>) {
         falla("Alguien más acaba de tomar ese horario. Elige otro.");
       }
       const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) })).json();
+      avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin), valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo"]);
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
     }
 
@@ -406,6 +432,8 @@ async function accion(b: Record<string, string>) {
       const resto = (e.description ?? "").replace(/^📎 COMPROBANTE[^\n]*\n?/, "");
       await gcal(cfg.calendar_id, `/${encodeURIComponent(e.id)}`, { method: "PATCH", body: JSON.stringify({ description: `📎 COMPROBANTE RECIBIDO (revisar y cambiar 🧊 por 💰): ${base}${sg.signedURL}\n${resto}` }) }, { sendUpdates: "none" })
         .catch((err) => console.error("no pude anotar el comprobante en el evento", err));
+      const [ci, cf] = rango(e);
+      avisar(cfg, PLANTILLAS.comprobante, [cfg.nombre, r.nombre, r.telefono, r.servicio, cuandoTxt(ci, cf), `${base}${sg.signedURL}`]);
       return { ok: true };
     }
 
