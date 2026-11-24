@@ -6926,7 +6926,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
         />}
 
         {/* ═══ PREVENTA ═══ */}
-        {tab==="opiniones"&&<PanelOpiniones sucursalesFiltro={sucursalesFiltro}/>}
+        {tab==="opiniones"&&<PanelOpiniones sucursalesFiltro={filtro}/>}
         {tab==="preventa"&&<PreventaDashboard sucursalesFiltro={sucursalesFiltro} session={session}/>}
 
         {/* ═══ BANNER "DESCUBRE LO NUEVO" ═══ */}
