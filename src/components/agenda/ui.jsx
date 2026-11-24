@@ -16,6 +16,8 @@ export const crearApi = (slug) => async (accion, datos = {}) => {
 };
 export const fechaLarga = (f) => new Date(f + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 export const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "19:00" -> "7:00 pm" */
+export const h12 = (hhmm) => { const [h, m] = String(hhmm).split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "pm" : "am"}`; };
 export const partes = (f) => {
   const d = new Date(f + "T12:00:00");
   return { dia: d.toLocaleDateString("es-MX", { weekday: "short" }).replace(".", "").toUpperCase(), num: d.getDate(), mes: d.toLocaleDateString("es-MX", { month: "short" }).replace(".", "").toUpperCase() };

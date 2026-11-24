@@ -73,7 +73,7 @@ function ComoAsistir() {
   );
 }
 
-export default function CierreCita({ info, fecha, hora, horaFin, servicio, estadoAnticipo }) {
+export default function CierreCita({ info, fecha, hora, horaFin, servicio, estadoAnticipo, especial }) {
   const dir = info?.direccion;
   // Mapa de la FICHA del negocio (no de la dirección): URL oficial si existe; si no, búsqueda por nombre + coordenadas.
   const mapaSrc = info?.mapsEmbed
@@ -85,6 +85,7 @@ export default function CierreCita({ info, fecha, hora, horaFin, servicio, estad
       <Colapsable icono="🗓️" titulo="Resumen de tu cita" abierto>
         <Fila icono="📅" titulo="Día" texto={cap(fechaLarga(fecha))} />
         <Fila icono="🕒" titulo="Hora" texto={`${hora}${horaFin ? ` – ${horaFin}` : ""}`} />
+        {especial && <Fila icono="⚠️" titulo="Horario especial" texto="Pendiente de aprobación: te confirmaremos por WhatsApp" />}
         {servicio && <Fila icono="✨" titulo="Servicio" texto={servicio} />}
         {estadoAnticipo && <Fila icono="💳" titulo="Anticipo" texto={estadoAnticipo} />}
         <Fila icono="📍" titulo="Sucursal" texto={`CIRE ${info?.nombre ?? ""}`} />

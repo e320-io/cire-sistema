@@ -9,7 +9,7 @@
 //   reagendar     { slug, nombre, telefono, eventId, fecha, hora }-> { ok, fecha, hora }
 //   sucursales    {}                                              -> { sucursales: [{ slug, nombre }] }
 //   servicios     { slug }                                        -> { grupos: [{ categoria, items: [{ id, nombre, precio, duracionMin }] }] }
-//   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias }
+//   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias, especiales, horarios }  (especiales = hasta 15 min antes de abrir o después del cierre; requieren aprobación)
 //   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio, reservaId, anticipo, reagendarHoras }
 //   espera        { slug, nombre, telefono, servicioId, dias: ['sab'], franja, comentario } -> { ok }  (lista de espera: la clienta que no encontró horario)
 //   espera_listar / espera_conteo / espera_actualizar  { usuario, hash, ... }  -> equipo (recepción) con usuario + hash de system_users
@@ -50,7 +50,7 @@ const sb = (path: string, init: RequestInit = {}) =>
 
 type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
-  intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
+  horario_especial_min: number; intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
   direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
   avisos_tel: string[] | null; tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
@@ -170,7 +170,10 @@ async function miEvento(cfg: Cfg, nombre: string, telRaw: string, eventId: strin
 }
 
 // ---------- Horarios libres ----------
-async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, anticipacionH = cfg.anticipacion_horas): Promise<Record<string, string[]>> {
+type Disp = { dias: Record<string, string[]>; especiales: Record<string, string[]>; horarios: Record<string, [string, string]> };
+/** Horarios libres por día. `dias` = dentro del horario de la sucursal. `especiales` = se salen hasta holguraMin minutos: empiezan antes de abrir
+ *  o terminan después del cierre (solo si holguraMin > 0; requieren aprobación del equipo). `horarios` = [abre, cierra] de esos días. */
+async function disponibilidad(cfg: Cfg, durMin: number, ignorarId: string, anticipacionH = cfg.anticipacion_horas, holguraMin = 0): Promise<Disp> {
   const ahora = Date.now();
   const evs = await listEvents(cfg.calendar_id, ahora, ahora + (cfg.dias_adelante + 2) * 864e5);
   const ocupados = evs
@@ -178,22 +181,31 @@ async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, antic
     .map(rango);
   const minInicio = ahora + anticipacionH * 3600e3;
   const hoy = ymd(ahora);
-  const dias: Record<string, string[]> = {};
+  const out: Disp = { dias: {}, especiales: {}, horarios: {} };
   for (let i = 0; i < cfg.dias_adelante; i++) {
     const dia = addDays(hoy, i);
     const h = cfg.horario?.[String(dow(dia))];
     if (!h) continue;
-    const libres: string[] = [];
-    for (let t = toMin(h[0]); t + durMin <= toMin(h[1]); t += cfg.intervalo_min) {
-      const s = inst(dia, t), e = s + durMin * 60_000;
-      if (s < minInicio) continue;
-      if (ocupados.filter(([a, b]) => a < e && b > s).length >= cfg.capacidad) continue;
-      libres.push(hm(s));
+    const abre = toMin(h[0]), cierre = toMin(h[1]);
+    const libres: string[] = [], esp: string[] = [];
+    const libre = (t: number) => { const s = inst(dia, t), e = s + durMin * 60_000; return s >= minInicio && ocupados.filter(([a, b]) => a < e && b > s).length < cfg.capacidad; };
+    // Especiales ANTES de abrir: empiezan hasta holguraMin minutos antes de la apertura
+    if (holguraMin > 0) for (let t = abre - holguraMin; t < abre; t += cfg.intervalo_min) if (libre(t)) esp.push(hm(inst(dia, t)));
+    for (let t = abre; t < cierre; t += cfg.intervalo_min) {
+      const fin = t + durMin, normal = fin <= cierre;
+      if (!normal && fin > cierre + holguraMin) break; // se pasa demasiado del cierre (y las siguientes aún más)
+      if (!libre(t)) continue;
+      (normal ? libres : esp).push(hm(inst(dia, t)));
     }
-    if (libres.length) dias[dia] = libres;
+    if (libres.length) out.dias[dia] = libres;
+    if (esp.length) { out.especiales[dia] = esp; out.horarios[dia] = [h[0], h[1]]; }
   }
-  return dias;
+  return out;
 }
+async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, anticipacionH = cfg.anticipacion_horas): Promise<Record<string, string[]>> {
+  return (await disponibilidad(cfg, durMin, ignorarId, anticipacionH, 0)).dias; // reagendar: sin horarios especiales
+}
+const h12 = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "pm" : "am"}`; };
 
 // ---------- Avisos por WhatsApp al equipo ----------
 // Plantillas aprobadas por Meta (ver plantillas.ts). Nunca rompen la reserva: si falla el envío solo se registra el error.
@@ -260,11 +272,11 @@ function infoAnticipo(cfg: Cfg, servicio: string) {
   if (!cfg.clabe) return { monto: cfg.anticipo_monto, sinDatos: true };
   return { monto: cfg.anticipo_monto, banco: cfg.banco, beneficiario: cfg.beneficiario, cuenta: cfg.cuenta, clabe: cfg.clabe, concepto: cfg.anticipo_concepto || concepto(servicio) };
 }
-type Reserva = { id: string; event_id: string; servicio: string; telefono: string; nombre: string; inicio: string; comprobante_at: string | null };
+type Reserva = { id: string; event_id: string; servicio: string; telefono: string; nombre: string; inicio: string; comprobante_at: string | null; especial: boolean };
 async function reservaValida(cfg: Cfg, b: Record<string, string>): Promise<Reserva> {
   const id = String(b.reservaId ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) falla("No encontramos esa reserva.");
-  const rows = await (await sb(`agenda_reservas?select=id,event_id,servicio,telefono,nombre,inicio,comprobante_at&id=eq.${id}&slug=eq.${cfg.slug}`)).json();
+  const rows = await (await sb(`agenda_reservas?select=id,event_id,servicio,telefono,nombre,inicio,comprobante_at,especial&id=eq.${id}&slug=eq.${cfg.slug}`)).json();
   const r = Array.isArray(rows) ? rows[0] : null;
   if (!r || r.telefono !== tel10(b.telefono)) falla("No encontramos esa reserva.");
   return r as Reserva;
@@ -396,7 +408,8 @@ async function accion(b: Record<string, string>) {
 
     case "disponibilidad_nueva": {
       const sv = await servicioPorId(cfg, b.servicioId);
-      return { duracionMin: sv.duracionMin, dias: await horariosLibres(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas) };
+      const d = await disponibilidad(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas, cfg.horario_especial_min ?? 0);
+      return { duracionMin: sv.duracionMin, dias: d.dias, especiales: d.especiales, horarios: d.horarios };
     }
 
     case "agendar": {
@@ -417,21 +430,29 @@ async function accion(b: Record<string, string>) {
         if (ya) { const [i] = rango(ya); falla(`Ya tienes una cita agendada el ${ymd(i)} a las ${hm(i)}. Si quieres cambiarla usa «Reagendar mi cita».`); }
       }
 
-      const libres = await horariosLibres(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas);
-      if (!libres[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
+      const disp = await disponibilidad(cfg, sv.duracionMin, "", cfg.anticipacion_nueva_horas, cfg.horario_especial_min ?? 0);
+      const normalOk = !!disp.dias[b.fecha]?.includes(b.hora);
+      const especial = !normalOk && !!disp.especiales[b.fecha]?.includes(b.hora); // empieza antes del cierre pero termina después: requiere aprobación
+      if (!normalOk && !especial) falla("Ese horario ya no está disponible. Elige otro.");
       const ini = inst(b.fecha, toMin(b.hora)), fin = ini + sv.duracionMin * 60_000;
+      // Por qué es especial: empieza antes de abrir, o termina después del cierre
+      const [abreD, cierraD] = especial ? disp.horarios[b.fecha] : ["", ""];
+      const motivoEsp = !especial ? "" : toMin(b.hora) < toMin(abreD)
+        ? `la sucursal abre a las ${h12(abreD)} y esta cita empieza a las ${h12(b.hora)}`
+        : `la sucursal cierra a las ${h12(cierraD)} y esta cita termina a las ${h12(hm(fin))}`;
 
       const valoracion = sv.id === "valoracion";
       const ev = await gcal(cfg.calendar_id, "", {
         method: "POST",
         body: JSON.stringify({
           // Convención CIRE: 🧊 = todavía sin anticipo (la valoración no lleva anticipo)
-          summary: `${valoracion ? "" : "🧊"}${nombre} ${tel}`,
-          description: `${cfg.nombre} ${sv.nombre}${sv.precio > 0 ? " " + pesos(sv.precio) : ""}${valoracion ? "" : " Pendiente Anticipo"}\n📲 AGENDADA EN LÍNEA por la clienta.`,
+          // ⚠️ = horario especial por aprobar (quitarlo al confirmar con la clienta)
+          summary: `${especial ? "⚠️" : ""}${valoracion ? "" : "🧊"}${nombre} ${tel}`,
+          description: `${cfg.nombre} ${sv.nombre}${sv.precio > 0 ? " " + pesos(sv.precio) : ""}${valoracion ? "" : " Pendiente Anticipo"}${especial ? `\n⚠️ HORARIO ESPECIAL PENDIENTE DE APROBACIÓN: ${motivoEsp}. Confirmarlo con la clienta y quitar el ⚠️ del título.` : ""}\n📲 AGENDADA EN LÍNEA por la clienta.`,
           start: { dateTime: iso(ini), timeZone: TZ }, end: { dateTime: iso(fin), timeZone: TZ },
           colorId: TIPOS[sv.tipo]?.colorId ?? "11",
           reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
-          extendedProperties: { private: { origen: "online", servicio_id: sv.id } },
+          extendedProperties: { private: { origen: "online", servicio_id: sv.id, ...(especial ? { horario_especial: "pendiente" } : {}) } },
         }),
       }, { sendUpdates: "none" });
 
@@ -443,9 +464,10 @@ async function accion(b: Record<string, string>) {
         await gcal(cfg.calendar_id, `/${encodeURIComponent(ev.id)}`, { method: "DELETE" }).catch(() => {});
         falla("Alguien más acaba de tomar ese horario. Elige otro.");
       }
-      const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString() }) })).json();
-      avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin), valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo"]);
-      return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
+      const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString(), especial }) })).json();
+      avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin),
+        (especial ? `⚠️ HORARIO ESPECIAL por aprobar: ${motivoEsp}${valoracion ? "" : " · 🧊 Pendiente de anticipo"}` : valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo")]);
+      return { ok: true, especial, motivoEspecial: motivoEsp || null, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
     }
 
     case "espera": {
@@ -482,7 +504,7 @@ async function accion(b: Record<string, string>) {
       const r = await reservaValida(cfg, b);
       const e = await eventoDe(cfg, r);
       const [ini, fin] = rango(e);
-      return { servicio: r.servicio, fecha: ymd(ini), hora: hm(ini), horaFin: hm(fin), comprobante: !!r.comprobante_at, anticipo: infoAnticipo(cfg, r.servicio), reagendarHoras: cfg.anticipacion_horas };
+      return { servicio: r.servicio, especial: !!r.especial, fecha: ymd(ini), hora: hm(ini), horaFin: hm(fin), comprobante: !!r.comprobante_at, anticipo: infoAnticipo(cfg, r.servicio), reagendarHoras: cfg.anticipacion_horas };
     }
 
     case "comprobante": {

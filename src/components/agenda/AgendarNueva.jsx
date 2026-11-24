@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { C, S, cap, fechaLarga, Pasos, Calendario } from "./ui.jsx";
+import { C, S, cap, fechaLarga, h12, Pasos, Calendario } from "./ui.jsx";
 import AseguraLugar, { guardarPendiente } from "./AseguraLugar.jsx";
 import CierreCita from "./CierreCita.jsx";
 import EsperaPublica from "./EsperaPublica.jsx";
@@ -23,6 +23,8 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
   const [abierta, setAbierta] = useState("");
   const [sv, setSv] = useState(null);
   const [dias, setDias] = useState({});
+  const [esp, setEsp] = useState({}); // horarios especiales: hasta 15 min antes de abrir o después del cierre (requieren aprobación)
+  const [horarios, setHorarios] = useState({}); // [abre, cierra] de los días que tienen horarios especiales
   const [dia, setDia] = useState("");
   const [mes, setMes] = useState("");
   const [hora, setHora] = useState("");
@@ -48,7 +50,9 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
     const j = await api("disponibilidad_nueva", { servicioId: s.id });
     const fechas = Object.keys(j.dias);
     // Si no hay ningún espacio no es un error sin salida: la clienta ve la lista de espera en el paso de horarios.
-    setSv({ ...s, duracionMin: j.duracionMin }); setDias(j.dias); setDia(fechas[0] || ""); setMes(fechas[0] ? fechas[0].slice(0, 7) : ""); setHora(""); setPaso("horarios");
+    const especiales = j.especiales || {};
+    const todas = [...new Set([...fechas, ...Object.keys(especiales)])].sort(); // un día con solo horarios especiales también se puede elegir
+    setSv({ ...s, duracionMin: j.duracionMin }); setDias(j.dias); setEsp(especiales); setHorarios(j.horarios || {}); setDia(todas[0] || ""); setMes(todas[0] ? todas[0].slice(0, 7) : ""); setHora(""); setPaso("horarios");
   });
   const reservar = () => correr(async () => {
     const j = await api("agendar", { nombre, telefono: tel, servicioId: sv.id, fecha: dia, hora, web });
@@ -57,6 +61,9 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
     else setPaso("listo");
   });
 
+  const diasCal = { ...Object.fromEntries(Object.keys(esp).map((f) => [f, []])), ...dias }; // [] cuenta como día elegible
+  const hayDias = Object.keys(diasCal).length > 0;
+  const esEsp = !!hora && (esp[dia] || []).includes(hora);
   const valoracion = grupos?.flatMap((g) => g.items).find((i) => i.id === "valoracion");
   const catalogo = (grupos || []).filter((g) => g.categoria !== "Empieza aquí");
   const busca = norm(q).trim();
@@ -143,7 +150,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
           <div style={S.pildora}>
             <span style={{ opacity: 0.85 }}>Tu servicio:</span> <b>{sv.nombre}</b> · {sv.duracionMin} min{pesos(sv.precio) ? ` · ${pesos(sv.precio)}` : ""}
           </div>
-          {Object.keys(dias).length === 0 && (
+          {!hayDias && (
           <div style={S.tarjeta}>
             <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 6 }}>Por ahora no hay horarios libres</div>
             <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto }}>Para este servicio no hay espacio en los próximos días. Anótate en la lista de espera y te avisamos en cuanto se abra un lugar.</div>
@@ -151,20 +158,31 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
           )}
           {/* Arriba del calendario para que se vea antes de elegir; siempre cerrado de entrada */}
           <EsperaPublica key={sv.id} api={api} nombre={nombre} tel={tel} servicio={sv} />
-          {Object.keys(dias).length > 0 && (
+          {hayDias && (
           <div style={S.tarjeta}>
             <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 12 }}>Elige el día</div>
-            <Calendario dias={dias} dia={dia} mes={mes} setMes={setMes} onPick={(d) => { setDia(d); setHora(""); }} />
+            <Calendario dias={diasCal} dia={dia} mes={mes} setMes={setMes} onPick={(d) => { setDia(d); setHora(""); }} />
             <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, margin: "22px 0 4px" }}>Elige la hora</div>
             <div style={{ fontSize: 13, color: C.suave, marginBottom: 12 }}>{cap(fechaLarga(dia))}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
               {(dias[dia] || []).map((h) => <button key={h} style={S.hora(h === hora)} onClick={() => setHora(h)}>{h}</button>)}
             </div>
+            {(esp[dia] || []).length > 0 && (
+              <div style={{ marginTop: 16, border: `2px dashed ${C.rosa}`, borderRadius: 16, padding: 14 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.verde, marginBottom: 6 }}>⚠️ Horario especial</div>
+                <div style={{ fontSize: 13, lineHeight: 1.45, color: C.texto, marginBottom: 12 }}>
+                  Nuestro horario de la sucursal es de <b>{h12((horarios[dia] || [])[0] || "10:00")}</b> a <b>{h12((horarios[dia] || [])[1] || "19:00")}</b>, pero <b>podemos habilitar el horario especial por ti</b>. Estos horarios quedan <b>pendientes de aprobación</b> y te confirmaremos por WhatsApp.
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                  {esp[dia].map((h) => <button key={h} style={{ ...S.hora(h === hora), borderStyle: "dashed", borderColor: h === hora ? C.verde : C.rosa }} onClick={() => setHora(h)}>⚠️ {h}</button>)}
+                </div>
+              </div>
+            )}
           </div>
           )}
-          {Object.keys(dias).length > 0 && (
+          {hayDias && (
           <button style={S.boton(!!hora && !cargando)} disabled={!hora || cargando} onClick={reservar}>
-            {cargando ? "Reservando…" : hora ? `Reservar ${cap(fechaLarga(dia))} · ${hora}` : "Elige una hora"}
+            {cargando ? "Reservando…" : hora ? `${esEsp ? "Reservar horario especial" : "Reservar"} ${cap(fechaLarga(dia))} · ${hora}` : "Elige una hora"}
           </button>
           )}
           <button style={S.link} onClick={() => { setPaso("servicio"); setErr(""); }}>← Cambiar servicio</button>
@@ -187,11 +205,12 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
             </div>
           </div>
           <div style={{ ...S.pildora, marginBottom: 10 }}>Tu cita en CIRE {sucursal} quedó reservada.</div>
+          {listo.especial && <div style={{ ...S.pildora, background: C.rosa, marginBottom: 10 }}>⚠️ <b>Horario especial pendiente de aprobación.</b> Te confirmaremos por WhatsApp.</div>}
           <div style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }}>
             Te escribiremos por WhatsApp para confirmar tu cita{listo.servicio === "Valoración" ? "" : " y coordinar tu anticipo"}. Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (hasta {listo.reagendarHoras ?? 12} h antes).
           </div>
         </div>
-        <CierreCita info={info || { nombre: sucursal }} fecha={listo.fecha} hora={listo.hora} horaFin={listo.horaFin} servicio={listo.servicio} />
+        <CierreCita info={info || { nombre: sucursal }} fecha={listo.fecha} hora={listo.hora} horaFin={listo.horaFin} servicio={listo.servicio} especial={listo.especial} />
         </>
       )}
     </>

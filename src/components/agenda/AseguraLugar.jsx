@@ -92,9 +92,10 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
         </div>
       </div>
       <div style={{ ...S.pildora, marginBottom: 10 }}>Hemos enviado tu comprobante a validación y te confirmamos tu cita por WhatsApp.</div>
+      {d.especial && <div style={{ ...S.pildora, background: C.rosa, marginBottom: 10 }}>⚠️ <b>Tu horario es especial y está pendiente de aprobación.</b> Te confirmaremos por WhatsApp.</div>}
       <div style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }}>Si necesitas cambiarla, entra de nuevo a este link y elige <b>Reagendar mi cita</b> (una sola vez, con al menos {d.reagendarHoras} h de anticipación).</div>
     </div>
-    <CierreCita info={info || { nombre: sucursal }} fecha={d.fecha} hora={d.hora} horaFin={d.horaFin} servicio={d.servicio} estadoAnticipo="Comprobante en validación" />
+    <CierreCita info={info || { nombre: sucursal }} fecha={d.fecha} hora={d.hora} horaFin={d.horaFin} servicio={d.servicio} estadoAnticipo="Comprobante en validación" especial={d.especial} />
     </>
   );
 
@@ -102,6 +103,7 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
     <>
       <div style={S.pildora}>
         <b>✓ Tu horario está reservado:</b><br />{cap(fechaLarga(d.fecha))} · {d.hora} – {d.horaFin}<br /><span style={{ opacity: 0.85 }}>{d.servicio} · CIRE {sucursal}</span>
+        {d.especial && <><br /><b>⚠️ Horario especial pendiente de aprobación:</b> te confirmaremos por WhatsApp.</>}
       </div>
 
       <div style={{ background: C.rosa, color: "#fff", border: "3px solid #fff", borderRadius: 20, padding: "16px 18px", marginBottom: 14, fontSize: 14, lineHeight: 1.5 }}>
