@@ -5810,7 +5810,7 @@ function PreventaDashboard({sucursalesFiltro,session}){
 function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropias=null,tema="dark",toggleTema=()=>{}}){
   const{light,T,acc}=useT();
   useCSSInjection();
-  const[tab,setTab]=useState("resumen");
+  const[tab,setTab]=useState(()=>{const t=new URLSearchParams(location.search).get("tab");return t==="opiniones"?"opiniones":"resumen";}); // /?tab=opiniones abre directo el tab (enlace del aviso de WhatsApp)
   const[metaSub,setMetaSub]=useState("resumen"); // sub-tab de Meta Ads: resumen | rendimiento
   const tabInicioRef=useRef(Date.now());
   const tabPrevRef=useRef("resumen");
