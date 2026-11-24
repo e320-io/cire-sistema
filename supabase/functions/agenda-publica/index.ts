@@ -49,7 +49,7 @@ type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
   direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
-  anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
+  tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
@@ -260,7 +260,7 @@ async function accion(b: Record<string, string>) {
   const cfg = await getCfg(String(b.slug ?? ""));
   switch (b.accion) {
     case "info":
-      return { nombre: cfg.nombre, direccion: cfg.direccion, mapsUrl: cfg.maps_url, estacionamiento: !!cfg.estacionamiento, mapaNombre: cfg.maps_nombre, lat: cfg.lat, lng: cfg.lng, mapsEmbed: cfg.maps_embed };
+      return { nombre: cfg.nombre, direccion: cfg.direccion, mapsUrl: cfg.maps_url, estacionamiento: !!cfg.estacionamiento, tema: cfg.tema, mapaNombre: cfg.maps_nombre, lat: cfg.lat, lng: cfg.lng, mapsEmbed: cfg.maps_embed };
 
     case "buscar": {
       const mias = await buscarMias(cfg, b.nombre, b.telefono);

@@ -90,7 +90,7 @@ export default function Reagendar({ api, sucursal, info, onVolver, setErr }) {
               {(dias[dia] || []).map((h) => <button key={h} style={S.hora(h === hora)} onClick={() => setHora(h)}>{h}</button>)}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#fff", fontWeight: 600, fontSize: 13, lineHeight: 1.35, margin: "0 4px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.sobre, fontWeight: 600, fontSize: 13, lineHeight: 1.35, margin: "0 4px 16px" }}>
             <span style={{ background: C.rosa, borderRadius: 12, padding: "6px 10px", fontWeight: 800, fontSize: 12, flex: "0 0 auto" }}>OJO</span>
             Solo puedes reagendar una vez. Después de confirmar, cualquier otro cambio será por WhatsApp.
           </div>

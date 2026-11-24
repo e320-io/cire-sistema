@@ -104,7 +104,7 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
         <b>✓ Tu horario está reservado:</b><br />{cap(fechaLarga(d.fecha))} · {d.hora} – {d.horaFin}<br /><span style={{ opacity: 0.85 }}>{d.servicio} · CIRE {sucursal}</span>
       </div>
 
-      <div style={{ background: C.rosa, color: "#fff", borderRadius: 20, padding: "16px 18px", marginBottom: 14, fontSize: 14, lineHeight: 1.5 }}>
+      <div style={{ background: C.rosa, color: "#fff", border: "3px solid #fff", borderRadius: 20, padding: "16px 18px", marginBottom: 14, fontSize: 14, lineHeight: 1.5 }}>
         <b style={{ fontSize: 16 }}>Información para agendar 🌟🩷</b><br />
         <span style={{ display: "block", marginTop: 6 }}>Te comentamos que afortunadamente tenemos la agenda saturada. Para garantizar tu cita deberás realizar un anticipo de <b>{pesos(a.monto)} por depósito o transferencia</b> a la siguiente cuenta:</span>
         <span style={{ display: "block", marginTop: 6, opacity: 0.92 }}>(Mismos que se toman a cuenta de tu pago final)</span>
@@ -142,7 +142,7 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
         {vista && <button type="button" style={S.boton(!enviando)} disabled={enviando} onClick={enviar}>{enviando ? "Enviando…" : "Enviar comprobante"}</button>}
       </div>
 
-      <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, lineHeight: 1.4, margin: "0 4px 10px" }}>
+      <div style={{ color: C.sobre, fontWeight: 600, fontSize: 13, lineHeight: 1.4, margin: "0 4px 10px" }}>
         Puedes reagendar <b>una sola vez</b> desde este link, con al menos <b>{d.reagendarHoras} horas</b> de anticipación; de lo contrario el anticipo se pierde.
       </div>
 
@@ -163,6 +163,6 @@ export function RetomarApartado({ api, sucursal, info, pendiente, setErr, onSali
       .then((j) => { if (!j.anticipo) { borrarPendiente(); onSalir(); } else setD({ ...j, reservaId: pendiente.reservaId, telefono: pendiente.telefono }); })
       .catch((e) => { borrarPendiente(); setErr(e.message); onSalir(); });
   }, []); // eslint-disable-line
-  if (!d) return <div style={{ color: "#fff", fontWeight: 600 }}>Cargando tu reserva…</div>;
+  if (!d) return <div style={{ color: C.sobre, fontWeight: 600 }}>Cargando tu reserva…</div>;
   return <AseguraLugar api={api} sucursal={sucursal} info={info} d={d} setErr={setErr} onSalir={onSalir} />;
 }

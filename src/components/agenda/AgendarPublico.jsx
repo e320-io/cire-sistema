@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { C, S, FONT, Loto, Pin, Titulo, crearApi } from "./ui.jsx";
+import { C, S, FONT, Loto, Pin, Titulo, crearApi, estiloTema } from "./ui.jsx";
 import Reagendar from "./Reagendar.jsx";
 import AgendarNueva from "./AgendarNueva.jsx";
 import { RetomarApartado, leerPendiente } from "./AseguraLugar.jsx";
@@ -52,14 +52,14 @@ export default function AgendarPublico() {
   );
 
   return (
-    <div style={S.pagina}>
+    <div style={{ ...S.pagina, ...estiloTema(info?.tema) }}>
       {/* Marca de agua tipográfica, como el fondo de las promos */}
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", fontWeight: 800, fontSize: 150, lineHeight: 0.9, color: "rgba(255,255,255,.09)", transform: "rotate(-8deg) scale(1.3)", userSelect: "none", fontFamily: FONT }}>
         {Array.from({ length: 8 }, (_, k) => <div key={k} style={{ whiteSpace: "nowrap", marginLeft: k % 2 ? -120 : 0 }}>CIRE CITA CIRE CITA</div>)}
       </div>
 
       <div style={S.caja}>
-        <div style={{ textAlign: "center", color: "#fff", marginBottom: 22 }}>
+        <div style={{ textAlign: "center", color: C.sobre, marginBottom: 22, textShadow: "0 1px 8px rgba(var(--c-sombra),.3)" }}>
           <div style={{ fontSize: 9, letterSpacing: "0.32em", fontWeight: 500, marginBottom: 2 }}>ARTE EN DEPILACIÓN</div>
           <Loto />
           <div style={{ fontSize: 34, fontWeight: 600, letterSpacing: "0.04em", lineHeight: 1, marginTop: 2 }}>CIRE</div>
@@ -79,12 +79,12 @@ export default function AgendarPublico() {
         )}
 
         {err && (
-          <div role="alert" style={{ background: C.rosa, color: "#fff", borderRadius: 18, padding: "12px 16px", marginBottom: 14, fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{err}</div>
+          <div role="alert" style={{ background: C.rosa, color: "#fff", border: "3px solid #fff", borderRadius: 18, padding: "12px 16px", marginBottom: 14, fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{err}</div>
         )}
 
         {sinSlug && (
           <>
-            {!lista && !err && <div style={{ color: "#fff", fontWeight: 600 }}>Cargando…</div>}
+            {!lista && !err && <div style={{ color: C.sobre, fontWeight: 600 }}>Cargando…</div>}
             {lista?.map((s) => (
               <button key={s.slug} onClick={() => elegirSucursal(s)} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT, padding: "14px 20px" }}>
                 <Pin />
@@ -97,7 +97,7 @@ export default function AgendarPublico() {
         {!sinSlug && sucursal && modo === "inicio" && (
           <>
             {pendiente && (
-              <button onClick={() => { setErr(""); setModo("asegurar"); }} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT, padding: "18px 20px", background: C.rosa }}>
+              <button onClick={() => { setErr(""); setModo("asegurar"); }} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "3px solid #fff", cursor: "pointer", fontFamily: FONT, padding: "18px 20px", background: C.rosa }}>
                 <span style={{ fontSize: 30 }}>📎</span>
                 <span>
                   <span style={{ display: "block", fontWeight: 800, fontSize: 18, color: "#fff" }}>Subir mi comprobante</span>
