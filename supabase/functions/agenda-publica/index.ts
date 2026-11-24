@@ -198,7 +198,7 @@ async function horariosLibres(cfg: Cfg, durMin: number, ignorarId: string, antic
 const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const cuandoTxt = (ini: number, fin: number) =>
   `${cap1(new Date(ini).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }))} · ${hm(ini)} – ${hm(fin)}`;
-const paraWA = (t: unknown) => String(t ?? "").replace(/[\n\r\t]+/g, " ").replace(/ {4,}/g, "   ").trim().slice(0, 300) || "-";
+const paraWA = (t: unknown) => String(t ?? "").replace(/[\n\r\t]+/g, " ").replace(/ {4,}/g, "   ").trim().slice(0, 1000) || "-"; // WhatsApp admite hasta 1024 por variable; el enlace firmado de la captura mide ~335 y recortarlo lo invalida
 async function mandarPlantilla(tel: string, p: Plantilla, vars: string[]) {
   const r = await fetch(`https://graph.facebook.com/v21.0/${env("WA_PHONE_ID")}/messages`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("WA_TOKEN")}` },
