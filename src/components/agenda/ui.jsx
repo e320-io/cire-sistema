@@ -22,23 +22,31 @@ export const partes = (f) => {
 };
 
 // Paleta de las piezas de campaña
-export const C = {
-  turquesa: "#14D0CF", turquesaClaro: "#7FE6E4", verde: "#0B5F5E", verdeMedio: "#0F7F7D", menta: "#E4FAF9",
-  rosa: "#F0357A", ciruela: "#6D2B5B", blanco: "#fff", texto: "#0B3F3E", suave: "#4C8483", gris: "#B7D8D7",
+// Paletas por sucursal (inspiradas en las piezas de campaña). Los componentes leen C.* que apunta a variables CSS (--c-*);
+// la página raíz las fija con estiloTema(tema) y todo cambia de color sin re-renderizar nada más.
+// fondo=color de fondo · verde=color principal oscuro (textos/botones) · menta=tinte claro · rosa=acento · sobre=texto sobre el fondo
+export const TEMAS = {
+  turquesa: { turquesa: "#14D0CF", turquesaClaro: "#7FE6E4", verde: "#0B5F5E", verdeMedio: "#0F7F7D", menta: "#E4FAF9", rosa: "#F0357A", ciruela: "#6D2B5B", texto: "#0B3F3E", suave: "#4C8483", gris: "#B7D8D7", sobre: "#FFFFFF", sombra: "11,95,94" },
+  cielo:    { turquesa: "#1EC6F2", turquesaClaro: "#8FE3F9", verde: "#09677A", verdeMedio: "#0E7F96", menta: "#E3F7FD", rosa: "#F0357A", ciruela: "#6D2B5B", texto: "#0A3F4E", suave: "#4A8190", gris: "#B5D6E0", sobre: "#FFFFFF", sombra: "9,103,122" },
+  fucsia:   { turquesa: "#F2438F", turquesaClaro: "#F98BBB", verde: "#7B1F4F", verdeMedio: "#9B3A6A", menta: "#FDE8F1", rosa: "#E11D48", ciruela: "#5E1F55", texto: "#451230", suave: "#8A4A68", gris: "#E3C3D2", sobre: "#FFFFFF", sombra: "123,31,79" },
+  lila:     { turquesa: "#F4A6E3", turquesaClaro: "#FAC9F0", verde: "#6B2A63", verdeMedio: "#8B3F82", menta: "#FBEAF8", rosa: "#E8265A", ciruela: "#4F2A6E", texto: "#3E1A3A", suave: "#855283", gris: "#E2C6DE", sobre: "#4A1D45", sombra: "107,42,99" },
+  rosa:     { turquesa: "#F7A7C3", turquesaClaro: "#FBCADA", verde: "#7A2B49", verdeMedio: "#A04566", menta: "#FDEBF2", rosa: "#D81B60", ciruela: "#6D2B5B", texto: "#45182B", suave: "#8D5568", gris: "#E6CAD6", sobre: "#5E1F38", sombra: "122,43,73" },
 };
+export const C = { ...Object.fromEntries(Object.keys(TEMAS.turquesa).map((k) => [k, `var(--c-${k})`])), blanco: "#fff" };
+export const estiloTema = (n) => Object.fromEntries(Object.entries(TEMAS[n] || TEMAS.turquesa).map(([k, v]) => [`--c-${k}`, v]));
 export const FONT = "'Poppins',system-ui,-apple-system,'Segoe UI',sans-serif";
 // Contorno blanco alrededor del texto, como los títulos "COMBO SEXY"
 export const contorno = (px = 3) => [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]].map(([x, y]) => `${x * px}px ${y * px}px 0 #fff`).join(",");
 
 export const S = {
   pagina: { minHeight: "100vh", fontFamily: FONT, color: C.texto, padding: "28px 16px 40px", boxSizing: "border-box", position: "relative", overflow: "hidden",
-    background: `radial-gradient(circle at 85% 8%, ${C.turquesaClaro} 0, transparent 45%), ${C.turquesa}` },
+    background: `radial-gradient(circle at 85% 8%, ${C.turquesaClaro} 0, transparent 45%), ${C.turquesa}`, transition: "background .4s" },
   caja: { maxWidth: 440, margin: "0 auto", position: "relative", zIndex: 1 },
-  tarjeta: { background: C.blanco, borderRadius: 24, padding: 20, marginBottom: 14, boxShadow: "0 8px 24px rgba(11,95,94,.18)" },
+  tarjeta: { background: C.blanco, borderRadius: 24, padding: 20, marginBottom: 14, boxShadow: "0 8px 24px rgba(var(--c-sombra),.2)" },
   pildora: { background: C.verdeMedio, color: "#fff", borderRadius: 18, padding: "12px 16px", marginBottom: 14, fontSize: 14, lineHeight: 1.4 },
   etiqueta: { display: "block", fontSize: 13, fontWeight: 600, color: C.verde, margin: "0 0 6px 4px" },
   input: { width: "100%", boxSizing: "border-box", padding: "14px 16px", fontSize: 16, fontFamily: FONT, border: `2px solid ${C.menta}`, borderRadius: 16, marginBottom: 14, background: C.menta, color: C.texto, outline: "none" },
-  boton: (activo = true) => ({ width: "100%", padding: "15px 18px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: "#fff", background: C.verde, border: "none", borderRadius: 18, cursor: activo ? "pointer" : "default", opacity: activo ? 1 : 0.55, boxShadow: activo ? "0 6px 16px rgba(11,95,94,.35)" : "none" }),
+  boton: (activo = true) => ({ width: "100%", padding: "15px 18px", fontSize: 16, fontWeight: 700, fontFamily: FONT, color: "#fff", background: C.verde, border: "none", borderRadius: 18, cursor: activo ? "pointer" : "default", opacity: activo ? 1 : 0.55, boxShadow: activo ? "0 6px 16px rgba(var(--c-sombra),.35)" : "none" }),
   link: { background: "transparent", border: "none", color: C.verde, fontSize: 14, fontWeight: 600, fontFamily: FONT, cursor: "pointer", padding: "10px 4px" },
   hora: (on) => ({ minHeight: 46, fontSize: 15, fontWeight: 600, fontFamily: FONT, borderRadius: 14, cursor: "pointer", border: `2px solid ${on ? C.verde : C.menta}`, background: on ? C.verde : C.menta, color: on ? "#fff" : C.verde }),
 };
