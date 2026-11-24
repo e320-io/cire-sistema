@@ -171,7 +171,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
               <div style={{ marginTop: 16, border: `2px dashed ${C.rosa}`, borderRadius: 16, padding: 14 }}>
                 <div style={{ fontWeight: 800, fontSize: 14, color: C.verde, marginBottom: 6 }}>⚠️ Horario especial</div>
                 <div style={{ fontSize: 13, lineHeight: 1.45, color: C.texto, marginBottom: 12 }}>
-                  Nuestro horario de la sucursal es de <b>{h12((horarios[dia] || [])[0] || "10:00")}</b> a <b>{h12((horarios[dia] || [])[1] || "19:00")}</b>, pero <b>podemos habilitar el horario especial por ti</b>. Estos horarios quedan <b>pendientes de aprobación</b> y te confirmaremos por WhatsApp.
+                  Nuestra sucursal cierra a las <b>{h12((horarios[dia] || [])[1] || "19:00")}</b>, pero <b>podemos habilitar el horario especial por ti</b>. Estos horarios quedan <b>pendientes de aprobación</b> y te confirmaremos por WhatsApp.
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                   {esp[dia].map((h) => <button key={h} style={{ ...S.hora(h === hora), borderStyle: "dashed", borderColor: h === hora ? C.verde : C.rosa }} onClick={() => setHora(h)}>⚠️ {h}</button>)}

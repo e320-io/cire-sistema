@@ -9,7 +9,7 @@
 //   reagendar     { slug, nombre, telefono, eventId, fecha, hora }-> { ok, fecha, hora }
 //   sucursales    {}                                              -> { sucursales: [{ slug, nombre }] }
 //   servicios     { slug }                                        -> { grupos: [{ categoria, items: [{ id, nombre, precio, duracionMin }] }] }
-//   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias, especiales, horarios }  (especiales = hasta 15 min antes de abrir o después del cierre; requieren aprobación)
+//   disponibilidad_nueva { slug, servicioId }                     -> { duracionMin, dias, especiales, horarios }  (especiales = terminan hasta 15 min después del cierre; requieren aprobación)
 //   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio, reservaId, anticipo, reagendarHoras }
 //   espera        { slug, nombre, telefono, servicioId, dias: ['sab'], franja, comentario } -> { ok }  (lista de espera: la clienta que no encontró horario)
 //   espera_listar / espera_conteo / espera_actualizar  { usuario, hash, ... }  -> equipo (recepción) con usuario + hash de system_users
@@ -171,8 +171,9 @@ async function miEvento(cfg: Cfg, nombre: string, telRaw: string, eventId: strin
 
 // ---------- Horarios libres ----------
 type Disp = { dias: Record<string, string[]>; especiales: Record<string, string[]>; horarios: Record<string, [string, string]> };
-/** Horarios libres por día. `dias` = dentro del horario de la sucursal. `especiales` = se salen hasta holguraMin minutos: empiezan antes de abrir
- *  o terminan después del cierre (solo si holguraMin > 0; requieren aprobación del equipo). `horarios` = [abre, cierra] de esos días. */
+/** Horarios libres por día. `dias` = dentro del horario de la sucursal. `especiales` = empiezan antes del cierre pero TERMINAN hasta holguraMin
+ *  minutos DESPUÉS del cierre (solo si holguraMin > 0; requieren aprobación del equipo). No hay horarios especiales antes de abrir.
+ *  `horarios` = [abre, cierra] de esos días. */
 async function disponibilidad(cfg: Cfg, durMin: number, ignorarId: string, anticipacionH = cfg.anticipacion_horas, holguraMin = 0): Promise<Disp> {
   const ahora = Date.now();
   const evs = await listEvents(cfg.calendar_id, ahora, ahora + (cfg.dias_adelante + 2) * 864e5);
@@ -189,8 +190,6 @@ async function disponibilidad(cfg: Cfg, durMin: number, ignorarId: string, antic
     const abre = toMin(h[0]), cierre = toMin(h[1]);
     const libres: string[] = [], esp: string[] = [];
     const libre = (t: number) => { const s = inst(dia, t), e = s + durMin * 60_000; return s >= minInicio && ocupados.filter(([a, b]) => a < e && b > s).length < cfg.capacidad; };
-    // Especiales ANTES de abrir: empiezan hasta holguraMin minutos antes de la apertura
-    if (holguraMin > 0) for (let t = abre - holguraMin; t < abre; t += cfg.intervalo_min) if (libre(t)) esp.push(hm(inst(dia, t)));
     for (let t = abre; t < cierre; t += cfg.intervalo_min) {
       const fin = t + durMin, normal = fin <= cierre;
       if (!normal && fin > cierre + holguraMin) break; // se pasa demasiado del cierre (y las siguientes aún más)
@@ -435,11 +434,8 @@ async function accion(b: Record<string, string>) {
       const especial = !normalOk && !!disp.especiales[b.fecha]?.includes(b.hora); // empieza antes del cierre pero termina después: requiere aprobación
       if (!normalOk && !especial) falla("Ese horario ya no está disponible. Elige otro.");
       const ini = inst(b.fecha, toMin(b.hora)), fin = ini + sv.duracionMin * 60_000;
-      // Por qué es especial: empieza antes de abrir, o termina después del cierre
-      const [abreD, cierraD] = especial ? disp.horarios[b.fecha] : ["", ""];
-      const motivoEsp = !especial ? "" : toMin(b.hora) < toMin(abreD)
-        ? `la sucursal abre a las ${h12(abreD)} y esta cita empieza a las ${h12(b.hora)}`
-        : `la sucursal cierra a las ${h12(cierraD)} y esta cita termina a las ${h12(hm(fin))}`;
+      // Horario especial = la cita termina después del cierre (hasta horario_especial_min minutos)
+      const motivoEsp = !especial ? "" : `la sucursal cierra a las ${h12(disp.horarios[b.fecha][1])} y esta cita termina a las ${h12(hm(fin))}`;
 
       const valoracion = sv.id === "valoracion";
       const ev = await gcal(cfg.calendar_id, "", {
