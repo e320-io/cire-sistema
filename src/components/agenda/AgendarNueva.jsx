@@ -143,7 +143,15 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
           <div style={S.pildora}>
             <span style={{ opacity: 0.85 }}>Tu servicio:</span> <b>{sv.nombre}</b> · {sv.duracionMin} min{pesos(sv.precio) ? ` · ${pesos(sv.precio)}` : ""}
           </div>
-          {Object.keys(dias).length > 0 ? (
+          {Object.keys(dias).length === 0 && (
+          <div style={S.tarjeta}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 6 }}>Por ahora no hay horarios libres</div>
+            <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto }}>Para este servicio no hay espacio en los próximos días. Anótate en la lista de espera y te avisamos en cuanto se abra un lugar.</div>
+          </div>
+          )}
+          {/* Arriba del calendario para que se vea antes de elegir; siempre cerrado de entrada */}
+          <EsperaPublica key={sv.id} api={api} nombre={nombre} tel={tel} servicio={sv} />
+          {Object.keys(dias).length > 0 && (
           <div style={S.tarjeta}>
             <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 12 }}>Elige el día</div>
             <Calendario dias={dias} dia={dia} mes={mes} setMes={setMes} onPick={(d) => { setDia(d); setHora(""); }} />
@@ -153,13 +161,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
               {(dias[dia] || []).map((h) => <button key={h} style={S.hora(h === hora)} onClick={() => setHora(h)}>{h}</button>)}
             </div>
           </div>
-          ) : (
-          <div style={S.tarjeta}>
-            <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 6 }}>Por ahora no hay horarios libres</div>
-            <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto }}>Para este servicio no hay espacio en los próximos días. Anótate en la lista de espera y te avisamos en cuanto se abra un lugar.</div>
-          </div>
           )}
-          <EsperaPublica api={api} nombre={nombre} tel={tel} servicio={sv} abierta0={Object.keys(dias).length === 0} />
           {Object.keys(dias).length > 0 && (
           <button style={S.boton(!!hora && !cargando)} disabled={!hora || cargando} onClick={reservar}>
             {cargando ? "Reservando…" : hora ? `Reservar ${cap(fechaLarga(dia))} · ${hora}` : "Elige una hora"}

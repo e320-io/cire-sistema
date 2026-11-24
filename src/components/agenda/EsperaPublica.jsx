@@ -8,8 +8,8 @@ const FRANJAS = [["manana", "Mañana"], ["tarde", "Tarde"], ["cualquiera", "Cual
 
 const chip = (on) => ({ padding: "10px 14px", fontSize: 14, fontWeight: 700, fontFamily: "inherit", borderRadius: 999, cursor: "pointer", border: `2px solid ${on ? C.verde : C.menta}`, background: on ? C.verde : C.menta, color: on ? "#fff" : C.verde });
 
-export default function EsperaPublica({ api, nombre, tel, servicio, abierta0 = false }) {
-  const [abierta, setAbierta] = useState(abierta0);
+export default function EsperaPublica({ api, nombre, tel, servicio }) {
+  const [abierta, setAbierta] = useState(false); // siempre cerrado de entrada
   const [dias, setDias] = useState([]);
   const [franja, setFranja] = useState("cualquiera");
   const [comentario, setComentario] = useState("");
@@ -37,14 +37,17 @@ export default function EsperaPublica({ api, nombre, tel, servicio, abierta0 = f
   );
 
   return (
-    <div style={{ ...S.tarjeta, border: `3px dashed ${C.rosa}` }}>
-      <div style={{ fontWeight: 800, fontSize: 18, color: C.verde, marginBottom: 4 }}>¿No está disponible el horario que buscas?</div>
-      <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto, marginBottom: abierta ? 14 : 12 }}>Entra a la lista de espera, <b>¡puede abrirse un lugar para ti!</b></div>
+    <div style={{ ...S.tarjeta, padding: 0, overflow: "hidden", border: `3px dashed ${C.rosa}` }}>
+      <button type="button" onClick={() => setAbierta(!abierta)} aria-expanded={abierta}
+        style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "14px 16px", cursor: "pointer", fontFamily: "inherit" }}>
+        <span style={{ fontSize: 22, flex: "0 0 auto" }}>⏳</span>
+        <span style={{ flex: 1, fontWeight: 800, fontSize: 16, color: C.verde, lineHeight: 1.25 }}>¿No está disponible el horario que buscas?</span>
+        <span style={{ flex: "0 0 auto", width: 30, height: 30, borderRadius: "50%", background: abierta ? C.verde : C.rosa, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 18, lineHeight: 1 }}>{abierta ? "–" : "+"}</span>
+      </button>
 
-      {!abierta ? (
-        <button style={{ ...S.boton(true), background: C.rosa, boxShadow: "none" }} onClick={() => setAbierta(true)}>⏳ Entrar a la lista de espera</button>
-      ) : (
-        <>
+      {abierta && (
+        <div style={{ padding: "0 16px 18px" }}>
+          <div style={{ fontSize: 14, lineHeight: 1.45, color: C.texto, marginBottom: 14 }}>Entra a la lista de espera, <b>¡puede abrirse un lugar para ti!</b></div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.verde, marginBottom: 8 }}>¿Qué días te acomodan?</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
             {DIAS.map(([k, t]) => <button key={k} type="button" style={chip(dias.includes(k))} onClick={() => alternar(k)}>{t}</button>)}
@@ -62,7 +65,7 @@ export default function EsperaPublica({ api, nombre, tel, servicio, abierta0 = f
           <button style={S.boton(!!dias.length && !enviando)} disabled={!dias.length || enviando} onClick={enviar}>
             {enviando ? "Anotándote…" : dias.length ? "Unirme a la lista de espera" : "Elige al menos un día"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
