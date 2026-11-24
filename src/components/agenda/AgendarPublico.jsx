@@ -73,7 +73,7 @@ export default function AgendarPublico() {
               <div style={{ fontSize: 20, fontWeight: 800, color: C.verde, lineHeight: 1.1 }}>Sucursal {sucursal}</div>
               <div style={{ fontSize: 13, color: C.suave }}>Agenda en línea</div>
             </div>
-            <button style={{ ...S.link, padding: 4, fontSize: 12 }} onClick={() => { history.pushState(null, "", "/agendar"); setSlug(""); setInfo(null); setModo("inicio"); setErr(""); }}>Cambiar</button>
+            <button style={{ ...S.link, color: C.verde, padding: 4, fontSize: 12 }} onClick={() => { history.pushState(null, "", "/agendar"); setSlug(""); setInfo(null); setModo("inicio"); setErr(""); }}>Cambiar</button>
           </div>
         )}
 

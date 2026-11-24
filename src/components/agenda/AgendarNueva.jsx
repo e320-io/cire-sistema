@@ -125,7 +125,7 @@ export default function AgendarNueva({ api, slug, sucursal, info, onVolver, setE
           </div>
           {valoracion && (
             <button disabled={cargando} onClick={() => elegir(valoracion)}
-              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "rgba(255,255,255,.35)", border: "2px dashed #fff", borderRadius: 20, padding: "14px 16px", marginBottom: 6, cursor: "pointer", fontFamily: "inherit", color: C.verde }}>
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "rgba(255,255,255,.35)", border: "2px dashed #fff", borderRadius: 20, padding: "14px 16px", marginBottom: 6, cursor: "pointer", fontFamily: "inherit", color: C.enlace }}>
               <span style={{ fontSize: 26 }}>💬</span>
               <span>
                 <span style={{ display: "block", fontWeight: 800, fontSize: 15 }}>¿No sabes qué necesitas?</span>
