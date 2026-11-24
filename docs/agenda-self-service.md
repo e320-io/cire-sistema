@@ -40,3 +40,16 @@ La clienta escribe nombre + celular, ve su cita, elige otro horario libre (misma
 
 ## Modo pruebas
 `agenda_sucursales.modo_pruebas = true` desactiva los candados antiabuso (máx. 3 reservas por celular al día y "ya tienes una cita agendada") para poder probar con el mismo nombre y celular. **Ponerlo en false antes de compartir los links con clientas** (Table Editor > agenda_sucursales).
+
+## Avisos por WhatsApp al equipo
+Al agendar, subir comprobante o reagendar, `agenda-publica` manda una plantilla de WhatsApp (Cloud API, mismos secretos `WA_TOKEN` / `WA_PHONE_ID` que el cierre diario) a los números de `agenda_sucursales.avisos_tel` de esa sucursal. **Con `avisos_tel` vacío no se manda nada.**
+
+| Evento | Plantilla (categoría Utility, es_MX) | Variables |
+|---|---|---|
+| Cita nueva | `agenda_cita_nueva` | sucursal, clienta, celular, servicio, cuándo, estatus |
+| Comprobante recibido | `agenda_comprobante_anticipo` | sucursal, clienta, celular, servicio, cita, enlace a la captura |
+| Cita reagendada | `agenda_cita_reagendada` | sucursal, clienta, celular, antes, ahora |
+
+Los textos exactos y los ejemplos están en `supabase/functions/agenda-publica/plantillas.ts`. Las plantillas deben existir y estar **aprobadas** en Meta (WhatsApp Manager > Plantillas) con ese nombre; si no, el envío falla y solo queda el error en los logs de la función (la reserva no se afecta).
+Los números van con el mismo formato que `RESUMEN_DESTINOS`. Con el número de **prueba** de Meta, cada destinatario debe estar verificado (máx. 5 en total).
+La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊 por 💰).
