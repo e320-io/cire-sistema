@@ -7,7 +7,8 @@
 //   ?modo=json   devuelve los datos y las variables de cada plantilla sin mandar nada
 //   ?modo=enviar (por defecto) manda a los destinatarios de RESUMEN_DESTINOS
 //   ?modo=cache&desde=&hasta=  llena la caché de días anteriores (tabla cierre_dias)
-//   ?solo=5255...   manda únicamente a ese teléfono (pruebas)
+//   ?solo=5255...   manda únicamente a ese teléfono de RESUMEN_DESTINOS (pruebas)
+//   ?tel=5255...&version=todas   prueba a CUALQUIER teléfono (aunque no esté en RESUMEN_DESTINOS); no se registra en cierre_envios
 //   ?dia=2026-11-04 cierre de otro día (por defecto, ayer en hora de México)
 //
 // Secretos: META_TOKEN, META_ACCOUNTS ("id:Nombre,id:Nombre"), WA_TOKEN, WA_PHONE_ID, CIERRE_KEY,
@@ -115,7 +116,9 @@ Deno.serve(async (req) => {
     if (modo === "png") return new Response(png, { headers: { "Content-Type": "image/png", "X-Tiempos": JSON.stringify(tiempos) } });
 
     let destinos: { nombre: string; tel: string; version: string }[] = JSON.parse(env("RESUMEN_DESTINOS") || "[]");
-    if (solo) destinos = destinos.filter((d) => d.tel === solo);
+    const telPrueba = (url.searchParams.get("tel") ?? "").replace(/\D/g, "");
+    if (telPrueba) destinos = [{ nombre: "Prueba", tel: telPrueba, version: url.searchParams.get("version") ?? "todas" }];
+    else if (solo) destinos = destinos.filter((d) => d.tel === solo);
     if (!destinos.length) return json({ error: "Sin destinatarios", solo }, 400);
 
     const forzar = url.searchParams.get("forzar") === "1";
@@ -124,10 +127,10 @@ Deno.serve(async (req) => {
     for (const d of destinos) {
       const vars = (cierre.vars as Record<string, string[]>)[d.version];
       if (!vars) { resultados.push({ nombre: d.nombre, ok: false, error: `Versión desconocida: ${d.version}` }); continue; }
-      if (!forzar && await yaEnviado(dia, d.tel, d.version)) { resultados.push({ nombre: d.nombre, version: d.version, ok: true, omitido: "ya se había enviado este cierre" }); continue; }
+      if (!telPrueba && !forzar && await yaEnviado(dia, d.tel, d.version)) { resultados.push({ nombre: d.nombre, version: d.version, ok: true, omitido: "ya se había enviado este cierre" }); continue; }
       mediaId ||= await subirImagen(png);
       const r = await mandar(d.tel, `cierre_diario_${d.version}`, mediaId, vars);
-      if (r.ok) await registrarEnvio(dia, d.tel, d.version, r.id);
+      if (r.ok && !telPrueba) await registrarEnvio(dia, d.tel, d.version, r.id); // las pruebas no cuentan como envío del día
       resultados.push({ nombre: d.nombre, version: d.version, ...r });
       await new Promise((x) => setTimeout(x, 1000));
     }
