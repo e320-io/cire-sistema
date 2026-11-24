@@ -49,7 +49,7 @@ type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
   direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
-  maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
+  anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
@@ -232,7 +232,7 @@ const concepto = (servicio: string) => "SERVICIO DE " + servicio.replace(/\([^)]
 function infoAnticipo(cfg: Cfg, servicio: string) {
   if (servicio === VALORACION.nombre) return null; // la valoración no lleva anticipo
   if (!cfg.clabe) return { monto: cfg.anticipo_monto, sinDatos: true };
-  return { monto: cfg.anticipo_monto, banco: cfg.banco, beneficiario: cfg.beneficiario, cuenta: cfg.cuenta, clabe: cfg.clabe, concepto: concepto(servicio) };
+  return { monto: cfg.anticipo_monto, banco: cfg.banco, beneficiario: cfg.beneficiario, cuenta: cfg.cuenta, clabe: cfg.clabe, concepto: cfg.anticipo_concepto || concepto(servicio) };
 }
 type Reserva = { id: string; event_id: string; servicio: string; telefono: string; comprobante_at: string | null };
 async function reservaValida(cfg: Cfg, b: Record<string, string>): Promise<Reserva> {

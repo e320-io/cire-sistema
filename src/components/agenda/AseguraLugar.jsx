@@ -121,7 +121,7 @@ export default function AseguraLugar({ api, sucursal, info, d, setErr, onSalir }
           <div style={{ marginTop: 12 }}>
             <Dato k="Banco" v={a.banco} />
             <Dato k="Beneficiario" v={a.beneficiario} />
-            <Dato k="Cuenta (solo del mismo banco)" v={a.cuenta} copiar={a.cuenta} />
+            {a.cuenta && <Dato k="Cuenta (solo del mismo banco)" v={a.cuenta} copiar={a.cuenta} />}
             <Dato k="Concepto (ponlo igual)" v={a.concepto} copiar={a.concepto} />
           </div>
         </div>
