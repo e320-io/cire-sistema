@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "./supabase";
+import { DOMINIO_PUBLICO, DOMINIO_EQUIPO } from "./dominios.js";
 
 // Llamadas a la edge function `lealtad`. Las acciones de recepción llevan usuario + hash de contraseña
 // (los mismos que guarda system_users) para que el servidor verifique que quien sella es personal, no la clienta.
@@ -20,5 +21,6 @@ export const apiLealtad = async (accion, datos = {}, { recepcion = false } = {})
 export const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 /** Saca el token de lo que lea el escáner: la URL del QR (/sello/<token>) o el token suelto. */
 export const tokenDe = (texto) => (String(texto || "").match(UUID_RE) || [])[0]?.toLowerCase() || null;
-export const urlSello = (token) => `${location.origin}/sello/${token}`;
-export const urlTarjeta = (token) => `${location.origin}/tarjeta/${token}`;
+// Sello (QR que escanea recepción) -> sistema del equipo; tarjeta (la ve la clienta) -> dominio público. Siempre producción.
+export const urlSello = (token) => `${DOMINIO_EQUIPO}/sello/${token}`;
+export const urlTarjeta = (token) => `${DOMINIO_PUBLICO}/tarjeta/${token}`;
