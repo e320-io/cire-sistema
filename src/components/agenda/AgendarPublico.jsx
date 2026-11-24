@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { C, S, FONT, Loto, Pin, Titulo, crearApi, estiloTema } from "./ui.jsx";
+import { C, S, FONT, Pin, Titulo, crearApi, estiloTema } from "./ui.jsx";
+import LogoCire from "./LogoCire.jsx";
 import Reagendar from "./Reagendar.jsx";
 import AgendarNueva from "./AgendarNueva.jsx";
 import { RetomarApartado, leerPendiente } from "./AseguraLugar.jsx";
@@ -59,10 +60,8 @@ export default function AgendarPublico() {
       </div>
 
       <div style={S.caja}>
-        <div style={{ textAlign: "center", color: C.sobre, marginBottom: 22, textShadow: "0 1px 8px rgba(var(--c-sombra),.3)" }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.32em", fontWeight: 500, marginBottom: 2 }}>ARTE EN DEPILACIÓN</div>
-          <Loto />
-          <div style={{ fontSize: 34, fontWeight: 600, letterSpacing: "0.04em", lineHeight: 1, marginTop: 2 }}>CIRE</div>
+        <div style={{ textAlign: "center", color: C.sobre, marginBottom: 12, filter: "drop-shadow(0 2px 8px rgba(var(--c-sombra),.25))" }}>
+          <LogoCire size={170} />
         </div>
 
         <Titulo>{sinSlug ? <>Elige tu<br />sucursal</> : titulo}</Titulo>
