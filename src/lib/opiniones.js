@@ -17,4 +17,6 @@ export const apiOpiniones = async (accion, datos = {}, { equipo = false } = {}) 
 };
 
 export const slugDeNombre = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-export const urlOpinion = (slug) => `${location.origin}/opinion/${slug}`;
+// Los QR siempre apuntan al dominio de producción (no al de una vista previa, que muestra la barra de Vercel y puede pedir login).
+export const DOMINIO_PUBLICO = "https://cire-sistema-ochre.vercel.app";
+export const urlOpinion = (slug) => `${DOMINIO_PUBLICO}/opinion/${slug}`;
