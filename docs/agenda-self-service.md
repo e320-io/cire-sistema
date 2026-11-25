@@ -79,3 +79,10 @@ La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊
 - **Cómo funciona:** el sitio principal es otro proyecto de Vercel (`cire-site`, repo `ferayalaio/cire-site`). Su `vercel.json` tiene tres *rewrites* externos (`/agendar`, `/agendar/:path*`, `/agenda-assets/:path*`) hacia `agenda.ciredepilacion.com`: la dirección que ve la clienta no cambia. Si algún día el sitio agrega un rewrite comodín, estas reglas deben ir **antes**.
 - **Por qué `/agenda-assets/`:** ambos proyectos usaban `/assets/` para sus archivos y chocaban; `vite.config.js` de esta app define `build.assetsDir = 'agenda-assets'`. No lo cambies sin ajustar el rewrite del sitio.
 - **No incluido:** `/opinion/…` y `/tarjeta/…` siguen solo en `agenda.ciredepilacion.com` (los QR de opiniones y el enlace de la tarjeta usan `DOMINIO_PUBLICO` = agenda.). Se pueden servir también bajo el dominio principal con el mismo patrón.
+
+## El sistema del equipo bajo el sitio principal: ciredepilacion.com/sistema
+- **Liga para el equipo:** `https://ciredepilacion.com/sistema` (también sigue `sistema.ciredepilacion.com`). `DOMINIO_EQUIPO` en `src/lib/dominios.js` apunta a la primera.
+- **Cómo funciona:** igual que `/agendar`: `cire-site` tiene rewrites externos `/sistema` y `/sistema/:path*` → `sistema.ciredepilacion.com`, más un header `noindex` para `/sistema(.*)`. La app detecta el prefijo con `PREFIJO_SISTEMA` y `rutaLimpia()` (`src/lib/dominios.js`; usados en `main.jsx` y `App.jsx` para `/sello/<token>`), así que las rutas internas funcionan con o sin `/sistema`.
+- **Sesiones:** el login se guarda por origen, así que cada persona entra de nuevo la primera vez en `ciredepilacion.com/sistema`.
+- **QR del sello** (`urlSello`): ahora genera `ciredepilacion.com/sistema/sello/<token>`; los QR ya impresos con `sistema.` siguen sirviendo.
+- Tras desplegar, el CDN puede dar 404 unos minutos en la ruta recién creada.
