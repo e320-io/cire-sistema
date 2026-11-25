@@ -12,6 +12,7 @@ import PanelOpiniones from "./components/opiniones/PanelOpiniones.jsx";
 import { setCredencialesOpiniones } from "./lib/opiniones.js";
 import ListaEsperaPanel, { EsperaDashboard } from "./components/agenda/ListaEsperaPanel.jsx";
 import { setCredencialesEspera, apiEspera, slugSucursal } from "./lib/espera.js";
+import { PREFIJO_SISTEMA, rutaLimpia } from "./lib/dominios.js";
 import EstadoFinanciero from "./components/finanzas/EstadoFinanciero.jsx";
 import ResumenFinanciero from "./components/finanzas/ResumenFinanciero.jsx";
 import MetaAdsBudget from "./components/finanzas/MetaAdsBudget.jsx";
@@ -7591,9 +7592,9 @@ export default function App(){
   const[showForgot,setShowForgot]=useState(false);
   const[mustChange,setMustChange]=useState(false);
   // Tarjeta de lealtad: token del QR escaneado (también si abrieron /sello/<token> y tuvieron que iniciar sesión)
-  const[tokenSello,setTokenSello]=useState(()=>/^\/sello\//.test(location.pathname)?tokenDe(location.pathname):null);
+  const[tokenSello,setTokenSello]=useState(()=>/^\/sello\//.test(rutaLimpia())?tokenDe(rutaLimpia()):null);
   useEffect(()=>{setCredencialesLealtad(session?.usuario,supaUser?.password_hash);setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);setCredencialesEspera(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
-  const cerrarSello=()=>{setTokenSello(null);if(/^\/sello\//.test(location.pathname))history.replaceState(null,"","/");};
+  const cerrarSello=()=>{setTokenSello(null);if(/^\/sello\//.test(rutaLimpia()))history.replaceState(null,"",PREFIJO_SISTEMA||"/");};
 
   async function login(){
     if(!user.trim()||!pass){setErr("Completa usuario y contraseña");return;}
