@@ -78,7 +78,7 @@ La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊
 - **Liga oficial para compartir:** `https://ciredepilacion.com/agendar` (selector de sucursal) y `https://ciredepilacion.com/agendar/<sucursal>` (coapa, valle, oriente, polanco, metepec). `agenda.ciredepilacion.com/agendar/...` sigue funcionando igual.
 - **Cómo funciona:** el sitio principal es otro proyecto de Vercel (`cire-site`, repo `ferayalaio/cire-site`). Su `vercel.json` tiene tres *rewrites* externos (`/agendar`, `/agendar/:path*`, `/agenda-assets/:path*`) hacia `agenda.ciredepilacion.com`: la dirección que ve la clienta no cambia. Si algún día el sitio agrega un rewrite comodín, estas reglas deben ir **antes**.
 - **Por qué `/agenda-assets/`:** ambos proyectos usaban `/assets/` para sus archivos y chocaban; `vite.config.js` de esta app define `build.assetsDir = 'agenda-assets'`. No lo cambies sin ajustar el rewrite del sitio.
-- **No incluido:** `/opinion/…` y `/tarjeta/…` siguen solo en `agenda.ciredepilacion.com` (los QR de opiniones y el enlace de la tarjeta usan `DOMINIO_PUBLICO` = agenda.). Se pueden servir también bajo el dominio principal con el mismo patrón.
+- **También `/opinion/…` y `/tarjeta/…`:** mismos rewrites (4 más en `cire-site`). Los QR de opiniones y el enlace de la tarjeta usan `DOMINIO_PUBLICO` = `https://ciredepilacion.com`. Los QR/enlaces ya emitidos con `agenda.` siguen sirviendo.
 
 ## El sistema del equipo bajo el sitio principal: ciredepilacion.com/sistema
 - **Liga para el equipo:** `https://ciredepilacion.com/sistema` (también sigue `sistema.ciredepilacion.com`). `DOMINIO_EQUIPO` en `src/lib/dominios.js` apunta a la primera.
