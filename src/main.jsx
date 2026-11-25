@@ -10,4 +10,13 @@ import { rutaLimpia } from './lib/dominios.js'
 // Ninguna pasa por el login ni carga el sistema. (/sello/<token> sí: es de recepción y vive dentro de App.)
 const path = rutaLimpia() // sin el prefijo /sistema (el sistema también abre en ciredepilacion.com/sistema)
 const Raiz = /^\/agendar(\/|$)/.test(path) ? AgendarPublico : /^\/tarjeta\//.test(path) ? TarjetaPublica : /^\/opinion(\/|$)/.test(path) ? OpinionPublica : App
-ReactDOM.createRoot(document.getElementById('root')).render(<Raiz/>)
+// Las direcciones agenda.ciredepilacion.com y sistema.ciredepilacion.com son solo el "origen" que el sitio principal presta:
+// quien entre directo por ahí se manda a ciredepilacion.com (el sistema bajo /sistema). Bajo el dominio principal el navegador
+// ya está en ciredepilacion.com, así que no hay ciclo.
+const h = location.hostname
+if (h === 'agenda.ciredepilacion.com' || h === 'sistema.ciredepilacion.com') {
+  const base = h.startsWith('sistema.') ? '/sistema' : ''
+  location.replace('https://ciredepilacion.com' + base + (location.pathname === '/' && !base ? '/agendar' : location.pathname === '/' ? '' : location.pathname) + location.search + location.hash)
+} else {
+  ReactDOM.createRoot(document.getElementById('root')).render(<Raiz/>)
+}

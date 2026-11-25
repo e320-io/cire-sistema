@@ -86,3 +86,4 @@ La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊
 - **Sesiones:** el login se guarda por origen, así que cada persona entra de nuevo la primera vez en `ciredepilacion.com/sistema`.
 - **QR del sello** (`urlSello`): ahora genera `ciredepilacion.com/sistema/sello/<token>`; los QR ya impresos con `sistema.` siguen sirviendo.
 - Tras desplegar, el CDN puede dar 404 unos minutos en la ruta recién creada.
+- **`agenda.` y `sistema.` redirigen:** `src/main.jsx` manda a quien abra directo `agenda.ciredepilacion.com/…` o `sistema.ciredepilacion.com/…` a `ciredepilacion.com/…` (el sistema bajo `/sistema`). Siguen existiendo solo como origen de los rewrites del sitio principal; no se deben borrar del proyecto de Vercel ni del DNS.
