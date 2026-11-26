@@ -5956,9 +5956,9 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
     const entries=Object.entries(frac);
     if(entries.length===0)return"Sin asignar";
     if(entries.length===1)return entries[0][0];
-    if(esRemarketing(r.campaign_name,r.adset_name))return"Remarketing · "+entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(", ");
+    if(esRemarketing(r.campaign_name,r.adset_name))return"Remarketing · "+entries.map(([s,f])=>`${s} ${+(f*100).toFixed(1)}%`).join(", ");
     if(entries.length===SUCURSALES_NAMES.length&&entries.every(([,f])=>Math.abs(f-1/entries.length)<1e-6))return"5 sucursales (÷5)";
-    return entries.map(([s,f])=>`${s} ${Math.round(f*100)}%`).join(" + ");
+    return entries.map(([s,f])=>`${s} ${+(f*100).toFixed(1)}%`).join(" + ");
   };
   // Insights diarios por adset en tramos de 5 días, en paralelo y con páginas chicas: pedir el mes
   // completo en una sola consulta hace que Meta tarde >30s o falle (error 1504044) y el gráfico queda vacío.
@@ -6771,7 +6771,7 @@ function Dashboard({session=null,onLogout,sucursalesFiltro=null,sucursalesPropia
                 const tot=rm.reduce((a,r)=>a+r.spend,0),msT=rm.reduce((a,r)=>a+r.mensajes,0);
                 return<div className="glass" style={{overflow:"hidden"}}>
                   <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.div}`,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"8px"}}>
-                    <div style={{fontSize:"11px",letterSpacing:"2px",color:"#ec4899"}}>REMARKETING · REPARTO PONDERADO: COAPA 30% · VALLE 30% · ORIENTE 20% · POLANCO 10% · METEPEC 10%</div>
+                    <div style={{fontSize:"11px",letterSpacing:"2px",color:"#ec4899"}}>REMARKETING · REPARTO PONDERADO: COAPA 30% · VALLE 30% · ORIENTE 15% · POLANCO 12.5% · METEPEC 12.5%</div>
                     <div style={{fontSize:"13px",fontWeight:700,color:"#f97316"}}>{fmt(tot)} <span style={{fontSize:"11px",fontWeight:400,color:T.sub}}>· {fmtN(Math.round(msT))} msgs en total</span></div>
                   </div>
                   <div style={{padding:"10px 20px",fontSize:"11px",color:T.faint,borderBottom:"1px solid rgba(255,255,255,0.04)"}}>{[...new Set(rm.map(r=>r.campania))].join(" · ")}</div>

@@ -8,7 +8,7 @@ const FIELDS = "campaign_name,adset_name,adset_id,spend,actions,impressions,clic
 const SUC_CDMX = ["Valle", "Coapa", "Polanco"];
 const SUC_TODAS = ["Valle", "Polanco", "Coapa", "Oriente", "Metepec"];
 // Remarketing (campaña, adset o anuncio): beneficia a las 5 sucursales, con reparto ponderado (suma 100 %).
-export const PESOS_REMARKETING = { Coapa: 0.3, Valle: 0.3, Oriente: 0.2, Polanco: 0.1, Metepec: 0.1 };
+export const PESOS_REMARKETING = { Coapa: 0.3, Valle: 0.3, Oriente: 0.15, Polanco: 0.125, Metepec: 0.125 };
 export const repartoRemarketing = () => ({ ...PESOS_REMARKETING });
 export const esRemarketing = (...nombres) => nombres.some((n) => /remarket|retarget|\brmk\b/i.test(sin(n)));
 export const quintos = () => Object.fromEntries(SUC_TODAS.map((s) => [s, 1 / SUC_TODAS.length]));
@@ -43,8 +43,8 @@ const tercios = () => ({ ...PESOS_CDMX });
  */
 function fraccionCompartida(r, fracAdset) {
   if (esRemarketing(r.campaign_name, r.adset_name, r.ad_name)) return repartoRemarketing();
-  // Campaña NOV-IMG-Bikini (todos sus conjuntos y anuncios, incl. "IMG - CC"): mismo reparto ponderado de las 5 sucursales que el remarketing
-  if (/^nov\W*img\W*bikini/.test(sin(r.campaign_name))) return repartoRemarketing();
+  // Campaña NOV-IMG-Bikini (todos sus conjuntos y anuncios, incl. "IMG - CC"): solo CDMX, ponderado Valle 40 · Coapa 40 · Polanco 20
+  if (/^nov\W*img\W*bikini/.test(sin(r.campaign_name))) return tercios();
   const p = String(r.ad_name || "").split("|").map((s) => sin(s));
   if (p[0] === "bikini") return tercios();
   const dir = SUC_CDMX.find((s) => sin(s) === p[0]);
