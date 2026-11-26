@@ -7,8 +7,8 @@ const API = "https://graph.facebook.com/v19.0";
 const FIELDS = "campaign_name,adset_name,adset_id,spend,actions,impressions,clicks,reach";
 const SUC_CDMX = ["Valle", "Coapa", "Polanco"];
 const SUC_TODAS = ["Valle", "Polanco", "Coapa", "Oriente", "Metepec"];
-// Remarketing (campaña, adset o anuncio): beneficia a las 5 sucursales, con reparto ponderado (suma 100 %).
-export const PESOS_REMARKETING = { Coapa: 0.3, Valle: 0.3, Oriente: 0.15, Polanco: 0.125, Metepec: 0.125 };
+// Remarketing (campaña, adset o anuncio): beneficia a las 5 sucursales, con reparto parejo (20 % cada una).
+export const PESOS_REMARKETING = { Coapa: 0.2, Valle: 0.2, Oriente: 0.2, Polanco: 0.2, Metepec: 0.2 };
 export const repartoRemarketing = () => ({ ...PESOS_REMARKETING });
 export const esRemarketing = (...nombres) => nombres.some((n) => /remarket|retarget|\brmk\b/i.test(sin(n)));
 export const quintos = () => Object.fromEntries(SUC_TODAS.map((s) => [s, 1 / SUC_TODAS.length]));
