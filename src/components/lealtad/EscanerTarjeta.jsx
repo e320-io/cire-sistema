@@ -4,7 +4,7 @@ import { tokenDe } from "../../lib/lealtad.js";
 
 // Botón flotante "Escanear tarjeta" + modal. Lee el QR con la cámara (BarcodeDetector si existe, jsQR si no)
 // o acepta el texto/enlace pegado — un lector USB de códigos "teclea" el enlace aquí y manda Enter.
-export default function EscanerTarjeta({ onToken }) {
+export default function EscanerTarjeta({ onToken, onHoy }) {
   const [abierto, setAbierto] = useState(false);
   const [txt, setTxt] = useState("");
   const [err, setErr] = useState("");
@@ -41,6 +41,7 @@ export default function EscanerTarjeta({ onToken }) {
 
   return (
     <>
+      {onHoy && <button className="btn-ghost" onClick={onHoy} style={{ position: "fixed", right: 18, bottom: 70, zIndex: 900, padding: "10px 16px", borderRadius: 30, fontSize: 13, background: "rgba(20,30,60,.85)", color: "#fff" }}>📅 Hoy</button>}
       <button className="btn-blue" onClick={() => { setAbierto(true); setErr(""); }}
         style={{ position: "fixed", right: 18, bottom: 18, zIndex: 900, padding: "12px 18px", borderRadius: 30, fontSize: 14, boxShadow: "0 6px 20px rgba(0,0,0,.3)" }}>
         🪪 Escanear tarjeta

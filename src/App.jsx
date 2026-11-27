@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_KEY, META_TOKEN, META_ACCOUNT, CLAUDE_KEY, supab
 import { ThemeCtx, mkT, useT } from "./lib/theme.jsx";
 import SelloRecepcion from "./components/lealtad/SelloRecepcion.jsx";
 import EscanerTarjeta from "./components/lealtad/EscanerTarjeta.jsx";
+import HoyRecepcion from "./components/lealtad/HoyRecepcion.jsx";
 import BotonTarjetaClienta from "./components/lealtad/BotonTarjetaClienta.jsx";
 import { setCredencialesLealtad, tokenDe } from "./lib/lealtad.js";
 import { USUARIOS, SUCURSALES_NAMES, COLORES, TERMINALES_DEFAULT, netoTarjeta, fmt, fmtN, cdmx, hoy, ayer, normName, mesLabel, defaultMes, MESES_ES, puedeEditarCatalogo } from "./lib/constantes.js";
@@ -7594,6 +7595,8 @@ export default function App(){
   // Tarjeta de lealtad: token del QR escaneado (también si abrieron /sello/<token> y tuvieron que iniciar sesión)
   const[tokenSello,setTokenSello]=useState(()=>/^\/sello\//.test(rutaLimpia())?tokenDe(rutaLimpia()):null);
   useEffect(()=>{setCredencialesLealtad(session?.usuario,supaUser?.password_hash);setCredencialesOpiniones(session?.usuario,supaUser?.password_hash);setCredencialesEspera(session?.usuario,supaUser?.password_hash);},[session,supaUser]);
+  const[verHoy,setVerHoy]=useState(()=>rutaLimpia()==="/hoy");
+  const cerrarHoy=()=>{setVerHoy(false);if(rutaLimpia()==="/hoy")history.replaceState(null,"",PREFIJO_SISTEMA||"/");};
   const cerrarSello=()=>{setTokenSello(null);if(/^\/sello\//.test(rutaLimpia()))history.replaceState(null,"",PREFIJO_SISTEMA||"/");};
 
   async function login(){
@@ -7674,5 +7677,5 @@ export default function App(){
   }
 
   const hayTarjeta=session&&!mustChange;
-  return <ThemeCtx.Provider value={{light,acc}}>{content}{hayTarjeta&&<EscanerTarjeta onToken={setTokenSello}/>}{hayTarjeta&&tokenSello&&<SelloRecepcion session={session} token={tokenSello} onClose={cerrarSello}/>}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{light,acc}}>{content}{hayTarjeta&&<EscanerTarjeta onToken={setTokenSello} onHoy={()=>setVerHoy(true)}/>}{hayTarjeta&&verHoy&&<HoyRecepcion session={session} onClose={cerrarHoy}/>}{hayTarjeta&&tokenSello&&<SelloRecepcion session={session} token={tokenSello} onClose={cerrarSello}/>}</ThemeCtx.Provider>;
 }

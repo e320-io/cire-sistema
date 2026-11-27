@@ -24,3 +24,6 @@ export const tokenDe = (texto) => (String(texto || "").match(UUID_RE) || [])[0]?
 // Sello (QR que escanea recepción) -> sistema del equipo; tarjeta (la ve la clienta) -> dominio público. Siempre producción.
 export const urlSello = (token) => `${DOMINIO_EQUIPO}/sello/${token}`;
 export const urlTarjeta = (token) => `${DOMINIO_PUBLICO}/tarjeta/${token}`;
+export const getCredLealtad = () => cred;
+// Vista previa de recepción (tarjeta de cálculo nuevo, aunque no esté publicada): vive en el dominio del equipo.
+export const urlPreview = (token) => `${DOMINIO_EQUIPO}/r/${token}`;

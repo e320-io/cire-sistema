@@ -9,7 +9,7 @@ import { rutaLimpia } from './lib/dominios.js'
 // /agendar y /agendar/<sucursal> son la página pública de reagendado; /opinion/<sucursal> es el QR de opiniones; /tarjeta/<token> es la tarjeta de lealtad de la clienta.
 // Ninguna pasa por el login ni carga el sistema. (/sello/<token> sí: es de recepción y vive dentro de App.)
 const path = rutaLimpia() // sin el prefijo /sistema (el sistema también abre en ciredepilacion.com/sistema)
-const Raiz = /^\/agendar(\/|$)/.test(path) ? AgendarPublico : /^\/tarjeta\//.test(path) ? TarjetaPublica : /^\/opinion(\/|$)/.test(path) ? OpinionPublica : App
+const Raiz = /^\/agendar(\/|$)/.test(path) ? AgendarPublico : /^\/(tarjeta|r)\//.test(path) ? TarjetaPublica : /^\/opinion(\/|$)/.test(path) ? OpinionPublica : App
 // Las direcciones agenda.ciredepilacion.com y sistema.ciredepilacion.com son solo el "origen" que el sitio principal presta:
 // quien entre directo por ahí se manda a ciredepilacion.com (el sistema bajo /sistema). Bajo el dominio principal el navegador
 // ya está en ciredepilacion.com, así que no hay ciclo.
