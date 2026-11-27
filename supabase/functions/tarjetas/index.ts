@@ -94,6 +94,71 @@ async function clientaPorToken(t: any) {
   return { c, suc };
 }
 
+// ---------- Agendar la siguiente sesión (recepción, piloto) ----------
+const TZ = "America/Mexico_City", OFFSET = "-06:00";
+const ymd = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: TZ });
+const hm = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+const addDays = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+const addMeses = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCMonth(x.getUTCMonth() + n); return x.toISOString().slice(0, 10); };
+const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
+const toMin = (h: string) => { const [a, b] = h.split(":").map(Number); return a * 60 + b; };
+const inst = (dia: string, min: number) => new Date(`${dia}T${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00${OFFSET}`).getTime();
+// deno-lint-ignore no-explicit-any
+const rango = (e: any): [number, number] => e.start.dateTime ? [Date.parse(e.start.dateTime), Date.parse(e.end.dateTime)] : [Date.parse(`${e.start.date}T00:00:00${OFFSET}`), Date.parse(`${e.end.date}T00:00:00${OFFSET}`)];
+const VENTANA = 100; // días hacia adelante
+// deno-lint-ignore no-explicit-any
+async function eventosFuturos(calId: string, desde: number, hasta: number): Promise<any[]> {
+  const tk = await token(); const out = []; let page = "";
+  do {
+    const u = new URL(`https://www.googleapis.com/calendar/v3/calendars/${enc(calId)}/events`);
+    u.searchParams.set("timeMin", new Date(desde).toISOString()); u.searchParams.set("timeMax", new Date(hasta).toISOString()); u.searchParams.set("singleEvents", "true"); u.searchParams.set("maxResults", "2500"); if (page) u.searchParams.set("pageToken", page);
+    const r = await fetch(u, { headers: { Authorization: `Bearer ${tk}` } }); const j = await r.json(); if (!r.ok) throw new Error("Google Calendar " + r.status);
+    out.push(...(j.items ?? [])); page = j.nextPageToken ?? "";
+  } while (page);
+  return out;
+}
+// deno-lint-ignore no-explicit-any
+function huecos(cfg: any, evs: any[], durMin: number): Record<string, string[]> {
+  const ahora = Date.now(); const ocupados = evs.filter((e) => e.status !== "cancelled" && e.transparency !== "transparent").map(rango);
+  const hoy = ymd(ahora); const dias: Record<string, string[]> = {};
+  for (let i = 0; i < VENTANA; i++) {
+    const dia = addDays(hoy, i); const h = cfg.horario?.[String(dow(dia))]; if (!h) continue;
+    const libres: string[] = [];
+    for (let t = toMin(h[0]); t + durMin <= toMin(h[1]); t += cfg.intervalo_min) {
+      const s = inst(dia, t), e = s + durMin * 60_000; if (s < ahora + 3600e3) continue;
+      if (ocupados.filter(([a, b]) => a < e && b > s).length >= (cfg.capacidad ?? 1)) continue;
+      libres.push(hm(s));
+    }
+    if (libres.length) dias[dia] = libres;
+  }
+  return dias;
+}
+// Contexto común: cita de hoy de la clienta (para duración y datos), paquete elegido y número de la siguiente sesión.
+// deno-lint-ignore no-explicit-any
+async function contextoSiguiente(b: Record<string, any>) {
+  await staff(b);
+  const { c, suc } = await clientaPorToken(b.token);
+  if (!PILOTO.includes(c.sucursal)) falla("Esta función aún no está activa en esta sucursal.");
+  if (b.sucursal !== c.sucursal) falla(`Esta clienta es de ${c.sucursal}. Inicia sesión con esa sucursal.`);
+  const cfg = (await rows(`agenda_sucursales?select=nombre,calendar_id,horario,intervalo_min,capacidad&nombre=eq.${enc(c.sucursal)}`))[0]; if (!cfg) falla("Sucursal sin agenda.");
+  const H = { Authorization: `Bearer ${await token()}` };
+  const g = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events/${enc(String(b.eventoId ?? ""))}`, { headers: H }); const ev = await g.json();
+  if (!g.ok || ev.status === "cancelled" || !ev.start?.dateTime) falla("No encontramos la cita de hoy en el calendario.");
+  if (!c.tel || telDe(ev.summary ?? "") !== c.tel) falla("Esa cita no corresponde a esta clienta.");
+  const durMin = Math.max(15, Math.round((Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000));
+  const dia = ymd(Date.parse(ev.start.dateTime));
+  const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
+  // deno-lint-ignore no-explicit-any
+  const p = ps.find((x: any) => x.nombre === b.paquete) ?? ps.find((x: any) => (x.sesiones ?? []).some((s: any) => s.fecha === dia)) ?? ps.find((x: any) => x.estado === "activo");
+  if (!p) falla("No encontramos el paquete de esta clienta.");
+  // deno-lint-ignore no-explicit-any
+  const hoyS = (p.sesiones ?? []).find((s: any) => s.fecha === dia);
+  const base = hoyS?.n ?? p.sellos + (/✅/.test(ev.summary ?? "") ? 0 : 1);
+  const siguiente = base + 1;
+  if (p.total && !p.total_supuesto && siguiente > p.total) falla(`${p.nombre} ya está completo (${p.total} de ${p.total}). No hay siguiente sesión.`);
+  return { c, suc, cfg, ev, durMin, dia, p, siguiente, H };
+}
+
 // deno-lint-ignore no-explicit-any
 async function accion(b: Record<string, any>) {
   switch (b.accion) {
@@ -190,6 +255,44 @@ async function accion(b: Record<string, any>) {
       // la tarjeta se recalcula al momento (sin esperar las 5 am) y el bloque de la cita se actualiza
       let recalculada = true; try { await llamar("sync-tarjetas", `suc=${enc(c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(c.sucursal)}&escribir=1&evento=${enc(evId)}`); } catch (er) { recalculada = false; console.error(er); }
       return { ok: true, recalculada, tarjeta: await tarjeta(c.token, true) };
+    }
+    case "siguiente_horarios": {
+      const x = await contextoSiguiente(b);
+      const evs = await eventosFuturos(x.suc.calendar_id, Date.now() - 864e5, Date.now() + (VENTANA + 2) * DIA);
+      // deno-lint-ignore no-explicit-any
+      const yaTiene = evs.filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3 && ymd(Date.parse(e.start.dateTime)) !== x.dia && telDe(e.summary ?? "") === x.c.tel)
+        // deno-lint-ignore no-explicit-any
+        .map((e: any) => ({ fecha: ymd(Date.parse(e.start.dateTime)), hora: hm(Date.parse(e.start.dateTime)), titulo: String(e.summary ?? "").slice(0, 80) }));
+      return { paquete: x.p.nombre, siguiente: x.siguiente, total: x.p.total_supuesto ? null : x.p.total, duracionMin: x.durMin, minimo: addMeses(x.dia, 1), dias: huecos(x.cfg, evs, x.durMin), yaTiene };
+    }
+
+    case "siguiente_agendar": {
+      const x = await contextoSiguiente(b);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha)) || !/^\d{2}:\d{2}$/.test(String(b.hora))) falla("Horario inválido.");
+      const evs = await eventosFuturos(x.suc.calendar_id, Date.now() - 864e5, Date.now() + (VENTANA + 2) * DIA);
+      // deno-lint-ignore no-explicit-any
+      const ya = evs.find((e: any) => e.status !== "cancelled" && e.start?.dateTime && Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3 && ymd(Date.parse(e.start.dateTime)) !== x.dia && telDe(e.summary ?? "") === x.c.tel);
+      if (ya && !b.forzar) falla(`Ya tiene una cita el ${ymd(Date.parse(ya.start.dateTime))} a las ${hm(Date.parse(ya.start.dateTime))}. Para cambiarla usa Reagendar.`);
+      if (b.fecha < addMeses(x.dia, 1) && !b.forzar) falla("Es antes del mes mínimo entre sesiones. Confirma que quieres saltarlo.");
+      if (!huecos(x.cfg, evs, x.durMin)[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
+      const ini = inst(b.fecha, toMin(b.hora)), fin = ini + x.durMin * 60_000;
+      const nombreTel = String(x.ev.summary ?? "").replace(/\p{Extended_Pictographic}[\u{FE0F}\u{200D}]*/gu, "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim();
+      const cuerpo = { summary: nombreTel, description: `${String(x.p.nombre).toUpperCase()} SESION ${x.siguiente}`,
+        start: { dateTime: `${b.fecha}T${b.hora}:00${OFFSET}`, timeZone: TZ }, end: { dateTime: `${ymd(fin)}T${hm(fin)}:00${OFFSET}`, timeZone: TZ },
+        ...(x.ev.colorId ? { colorId: x.ev.colorId } : {}), reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
+        extendedProperties: { private: { origen: "recepcion", paquete: String(x.p.nombre).slice(0, 80), sesion: String(x.siguiente) } } };
+      const cr = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(x.suc.calendar_id)}/events?sendUpdates=none`, { method: "POST", headers: { ...x.H, "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+      const nuevo = await cr.json(); if (!cr.ok) { console.error(JSON.stringify(nuevo).slice(0, 300)); falla("No pudimos crear la cita en el calendario. Intenta de nuevo."); }
+      // si dos personas tomaron el mismo hueco a la vez, se queda la creada primero
+      const tras = (await eventosFuturos(x.suc.calendar_id, ini, fin)).filter((e) => e.status !== "cancelled" && e.transparency !== "transparent" && e.start?.dateTime && rango(e)[0] < fin && rango(e)[1] > ini)
+        .sort((p, q) => String(p.created).localeCompare(String(q.created)) || p.id.localeCompare(q.id));
+      if (tras.findIndex((e) => e.id === nuevo.id) >= (x.cfg.capacidad ?? 1)) {
+        await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(x.suc.calendar_id)}/events/${enc(nuevo.id)}?sendUpdates=none`, { method: "DELETE", headers: x.H }).catch(() => {});
+        falla("Alguien más acaba de tomar ese horario. Elige otro.");
+      }
+      await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: x.c.sucursal, evento_id: nuevo.id, accion: "crear", antes: null, despues: `${cuerpo.summary} | ${cuerpo.description} | ${b.fecha} ${b.hora}` }) });
+      let recalculada = true; try { await llamar("sync-tarjetas", `suc=${enc(x.c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(x.c.sucursal)}&escribir=1&evento=${enc(nuevo.id)}`); } catch (er) { recalculada = false; console.error(er); }
+      return { ok: true, fecha: b.fecha, hora: b.hora, sesion: x.siguiente, recalculada };
     }
     default: return falla("Acción desconocida.");
   }
