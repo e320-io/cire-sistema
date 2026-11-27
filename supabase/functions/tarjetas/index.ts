@@ -66,7 +66,7 @@ const b64u = (b: ArrayBuffer | string) => { const u = typeof b === "string" ? ne
 async function token(): Promise<string> {
   const sa = JSON.parse(env("GOOGLE_SERVICE_ACCOUNT_JSON")); const now = Math.floor(Date.now() / 1000);
   const head = b64u(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claim = b64u(JSON.stringify({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/calendar.readonly", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
+  const claim = b64u(JSON.stringify({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/calendar.events", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
   const der = Uint8Array.from(atob(sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s/g, "")), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey("pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${head}.${claim}`));
@@ -74,6 +74,25 @@ async function token(): Promise<string> {
   const j = await r.json(); if (!j.access_token) throw new Error("Google auth"); return j.access_token as string;
 }
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" });
+
+// deno-lint-ignore no-explicit-any
+const PILOTO = ["Metepec"]; // sucursales donde recepción puede cerrar sesiones (escribe ✅ en Calendar)
+const INI = "🪪 TARJETA CIRE", FIN = "🪪 FIN";
+const QUITAR = new RegExp(`(?:\\s|<br\\s*/?>|&nbsp;)*${INI}[\\s\\S]*?${FIN}[^\\n<]*`, "i");
+const limpio = (d: string) => d.replace(QUITAR, "").replace(/<\s*(br|\/p|\/div|\/li)\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+const esHtml = (d: string) => /<\/?(br|p|div|span|b|i|a|ul|li)\b/i.test(d);
+async function llamar(fn: string, qs: string) {
+  const r = await fetch(`${env("SUPABASE_URL")}/functions/v1/${fn}?${qs}`, { method: "POST", headers: { "x-sync-key": env("SYNC_KEY"), Authorization: `Bearer ${env("SUPABASE_SERVICE_ROLE_KEY")}` } });
+  if (!r.ok) throw new Error(`${fn} ${r.status}`);
+}
+// deno-lint-ignore no-explicit-any
+async function clientaPorToken(t: any) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(t ?? ""))) falla("Tarjeta no encontrada.");
+  const c = (await rows(`tarj_clientas?select=*&token=eq.${t}`))[0]; if (!c) falla("Tarjeta no encontrada.");
+  const suc = (await rows(`agenda_sucursales?select=nombre,calendar_id&nombre=eq.${enc(c.sucursal)}&calendar_id=not.is.null`))[0];
+  if (!suc) falla("Esa sucursal no tiene calendario conectado.");
+  return { c, suc };
+}
 
 // deno-lint-ignore no-explicit-any
 async function accion(b: Record<string, any>) {
@@ -118,6 +137,59 @@ async function accion(b: Record<string, any>) {
           clienta: c ? { nombre: c.nombre, token: c.token, nivel: c.nivel, estricta: c.estricta, publicada: c.publicada, resumen: ps.map((p) => `${p.nombre} ${p.sellos}${p.total ? "/" + p.total : ""}`).join(" · ") } : null };
       });
       return { sucursal: suc.nombre, dia, citas: lista };
+    }
+    case "sesion_hoy": {
+      await staff(b);
+      const { c, suc } = await clientaPorToken(b.token);
+      const dia = hoyMx(); const ini = new Date(`${dia}T00:00:00-06:00`), fin = new Date(ini.getTime() + DIA);
+      const u = new URL(`https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events`);
+      u.searchParams.set("timeMin", ini.toISOString()); u.searchParams.set("timeMax", fin.toISOString()); u.searchParams.set("singleEvents", "true"); u.searchParams.set("orderBy", "startTime"); u.searchParams.set("maxResults", "250");
+      const r = await fetch(u, { headers: { Authorization: `Bearer ${await token()}` } }); const j = await r.json(); if (!r.ok) throw new Error("Google Calendar " + r.status);
+      const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
+      const cierres = await rows(`tarj_cierres?select=evento_id,faltaron&clienta_id=eq.${c.id}&fecha=eq.${dia}`);
+      // deno-lint-ignore no-explicit-any
+      const citas = (j.items ?? []).filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && c.tel && telDe(e.summary ?? "") === c.tel).map((e: any) => {
+        // deno-lint-ignore no-explicit-any
+        const hoySes = ps.flatMap((p: any) => (p.sesiones ?? []).filter((s: any) => s.fecha === dia).map((s: any) => ({ paquete: p.nombre, n: s.n ?? null, zonas: s.zonas ?? [] })));
+        return { id: e.id, hora: hhmm(e.start.dateTime), titulo: String(e.summary ?? ""), vino: /✅/.test(e.summary ?? ""), descripcion: limpio(String(e.description ?? "")).slice(0, 300), sesionesHoy: hoySes,
+          // deno-lint-ignore no-explicit-any
+          cierre: cierres.find((x: any) => x.evento_id === e.id)?.faltaron ?? null };
+      });
+      // deno-lint-ignore no-explicit-any
+      const resumen = ps.filter((p: any) => p.estado === "activo").map((p: any) => ({ nombre: p.nombre, sellos: p.sellos, total: p.total_supuesto ? null : p.total }));
+      return { clienta: { nombre: c.nombre, sucursal: c.sucursal, token: c.token, estricta: c.estricta }, piloto: PILOTO.includes(c.sucursal), dia, citas, paquetes: resumen };
+    }
+
+    case "cerrar_sesion": {
+      await staff(b);
+      const { c, suc } = await clientaPorToken(b.token);
+      if (!PILOTO.includes(c.sucursal)) falla("Esta función aún no está activa en esta sucursal.");
+      if (b.sucursal !== c.sucursal) falla(`Esta clienta es de ${c.sucursal}. Inicia sesión con esa sucursal para marcar su sesión.`);
+      const dia = hoyMx(); const evId = String(b.eventoId ?? "");
+      if (!/^[A-Za-z0-9_]{5,200}$/.test(evId)) falla("Cita no válida.");
+      const H = { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" };
+      const cal = `https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events/${enc(evId)}`;
+      const g = await fetch(cal, { headers: H }); const e = await g.json(); if (!g.ok) falla("No encontramos esa cita en el calendario.");
+      if (e.status === "cancelled" || !e.start?.dateTime || new Date(e.start.dateTime).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" }) !== dia) falla("Solo se puede marcar una cita de HOY.");
+      if (!c.tel || telDe(e.summary ?? "") !== c.tel) falla("Esa cita no corresponde a esta clienta.");
+      const faltaron: string[] = (Array.isArray(b.faltaron) ? b.faltaron : []).map((x: unknown) => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 12);
+      const tit = String(e.summary ?? ""); const desc = String(e.description ?? "");
+      const nuevoTit = /✅/.test(tit) ? tit : "✅" + tit;
+      let nuevoDesc = desc;
+      if (faltaron.length && !/FALT[ÓO]:/i.test(desc)) {
+        const linea = `FALTÓ: ${faltaron.join(", ")} (reagendar como sesión individual)`;
+        const html = esHtml(desc); const sep = html ? "<br>" : "\n"; const i = desc.indexOf(INI);
+        const cabeza = (i >= 0 ? desc.slice(0, i) : desc).replace(/(?:\s|<br\s*\/?>|&nbsp;)+$/i, ""); const cola = i >= 0 ? desc.slice(i) : "";
+        nuevoDesc = (cabeza ? cabeza + sep + sep : "") + linea + (cola ? sep + sep + cola : "");
+      }
+      if (nuevoTit === tit && nuevoDesc === desc) return { ok: true, sinCambios: true };
+      const p = await fetch(`${cal}?sendUpdates=none`, { method: "PATCH", headers: { ...H, "If-Match": e.etag }, body: JSON.stringify({ summary: nuevoTit, description: nuevoDesc }) });
+      if (!p.ok) falla(p.status === 412 ? "La cita cambió mientras la marcabas. Vuelve a abrirla." : "No pudimos escribir en el calendario. Intenta de nuevo.");
+      await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: c.sucursal, evento_id: evId, accion: "cierre", antes: desc, despues: nuevoDesc, titulo_antes: tit, titulo_despues: nuevoTit }) });
+      await sb("tarj_cierres?on_conflict=sucursal,evento_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ clienta_id: c.id, sucursal: c.sucursal, evento_id: evId, fecha: dia, paquete: String(b.paquete ?? "").slice(0, 80) || null, faltaron, nota: String(b.nota ?? "").slice(0, 300) || null, usuario: String(b.usuario ?? "").slice(0, 60) }) });
+      // la tarjeta se recalcula al momento (sin esperar las 5 am) y el bloque de la cita se actualiza
+      let recalculada = true; try { await llamar("sync-tarjetas", `suc=${enc(c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(c.sucursal)}&escribir=1&evento=${enc(evId)}`); } catch (er) { recalculada = false; console.error(er); }
+      return { ok: true, recalculada, tarjeta: await tarjeta(c.token, true) };
     }
     default: return falla("Acción desconocida.");
   }

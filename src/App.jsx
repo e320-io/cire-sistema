@@ -3,7 +3,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { SUPABASE_URL, SUPABASE_KEY, META_TOKEN, META_ACCOUNT, CLAUDE_KEY, supabase, BOT_SB_URL, BOT_SB_KEY, BOT_API_URL, botSB } from "./lib/supabase.js";
 import { ThemeCtx, mkT, useT } from "./lib/theme.jsx";
-import SelloRecepcion from "./components/lealtad/SelloRecepcion.jsx";
+import CerrarSesion from "./components/lealtad/CerrarSesion.jsx";
 import EscanerTarjeta from "./components/lealtad/EscanerTarjeta.jsx";
 import HoyRecepcion from "./components/lealtad/HoyRecepcion.jsx";
 import BotonTarjetaClienta from "./components/lealtad/BotonTarjetaClienta.jsx";
@@ -7677,5 +7677,5 @@ export default function App(){
   }
 
   const hayTarjeta=session&&!mustChange;
-  return <ThemeCtx.Provider value={{light,acc}}>{content}{hayTarjeta&&<EscanerTarjeta onToken={setTokenSello} onHoy={()=>setVerHoy(true)}/>}{hayTarjeta&&verHoy&&<HoyRecepcion session={session} onClose={cerrarHoy}/>}{hayTarjeta&&tokenSello&&<SelloRecepcion session={session} token={tokenSello} onClose={cerrarSello}/>}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{light,acc}}>{content}{hayTarjeta&&<EscanerTarjeta onToken={setTokenSello} onHoy={()=>setVerHoy(true)}/>}{hayTarjeta&&verHoy&&<HoyRecepcion session={session} onClose={cerrarHoy}/>}{hayTarjeta&&tokenSello&&<CerrarSesion session={session} token={tokenSello} onClose={cerrarSello}/>}</ThemeCtx.Provider>;
 }

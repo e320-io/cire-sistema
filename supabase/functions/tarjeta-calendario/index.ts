@@ -86,14 +86,15 @@ Deno.serve(async (req) => {
     if (!suc) return json({ error: "Esa sucursal no tiene calendario" }, 400);
     const tk = await token(); const H = { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" };
     const cal = `https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events`;
-    const ahora = new Date();
+    const ahora = new Date(); // solo de MAÑANA en adelante (las de hoy cambian al atenderse)
+    const manana = new Date(new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })}T00:00:00-06:00`).getTime() + DIA);
     // deno-lint-ignore no-explicit-any
     let evs: any[] = [];
     if (unico) { const r = await fetch(`${cal}/${enc(unico)}`, { headers: H }); const j = await r.json(); if (!r.ok) throw new Error(`Google ${r.status}: ${JSON.stringify(j).slice(0, 200)}`); evs = [j]; }
     else {
       let page = "";
       do {
-        const u = new URL(cal); u.searchParams.set("timeMin", ahora.toISOString()); u.searchParams.set("timeMax", new Date(ahora.getTime() + dias * DIA).toISOString());
+        const u = new URL(cal); u.searchParams.set("timeMin", manana.toISOString()); u.searchParams.set("timeMax", new Date(ahora.getTime() + dias * DIA).toISOString());
         u.searchParams.set("singleEvents", "true"); u.searchParams.set("orderBy", "startTime"); u.searchParams.set("maxResults", "2500"); if (page) u.searchParams.set("pageToken", page);
         const r = await fetch(u, { headers: H }); const j = await r.json(); if (!r.ok) throw new Error(`Google ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
         evs = evs.concat(j.items ?? []); page = j.nextPageToken ?? "";
