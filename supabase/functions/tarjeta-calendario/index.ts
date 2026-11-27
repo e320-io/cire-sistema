@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
     const tk = await token(); const H = { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" };
     const cal = `https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events`;
     const ahora = new Date(); // solo de MAÑANA en adelante (las de hoy cambian al atenderse)
+    const hoy0 = new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })}T00:00:00-06:00`);
     const manana = new Date(new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })}T00:00:00-06:00`).getTime() + DIA);
     // deno-lint-ignore no-explicit-any
     let evs: any[] = [];
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
     else {
       let page = "";
       do {
-        const u = new URL(cal); u.searchParams.set("timeMin", manana.toISOString()); u.searchParams.set("timeMax", new Date(ahora.getTime() + dias * DIA).toISOString());
+        const u = new URL(cal); u.searchParams.set("timeMin", (q.get("desde") === "hoy" ? hoy0 : manana).toISOString()); u.searchParams.set("timeMax", new Date(ahora.getTime() + dias * DIA).toISOString());
         u.searchParams.set("singleEvents", "true"); u.searchParams.set("orderBy", "startTime"); u.searchParams.set("maxResults", "2500"); if (page) u.searchParams.set("pageToken", page);
         const r = await fetch(u, { headers: H }); const j = await r.json(); if (!r.ok) throw new Error(`Google ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
         evs = evs.concat(j.items ?? []); page = j.nextPageToken ?? "";
@@ -105,6 +106,7 @@ Deno.serve(async (req) => {
     const ids = cl.map((x) => x.id);
     // deno-lint-ignore no-explicit-any
     const paq: any[] = []; for (let i = 0; i < ids.length; i += 100) paq.push(...await rows(`tarj_paquetes?select=clienta_id,orden,nombre,estado,sellos,total,total_supuesto,proxima,ultima,sesiones&clienta_id=in.(${ids.slice(i, i + 100).join(",")})&order=orden`));
+    const buscado = q.get("buscar") ? evs.filter((e) => String(e.summary ?? "").toLowerCase().includes(String(q.get("buscar")).toLowerCase())).map((e) => ({ id: e.id, titulo: e.summary, inicio: e.start?.dateTime, desc: String(e.description ?? "").slice(0, 120) })) : undefined;
     const resultado = []; let escritas = 0, iguales = 0, sinClienta = 0, omitidas = 0;
     for (const e of evs) {
       if (e.status === "cancelled" || !e.start?.dateTime) { omitidas++; continue; }
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
         await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: suc.nombre, evento_id: e.id, accion: "revertir", antes: desc, despues: nuevo }) });
         escritas++; resultado.push({ id: e.id, titulo: e.summary, accion: "revertida" }); continue;
       }
-      const tel = telDe(e.summary ?? ""); const c = tel ? porClave.get(tel) : null;
+      const tel = unico && q.get("tel") ? String(q.get("tel")) : telDe(e.summary ?? ""); if (!unico && q.get("tel") && tel !== q.get("tel")) continue; const c = tel ? porClave.get(tel) : null;
       if (!c) { sinClienta++; continue; }
       const ps = paq.filter((p) => p.clienta_id === c.id && visible(p)).sort((a, b) => Number(b.estado === "activo") - Number(a.estado === "activo"));
       const L = lineas(c, ps, fechaMx(e.start.dateTime));
@@ -134,6 +136,6 @@ Deno.serve(async (req) => {
       await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: suc.nombre, evento_id: e.id, accion: "escribir", antes: desc, despues: nuevo }) });
       escritas++; resultado.push({ id: e.id, titulo: e.summary, accion: "escrita" });
     }
-    return json({ modo: revertir ? (escribir ? "revertir" : "simulacro de revertir") : escribir ? "escribir" : "SIMULACRO (no se escribió nada)", sucursal: suc.nombre, eventos_leidos: evs.length, escritas, ya_al_dia: iguales, sin_tarjeta: sinClienta, omitidas, resultado: resultado.slice(0, 80) });
+    return json({ buscado, modo: revertir ? (escribir ? "revertir" : "simulacro de revertir") : escribir ? "escribir" : "SIMULACRO (no se escribió nada)", sucursal: suc.nombre, eventos_leidos: evs.length, escritas, ya_al_dia: iguales, sin_tarjeta: sinClienta, omitidas, resultado: resultado.slice(0, 80) });
   } catch (e) { console.error(e); return json({ error: String(e instanceof Error ? e.message : e).slice(0, 500) }, 500); }
 });

@@ -58,8 +58,9 @@ function AgendarSiguiente({ token, sucursal, cita, paquete, zonas, onListo }) {
 }
 
 export default function CerrarSesion({ session, token, onClose }) {
-  const sucursal = session.rol === "sucursal" ? session.nombre : (session.sucursales?.[0] || session.sucursalesPropias?.[0] || SUCURSALES_NAMES[0]);
-  const [d, setD] = useState(null); const [err, setErr] = useState(""); const [anterior, setAnterior] = useState(false);
+  const [d, setD] = useState(null);
+  // usuario de una sucursal: la suya (el servidor rechaza clientas de otra). Admin/dueñas: la sucursal de la clienta escaneada.
+  const sucursal = session.rol === "sucursal" ? session.nombre : (d?.clienta?.sucursal || session.sucursales?.[0] || session.sucursalesPropias?.[0] || SUCURSALES_NAMES[0]); const [err, setErr] = useState(""); const [anterior, setAnterior] = useState(false);
   const [siguiente, setSiguiente] = useState(null); const [suelta, setSuelta] = useState(null); const [sel, setSel] = useState({}); const [confirmar, setConfirmar] = useState(null); const [busy, setBusy] = useState(false); const [listo, setListo] = useState(null);
 
   const cargar = async () => {
