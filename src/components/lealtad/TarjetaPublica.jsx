@@ -136,7 +136,7 @@ export default function TarjetaPublica() {
             {d.interno.sinAsignar?.length > 0 && <div style={{ color: C.rosa }}>• Hay {d.interno.sinAsignar.length} cita(s) que no se pudieron asignar a un paquete.</div>}
           </div>}
 
-          <Feedback token={token} d={d} origen={preview ? "recepcion" : "clienta"} />
+          {preview && <Feedback token={token} d={d} origen="recepcion" />}
 
           {!preview && qr && <div style={{ ...S.tarjeta, textAlign: "center" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.verde, marginBottom: 10 }}>Muéstralo en recepción</div>

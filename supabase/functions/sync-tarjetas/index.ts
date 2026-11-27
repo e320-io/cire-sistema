@@ -55,7 +55,7 @@ async function eventos(calId: string, desde: Date, hasta: Date) {
     for (const e of j.items ?? []) {
       if (e.status === "cancelled") continue;
       out.push({ id: e.id, ini: e.start?.dateTime ?? e.start?.date, fin: e.end?.dateTime ?? e.end?.date, diaCompleto: !e.start?.dateTime, t: e.summary ?? "",
-        d: String(e.description ?? "").replace(/<\s*(br|\/p|\/div|\/li)\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").slice(0, 900) });
+        d: String(e.description ?? "").replace(/<\s*(br|\/p|\/div|\/li)\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/🪪 TARJETA CIRE[\s\S]*$/, "").slice(0, 900) });
     }
     page = j.nextPageToken ?? "";
   } while (page);
