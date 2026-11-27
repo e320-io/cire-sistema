@@ -108,13 +108,13 @@ export default function AgendarPublico() {
             )}
             {opcion("✨", "Agendar mi cita", "Elige tu servicio, día y hora", () => { setErr(""); setModo("nueva"); }, true)}
             {opcion("🔁", "Reagendar mi cita", "Ya tengo cita y quiero cambiarla", () => { setErr(""); setModo("reagendar"); })}
-            {opcion("🪪", "Tengo un paquete y no he agendado mi siguiente sesión", tokenUrl() ? "Agenda aquí tu siguiente sesión" : "Entra desde el enlace de tu tarjeta CIRE", () => { setErr(""); if (tokenUrl()) setModo("siguiente"); else setErr("Para agendar tu siguiente sesión abre el enlace de tu tarjeta CIRE (te lo enviamos por WhatsApp) y toca «Agendar mi siguiente sesión»."); })}
+            {opcion("🪪", "Tengo un paquete y no he agendado mi siguiente sesión", "Agenda aquí tu siguiente sesión", () => { setErr(""); setModo("siguiente"); })}
           </>
         )}
 
         {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} info={info} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
         {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} info={info} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
-        {!sinSlug && sucursal && modo === "siguiente" && <AgendarSiguienteClienta key={slug} token={tokenUrl()} onVolver={volver} setErr={setErr} />}
+        {!sinSlug && sucursal && modo === "siguiente" && <AgendarSiguienteClienta key={slug} token={tokenUrl() || undefined} slug={slug} onVolver={volver} setErr={setErr} />}
         {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} info={info} onVolver={volver} setErr={setErr} />}
 
         {/* Pie en todas las pantallas */}

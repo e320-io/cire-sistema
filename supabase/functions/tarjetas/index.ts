@@ -160,12 +160,26 @@ async function contextoSiguiente(b: Record<string, any>) {
   return { c, suc, cfg, ev, durMin, dia, p, siguiente, H, suelta };
 }
 
+const sinAc = (t: string) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Desde /agendar sin el enlace de la tarjeta: se identifica con celular + nombre (igual que "Reagendar mi cita").
+// deno-lint-ignore no-explicit-any
+async function identificarClienta(b: Record<string, any>) {
+  const slug = String(b.slug ?? ""); const tel = String(b.telefono ?? "").replace(/\D/g, "").slice(-10);
+  const nombre = sinAc(b.nombre).split(/\s+/).filter((w) => w.length >= 3);
+  if (!slug || tel.length !== 10 || !nombre.length) falla("Escribe tu nombre y tu celular a 10 dígitos.");
+  const suc = (await rows(`agenda_sucursales?select=nombre,calendar_id&slug=eq.${enc(slug)}&activa=eq.true&calendar_id=not.is.null`))[0]; if (!suc) falla("Esta sucursal aún no tiene agenda en línea.");
+  const c = (await rows(`tarj_clientas?select=*&sucursal=eq.${enc(suc.nombre)}&tel=eq.${tel}`))[0];
+  const palabras = c ? sinAc(c.nombre).split(/\s+/) : [];
+  if (!c || !nombre.some((w) => palabras.includes(w))) falla("No encontramos un paquete con esos datos. Revisa tu nombre y celular, o escríbenos por WhatsApp.");
+  return { c, suc };
+}
+
 // Agendar desde la tarjeta (la clienta). Reglas: tarjeta publicada (o recepción con sesión para probar), piloto, ≥1 mes desde su última sesión (Valle 2),
 // una sola cita por paquete, y si no es del grupo estricto: nunca sábados y el número de sesión lo confirma recepción.
 // deno-lint-ignore no-explicit-any
 async function contextoClienta(b: Record<string, any>) {
-  const { c, suc } = await clientaPorToken(b.token);
-  if (!c.publicada) await staff(b); // sin publicar solo sirve para probar con sesión de recepción
+  const { c, suc } = b.token ? await clientaPorToken(b.token) : await identificarClienta(b);
+  if (b.token && !c.publicada) await staff(b); // con el enlace de una tarjeta sin publicar solo sirve para probar con sesión de recepción
   if (!PILOTO.includes(c.sucursal)) falla("Agendar desde tu tarjeta estará disponible pronto en tu sucursal.");
   if (!c.tel) falla("No encontramos tu celular en el calendario. Escríbenos por WhatsApp.");
   const cfg = (await rows(`agenda_sucursales?select=nombre,calendar_id,horario,intervalo_min,capacidad&nombre=eq.${enc(c.sucursal)}`))[0]; if (!cfg) falla("Sucursal sin agenda.");
