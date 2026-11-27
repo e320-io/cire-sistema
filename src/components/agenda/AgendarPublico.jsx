@@ -3,6 +3,7 @@ import { C, S, FONT, Pin, Titulo, crearApi, estiloTema } from "./ui.jsx";
 import LogoCire from "./LogoCire.jsx";
 import Reagendar from "./Reagendar.jsx";
 import AgendarNueva from "./AgendarNueva.jsx";
+import AgendarSiguienteClienta from "./AgendarSiguienteClienta.jsx";
 import { RetomarApartado, leerPendiente } from "./AseguraLugar.jsx";
 
 // Página pública:
@@ -10,6 +11,7 @@ import { RetomarApartado, leerPendiente } from "./AseguraLugar.jsx";
 //   /agendar/<sucursal> -> "Agendar mi cita" (nueva) o "Reagendar mi cita"
 // Toda la lógica vive en la edge function agenda-publica; aquí solo hay UI. Look & feel = piezas de campaña de CIRE.
 
+const tokenUrl = () => ((location.search.match(/[?&]t=([0-9a-fA-F-]{36})/) || [])[1] || "").toLowerCase();
 const slugUrl = () => (location.pathname.match(/^\/agendar\/([^/]+)/) || [])[1] || "";
 
 export default function AgendarPublico() {
@@ -17,7 +19,7 @@ export default function AgendarPublico() {
   const [info, setInfo] = useState(null); // { nombre, direccion, mapsUrl, estacionamiento }
   const sucursal = info?.nombre || "";
   const [lista, setLista] = useState(null);
-  const [modo, setModo] = useState("inicio"); // inicio | nueva | reagendar | asegurar
+  const [modo, setModo] = useState("inicio"); // inicio | nueva | reagendar | asegurar | siguiente
   const [titulo2, setTitulo2] = useState("");
   const pendiente = slug ? leerPendiente(slug) : null; // anticipo sin comprobante (se guardó en este dispositivo)
   const [err, setErr] = useState("");
@@ -40,7 +42,7 @@ export default function AgendarPublico() {
   const volver = () => { setModo("inicio"); setErr(""); };
   const sinSlug = !slug;
 
-  const titulo = (titulo2 === "asegura" || modo === "asegurar") ? <>Asegura<br />tu lugar</> : modo === "nueva" ? <>Agenda<br />tu cita</> : modo === "reagendar" ? <>Reagenda<br />tu cita</> : <>Agenda tu<br />cita en CIRE</>;
+  const titulo = (titulo2 === "asegura" || modo === "asegurar") ? <>Asegura<br />tu lugar</> : modo === "nueva" ? <>Agenda<br />tu cita</> : modo === "siguiente" ? <>Tu siguiente<br />sesión</> : modo === "reagendar" ? <>Reagenda<br />tu cita</> : <>Agenda tu<br />cita en CIRE</>;
 
   const opcion = (emoji, titulo, texto, onClick, resaltada) => (
     <button onClick={onClick} style={{ ...S.tarjeta, display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT, padding: "18px 20px", background: resaltada ? C.verde : "#fff" }}>
@@ -106,11 +108,13 @@ export default function AgendarPublico() {
             )}
             {opcion("✨", "Agendar mi cita", "Elige tu servicio, día y hora", () => { setErr(""); setModo("nueva"); }, true)}
             {opcion("🔁", "Reagendar mi cita", "Ya tengo cita y quiero cambiarla", () => { setErr(""); setModo("reagendar"); })}
+            {opcion("🪪", "Tengo un paquete y no he agendado mi siguiente sesión", tokenUrl() ? "Agenda aquí tu siguiente sesión" : "Entra desde el enlace de tu tarjeta CIRE", () => { setErr(""); if (tokenUrl()) setModo("siguiente"); else setErr("Para agendar tu siguiente sesión abre el enlace de tu tarjeta CIRE (te lo enviamos por WhatsApp) y toca «Agendar mi siguiente sesión»."); })}
           </>
         )}
 
         {!sinSlug && sucursal && modo === "nueva" && <AgendarNueva key={slug} api={api} slug={slug} sucursal={sucursal} info={info} onVolver={() => { volver(); setTitulo2(""); }} setErr={setErr} setTitulo={setTitulo2} />}
         {!sinSlug && sucursal && modo === "asegurar" && pendiente && <RetomarApartado api={api} sucursal={sucursal} info={info} pendiente={pendiente} setErr={setErr} onSalir={volver} />}
+        {!sinSlug && sucursal && modo === "siguiente" && <AgendarSiguienteClienta key={slug} token={tokenUrl()} onVolver={volver} setErr={setErr} />}
         {!sinSlug && sucursal && modo === "reagendar" && <Reagendar key={slug} api={api} sucursal={sucursal} info={info} onVolver={volver} setErr={setErr} />}
 
         {/* Pie en todas las pantallas */}

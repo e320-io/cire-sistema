@@ -5,7 +5,7 @@ import LogoCire from "../agenda/LogoCire.jsx";
 import TarjetaAnterior from "./TarjetaAnterior.jsx";
 import { tokenDe, urlPreview } from "../../lib/lealtad.js";
 import { apiTarjetas } from "../../lib/tarjetas.js";
-import { rutaLimpia } from "../../lib/dominios.js";
+import { rutaLimpia, DOMINIO_PUBLICO } from "../../lib/dominios.js";
 
 // Tarjeta de lealtad de la clienta (/tarjeta/<token>, solo si está publicada) y vista previa para recepción (/r/<token>, siempre).
 // Los números salen del cálculo diario desde el Google Calendar (tablas tarj_*). Si el código no existe en el cálculo nuevo,
@@ -124,6 +124,7 @@ export default function TarjetaPublica() {
           <div style={{ color: "#fff", fontSize: 18, fontWeight: 700, margin: "0 4px 12px" }}>Hola, {d.nombre} 👋</div>
           {activos.length === 0 && <div style={S.pildora}>No tienes paquetes en curso. Cuando tengas uno, aquí verás tus sellos.</div>}
           {activos.map((p, i) => <Paquete key={i} p={p} />)}
+          {d.agendar && d.slug && activos.some((p) => p.citaAbierta) && <a href={`${DOMINIO_PUBLICO}/agendar/${d.slug}?t=${token}`} style={{ ...S.boton(true), display: "block", textAlign: "center", textDecoration: "none", boxSizing: "border-box", marginBottom: 12 }}>📅 Agendar mi siguiente sesión</a>}
           {completos.length > 0 && <details style={{ marginBottom: 12 }}><summary style={{ cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 14, padding: "8px 4px" }}>Paquetes completos ({completos.length})</summary>
             <div style={{ marginTop: 8 }}>{completos.map((p, i) => <Paquete key={i} p={p} />)}</div></details>}
 

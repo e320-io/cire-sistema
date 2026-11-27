@@ -48,7 +48,7 @@ async function tarjeta(token: string, interno: boolean) {
   const ps = (await rows(`tarj_paquetes?select=*&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
   ps.sort((a, b) => Number(b.estado === "activo") - Number(a.estado === "activo"));
   const slug = (await rows(`agenda_sucursales?select=slug&nombre=eq.${enc(c.sucursal)}`))[0]?.slug ?? null;
-  const base = { nombre: String(c.nombre).split(/\s+/)[0], sucursal: c.sucursal, slug, paquetes: ps.map(paquetePublico) };
+  const base = { nombre: String(c.nombre).split(/\s+/)[0], sucursal: c.sucursal, slug, agendar: PILOTO.includes(c.sucursal), paquetes: ps.map(paquetePublico) };
   if (!interno) return base;
   return { ...base, interno: { nombreCompleto: c.nombre, nivel: c.nivel, estricta: c.estricta, publicada: c.publicada, tituloCalendario: c.titulo_calendario, tel4: String(c.tel ?? "").slice(-4),
     // deno-lint-ignore no-explicit-any
@@ -145,7 +145,8 @@ async function contextoSiguiente(b: Record<string, any>) {
   const g = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(suc.calendar_id)}/events/${enc(String(b.eventoId ?? ""))}`, { headers: H }); const ev = await g.json();
   if (!g.ok || ev.status === "cancelled" || !ev.start?.dateTime) falla("No encontramos la cita de hoy en el calendario.");
   if (!c.tel || telDe(ev.summary ?? "") !== c.tel) falla("Esa cita no corresponde a esta clienta.");
-  const durMin = Math.max(15, Math.round((Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000));
+  const suelta = b.modo === "suelta";
+  const durMin = suelta ? Math.min(120, Math.max(15, Number(b.duracion) || 30)) : Math.max(15, Math.round((Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000));
   const dia = ymd(Date.parse(ev.start.dateTime));
   const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
   // deno-lint-ignore no-explicit-any
@@ -155,8 +156,47 @@ async function contextoSiguiente(b: Record<string, any>) {
   const hoyS = (p.sesiones ?? []).find((s: any) => s.fecha === dia);
   const base = hoyS?.n ?? p.sellos + (/✅/.test(ev.summary ?? "") ? 0 : 1);
   const siguiente = base + 1;
-  if (p.total && !p.total_supuesto && siguiente > p.total) falla(`${p.nombre} ya está completo (${p.total} de ${p.total}). No hay siguiente sesión.`);
-  return { c, suc, cfg, ev, durMin, dia, p, siguiente, H };
+  if (!suelta && p.total && !p.total_supuesto && siguiente > p.total) falla(`${p.nombre} ya está completo (${p.total} de ${p.total}). No hay siguiente sesión.`);
+  return { c, suc, cfg, ev, durMin, dia, p, siguiente, H, suelta };
+}
+
+// Agendar desde la tarjeta (la clienta). Reglas: tarjeta publicada (o recepción con sesión para probar), piloto, ≥1 mes desde su última sesión (Valle 2),
+// una sola cita por paquete, y si no es del grupo estricto: nunca sábados y el número de sesión lo confirma recepción.
+// deno-lint-ignore no-explicit-any
+async function contextoClienta(b: Record<string, any>) {
+  const { c, suc } = await clientaPorToken(b.token);
+  if (!c.publicada) await staff(b); // sin publicar solo sirve para probar con sesión de recepción
+  if (!PILOTO.includes(c.sucursal)) falla("Agendar desde tu tarjeta estará disponible pronto en tu sucursal.");
+  if (!c.tel) falla("No encontramos tu celular en el calendario. Escríbenos por WhatsApp.");
+  const cfg = (await rows(`agenda_sucursales?select=nombre,calendar_id,horario,intervalo_min,capacidad&nombre=eq.${enc(c.sucursal)}`))[0]; if (!cfg) falla("Sucursal sin agenda.");
+  const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,tipo,mant,regalo,proxima,ultima,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
+  // deno-lint-ignore no-explicit-any
+  const opciones = ps.filter((p: any) => p.estado === "activo" && p.total && !p.total_supuesto && p.tipo === "laser" && !p.mant && !p.regalo && p.sellos < p.total);
+  const evs = await eventosFuturos(suc.calendar_id, Date.now() - 420 * DIA, Date.now() + (VENTANA + 2) * DIA);
+  // deno-lint-ignore no-explicit-any
+  const mias = evs.filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && telDe(e.summary ?? "") === c.tel);
+  // deno-lint-ignore no-explicit-any
+  const futura = mias.filter((e: any) => Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3).sort((p: any, q: any) => p.start.dateTime.localeCompare(q.start.dateTime))[0];
+  const H = { Authorization: `Bearer ${await token()}` };
+  const base = { c, suc, cfg, opciones, H, p: null, siguiente: 0, minimo: "", durMin: 60, dias: {} as Record<string, string[]>, yaTiene: null, mensaje: null };
+  if (!opciones.length) return { ...base, mensaje: "No encontramos un paquete con sesiones por agendar." };
+  // deno-lint-ignore no-explicit-any
+  const p = opciones.find((x: any) => x.nombre === b.paquete) ?? (opciones.length === 1 ? opciones[0] : null);
+  if (!p) return { ...base, mensaje: "Elige el paquete que quieres agendar." };
+  if (futura) return { ...base, p, yaTiene: { fecha: ymd(Date.parse(futura.start.dateTime)), hora: hm(Date.parse(futura.start.dateTime)) }, mensaje: `Ya tienes una cita agendada el ${ymd(Date.parse(futura.start.dateTime))} a las ${hm(Date.parse(futura.start.dateTime))}. Si quieres cambiarla usa «Reagendar mi cita».` };
+  // duración: la de su última cita en el calendario
+  // deno-lint-ignore no-explicit-any
+  const ultima = mias.filter((e: any) => /✅/.test(e.summary ?? "")).sort((p: any, q: any) => q.start.dateTime.localeCompare(p.start.dateTime))[0];
+  const durMin = ultima ? Math.max(15, Math.round((Date.parse(ultima.end.dateTime) - Date.parse(ultima.start.dateTime)) / 60000)) : 60;
+  const meses = c.sucursal === "Valle" ? 2 : 1;
+  const desde = p.ultima ? addMeses(String(p.ultima).slice(0, 10), meses) : hoyMx();
+  const minimo = desde > hoyMx() ? desde : hoyMx();
+  const todos = huecos(cfg, evs, durMin); const dias: Record<string, string[]> = {};
+  for (const [f, hs] of Object.entries(todos)) { if (f < minimo) continue; if (!c.estricta && dow(f) === 6) continue; dias[f] = hs; }
+  // deno-lint-ignore no-explicit-any
+  const hechas = (p.sesiones ?? []).filter((s: any) => !s.fut && !s.suelta && s.n != null).map((s: any) => s.n);
+  const siguiente = (hechas.length ? Math.max(...hechas) : p.sellos) + 1;
+  return { ...base, p, siguiente, minimo, durMin, dias };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -212,6 +252,7 @@ async function accion(b: Record<string, any>) {
       const r = await fetch(u, { headers: { Authorization: `Bearer ${await token()}` } }); const j = await r.json(); if (!r.ok) throw new Error("Google Calendar " + r.status);
       const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
       const cierres = await rows(`tarj_cierres?select=evento_id,faltaron&clienta_id=eq.${c.id}&fecha=eq.${dia}`);
+      const abiertas = (await rows(`tarj_abiertas?select=paquete&clienta_id=eq.${c.id}&fecha=eq.${dia}`)).map((x: { paquete: string }) => x.paquete);
       // deno-lint-ignore no-explicit-any
       const citas = (j.items ?? []).filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && c.tel && telDe(e.summary ?? "") === c.tel).map((e: any) => {
         // deno-lint-ignore no-explicit-any
@@ -222,7 +263,7 @@ async function accion(b: Record<string, any>) {
       });
       // deno-lint-ignore no-explicit-any
       const resumen = ps.filter((p: any) => p.estado === "activo").map((p: any) => ({ nombre: p.nombre, sellos: p.sellos, total: p.total_supuesto ? null : p.total }));
-      return { clienta: { nombre: c.nombre, sucursal: c.sucursal, token: c.token, estricta: c.estricta }, piloto: PILOTO.includes(c.sucursal), dia, citas, paquetes: resumen };
+      return { clienta: { nombre: c.nombre, sucursal: c.sucursal, token: c.token, estricta: c.estricta }, piloto: PILOTO.includes(c.sucursal), dia, citas, paquetes: resumen, abiertas };
     }
 
     case "cerrar_sesion": {
@@ -260,10 +301,10 @@ async function accion(b: Record<string, any>) {
       const x = await contextoSiguiente(b);
       const evs = await eventosFuturos(x.suc.calendar_id, Date.now() - 864e5, Date.now() + (VENTANA + 2) * DIA);
       // deno-lint-ignore no-explicit-any
-      const yaTiene = evs.filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3 && ymd(Date.parse(e.start.dateTime)) !== x.dia && telDe(e.summary ?? "") === x.c.tel)
+      const yaTiene = x.suelta ? [] : evs.filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3 && ymd(Date.parse(e.start.dateTime)) !== x.dia && telDe(e.summary ?? "") === x.c.tel)
         // deno-lint-ignore no-explicit-any
         .map((e: any) => ({ fecha: ymd(Date.parse(e.start.dateTime)), hora: hm(Date.parse(e.start.dateTime)), titulo: String(e.summary ?? "").slice(0, 80) }));
-      return { paquete: x.p.nombre, siguiente: x.siguiente, total: x.p.total_supuesto ? null : x.p.total, duracionMin: x.durMin, minimo: addMeses(x.dia, 1), dias: huecos(x.cfg, evs, x.durMin), yaTiene };
+      return { paquete: x.p.nombre, siguiente: x.siguiente, total: x.p.total_supuesto ? null : x.p.total, duracionMin: x.durMin, minimo: x.suelta ? addDays(x.dia, 1) : addMeses(x.dia, 1), suelta: x.suelta, dias: huecos(x.cfg, evs, x.durMin), yaTiene };
     }
 
     case "siguiente_agendar": {
@@ -272,15 +313,17 @@ async function accion(b: Record<string, any>) {
       const evs = await eventosFuturos(x.suc.calendar_id, Date.now() - 864e5, Date.now() + (VENTANA + 2) * DIA);
       // deno-lint-ignore no-explicit-any
       const ya = evs.find((e: any) => e.status !== "cancelled" && e.start?.dateTime && Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3 && ymd(Date.parse(e.start.dateTime)) !== x.dia && telDe(e.summary ?? "") === x.c.tel);
-      if (ya && !b.forzar) falla(`Ya tiene una cita el ${ymd(Date.parse(ya.start.dateTime))} a las ${hm(Date.parse(ya.start.dateTime))}. Para cambiarla usa Reagendar.`);
-      if (b.fecha < addMeses(x.dia, 1) && !b.forzar) falla("Es antes del mes mínimo entre sesiones. Confirma que quieres saltarlo.");
+      if (!x.suelta && ya && !b.forzar) falla(`Ya tiene una cita el ${ymd(Date.parse(ya.start.dateTime))} a las ${hm(Date.parse(ya.start.dateTime))}. Para cambiarla usa Reagendar.`);
+      if (!x.suelta && b.fecha < addMeses(x.dia, 1) && !b.forzar) falla("Es antes del mes mínimo entre sesiones. Confirma que quieres saltarlo.");
       if (!huecos(x.cfg, evs, x.durMin)[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
       const ini = inst(b.fecha, toMin(b.hora)), fin = ini + x.durMin * 60_000;
       const nombreTel = String(x.ev.summary ?? "").replace(/\p{Extended_Pictographic}[\u{FE0F}\u{200D}]*/gu, "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim();
-      const cuerpo = { summary: nombreTel, description: `${String(x.p.nombre).toUpperCase()} SESION ${x.siguiente}`,
+      const zonasTxt = (Array.isArray(b.zonas) ? b.zonas : []).map((z: unknown) => String(z).trim().slice(0, 40)).filter(Boolean).slice(0, 8).join(" ").toUpperCase();
+      if (x.suelta && !zonasTxt) falla("Indica la zona que falta.");
+      const cuerpo = { summary: nombreTel, description: x.suelta ? `DIODO ${zonasTxt}` : `${String(x.p.nombre).toUpperCase()} SESION ${x.siguiente}`,
         start: { dateTime: `${b.fecha}T${b.hora}:00${OFFSET}`, timeZone: TZ }, end: { dateTime: `${ymd(fin)}T${hm(fin)}:00${OFFSET}`, timeZone: TZ },
         ...(x.ev.colorId ? { colorId: x.ev.colorId } : {}), reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
-        extendedProperties: { private: { origen: "recepcion", paquete: String(x.p.nombre).slice(0, 80), sesion: String(x.siguiente) } } };
+        extendedProperties: { private: { origen: "recepcion", paquete: String(x.p.nombre).slice(0, 80), sesion: x.suelta ? "suelta" : String(x.siguiente) } } };
       const cr = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(x.suc.calendar_id)}/events?sendUpdates=none`, { method: "POST", headers: { ...x.H, "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
       const nuevo = await cr.json(); if (!cr.ok) { console.error(JSON.stringify(nuevo).slice(0, 300)); falla("No pudimos crear la cita en el calendario. Intenta de nuevo."); }
       // si dos personas tomaron el mismo hueco a la vez, se queda la creada primero
@@ -292,7 +335,41 @@ async function accion(b: Record<string, any>) {
       }
       await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: x.c.sucursal, evento_id: nuevo.id, accion: "crear", antes: null, despues: `${cuerpo.summary} | ${cuerpo.description} | ${b.fecha} ${b.hora}` }) });
       let recalculada = true; try { await llamar("sync-tarjetas", `suc=${enc(x.c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(x.c.sucursal)}&escribir=1&evento=${enc(nuevo.id)}`); } catch (er) { recalculada = false; console.error(er); }
-      return { ok: true, fecha: b.fecha, hora: b.hora, sesion: x.siguiente, recalculada };
+      return { ok: true, fecha: b.fecha, hora: b.hora, sesion: x.suelta ? null : x.siguiente, recalculada };
+    }
+    case "cita_abierta": {
+      await staff(b);
+      const { c } = await clientaPorToken(b.token);
+      if (!PILOTO.includes(c.sucursal)) falla("Esta función aún no está activa en esta sucursal.");
+      if (b.sucursal !== c.sucursal) falla(`Esta clienta es de ${c.sucursal}. Inicia sesión con esa sucursal.`);
+      const paq = String(b.paquete ?? "").slice(0, 80); if (!paq) falla("Indica el paquete.");
+      const r = await sb("tarj_abiertas?on_conflict=clienta_id,paquete,fecha", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ clienta_id: c.id, sucursal: c.sucursal, paquete: paq, fecha: hoyMx(), usuario: String(b.usuario ?? "").slice(0, 60) }) });
+      if (!r.ok) throw new Error("cita_abierta: " + (await r.text()).slice(0, 200));
+      return { ok: true };
+    }
+
+    case "clienta_horarios": case "clienta_agendar": {
+      const x = await contextoClienta(b);
+      if (b.accion === "clienta_horarios") return { nombre: String(x.c.nombre).split(/\s+/)[0], paquetes: x.opciones.map((o: { nombre: string }) => o.nombre), paquete: x.p?.nombre ?? null, siguiente: x.siguiente, total: x.p && !x.p.total_supuesto ? x.p.total : null,
+        confiable: x.c.estricta, minimo: x.minimo, duracionMin: x.durMin, dias: x.p ? x.dias : {}, yaTiene: x.yaTiene ?? null, mensaje: x.mensaje ?? null };
+      if (!x.p || x.yaTiene) falla(x.mensaje || "No hay una siguiente sesión por agendar.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha)) || !/^\d{2}:\d{2}$/.test(String(b.hora))) falla("Horario inválido.");
+      if (!x.dias[b.fecha]?.includes(b.hora)) falla("Ese horario ya no está disponible. Elige otro.");
+      const ini = inst(b.fecha, toMin(b.hora)), fin = ini + x.durMin * 60_000;
+      const desc = x.c.estricta ? `${String(x.p.nombre).toUpperCase()} SESION ${x.siguiente}\n📲 AGENDADA EN LÍNEA por la clienta.` : `${String(x.p.nombre).toUpperCase()}\n📲 AGENDADA EN LÍNEA por la clienta.\n⚠️ Recepción: confirmar número de sesión.`;
+      const cuerpo = { summary: `${x.c.nombre} ${x.c.tel}`, description: desc, start: { dateTime: `${b.fecha}T${b.hora}:00${OFFSET}`, timeZone: TZ }, end: { dateTime: `${ymd(fin)}T${hm(fin)}:00${OFFSET}`, timeZone: TZ },
+        reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] }, extendedProperties: { private: { origen: "lealtad", paquete: String(x.p.nombre).slice(0, 80), sesion: String(x.siguiente) } } };
+      const cr = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(x.suc.calendar_id)}/events?sendUpdates=none`, { method: "POST", headers: { ...x.H, "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+      const nuevo = await cr.json(); if (!cr.ok) { console.error(JSON.stringify(nuevo).slice(0, 300)); falla("No pudimos agendar. Intenta de nuevo o escríbenos por WhatsApp."); }
+      const tras = (await eventosFuturos(x.suc.calendar_id, ini, fin)).filter((e) => e.status !== "cancelled" && e.transparency !== "transparent" && e.start?.dateTime && rango(e)[0] < fin && rango(e)[1] > ini)
+        .sort((p, q) => String(p.created).localeCompare(String(q.created)) || p.id.localeCompare(q.id));
+      if (tras.findIndex((e) => e.id === nuevo.id) >= (x.cfg.capacidad ?? 1)) {
+        await fetch(`https://www.googleapis.com/calendar/v3/calendars/${enc(x.suc.calendar_id)}/events/${enc(nuevo.id)}?sendUpdates=none`, { method: "DELETE", headers: x.H }).catch(() => {});
+        falla("Alguien más acaba de tomar ese horario. Elige otro.");
+      }
+      await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: x.c.sucursal, evento_id: nuevo.id, accion: "crear", antes: null, despues: `CLIENTA | ${cuerpo.summary} | ${cuerpo.description.replace(/\n/g, " / ")} | ${b.fecha} ${b.hora}` }) });
+      try { await llamar("sync-tarjetas", `suc=${enc(x.c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(x.c.sucursal)}&escribir=1&evento=${enc(nuevo.id)}`); } catch (er) { console.error(er); }
+      return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), sesion: x.c.estricta ? x.siguiente : null, sucursal: x.c.sucursal };
     }
     default: return falla("Acción desconocida.");
   }

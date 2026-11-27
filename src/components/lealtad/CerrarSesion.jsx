@@ -16,16 +16,17 @@ const Barra = ({ sellos, total }) => total ? (
 const fechaLarga = (f) => new Date(f + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
 
 // Agendar la siguiente sesión: misma duración que la cita de hoy, horarios libres del Calendar de la sucursal.
-function AgendarSiguiente({ token, sucursal, cita, paquete, onListo }) {
+function AgendarSiguiente({ token, sucursal, cita, paquete, zonas, onListo }) {
   const [d, setD] = useState(null); const [err, setErr] = useState(""); const [dia, setDia] = useState(""); const [hora, setHora] = useState("");
   const [antes, setAntes] = useState(false); const [busy, setBusy] = useState(false); const [ok, setOk] = useState(null);
-  const base = { token, sucursal, eventoId: cita.id, paquete };
-  useEffect(() => { apiTarjetas("siguiente_horarios", base, { recepcion: true }).then(setD).catch((e) => setErr(e.message)); }, []); // eslint-disable-line
-  if (ok) return <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "rgba(16,185,129,.18)", fontWeight: 600 }}>📅 Sesión {ok.sesion} agendada: {fechaLarga(ok.fecha)} a las {ok.hora}.</div>;
+  const suelta = !!zonas?.length; const [dur, setDur] = useState(30);
+  const base = { token, sucursal, eventoId: cita.id, paquete, ...(suelta ? { modo: "suelta", zonas, duracion: dur } : {}) };
+  useEffect(() => { setD(null); setDia(""); setHora(""); apiTarjetas("siguiente_horarios", base, { recepcion: true }).then(setD).catch((e) => setErr(e.message)); }, [dur]); // eslint-disable-line
+  if (ok) return <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "rgba(16,185,129,.18)", fontWeight: 600 }}>📅 {ok.sesion ? `Sesión ${ok.sesion}` : `Zona ${zonas.join(", ")}`} agendada: {fechaLarga(ok.fecha)} a las {ok.hora}.</div>;
   if (err && !d) return <div style={{ marginTop: 10, color: "#ff6b6b", fontSize: 13 }}>{err}</div>;
   if (!d) return <div style={{ marginTop: 10, opacity: .7, fontSize: 13 }}>Buscando horarios…</div>;
-  const dias = Object.keys(d.dias).filter((f) => antes || f >= d.minimo);
-  const temprano = dia && dia < d.minimo;
+  const dias = Object.keys(d.dias).filter((f) => suelta || antes || f >= d.minimo);
+  const temprano = !suelta && dia && dia < d.minimo;
   const agendar = async () => {
     setBusy(true); setErr("");
     try { const r = await apiTarjetas("siguiente_agendar", { ...base, fecha: dia, hora, forzar: temprano || d.yaTiene.length > 0 }, { recepcion: true }); setOk(r); onListo?.(); }
@@ -34,13 +35,18 @@ function AgendarSiguiente({ token, sucursal, cita, paquete, onListo }) {
   };
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(128,128,128,.3)" }}>
-      <div style={{ fontWeight: 700 }}>Siguiente: {d.paquete} · sesión {d.siguiente}{d.total ? ` de ${d.total}` : ""}</div>
-      <div style={{ fontSize: 12, opacity: .7 }}>Duración {d.duracionMin} min · mínimo 1 mes entre sesiones (desde {fechaLarga(d.minimo)})</div>
+      {suelta ? <>
+        <div style={{ fontWeight: 700 }}>Sesión individual: {zonas.join(", ")}</div>
+        <div style={{ fontSize: 12, opacity: .7, display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>Duración
+          <select className="inp" value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: "auto", padding: "4px 8px" }}>{[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}</select></div>
+      </> : <>
+        <div style={{ fontWeight: 700 }}>Siguiente: {d.paquete} · sesión {d.siguiente}{d.total ? ` de ${d.total}` : ""}</div>
+        <div style={{ fontSize: 12, opacity: .7 }}>Duración {d.duracionMin} min · mínimo 1 mes entre sesiones (desde {fechaLarga(d.minimo)})</div></>}
       {d.yaTiene.length > 0 && <div style={{ margin: "8px 0", padding: 8, borderRadius: 8, background: "rgba(245,158,11,.2)", fontSize: 13 }}>⚠️ Ya tiene cita: {d.yaTiene.map((y) => `${fechaLarga(y.fecha)} ${y.hora}`).join(", ")}. Si quieres cambiarla, muévela en Calendar; agendar otra la duplicaría.</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 0" }}>
         {dias.slice(0, 40).map((f) => <button key={f} className={dia === f ? "btn-blue" : "btn-ghost"} style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => { setDia(f); setHora(""); }}>{fechaLarga(f)}</button>)}
       </div>
-      {!antes && <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setAntes(true)}>Ver también fechas antes del mes mínimo</button>}
+      {!suelta && !antes && <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setAntes(true)}>Ver también fechas antes del mes mínimo</button>}
       {dia && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 0" }}>
         {d.dias[dia].map((h) => <button key={h} className={hora === h ? "btn-blue" : "btn-ghost"} style={{ padding: "6px 12px" }} onClick={() => setHora(h)}>{h}</button>)}
       </div>}
@@ -54,7 +60,7 @@ function AgendarSiguiente({ token, sucursal, cita, paquete, onListo }) {
 export default function CerrarSesion({ session, token, onClose }) {
   const sucursal = session.rol === "sucursal" ? session.nombre : (session.sucursales?.[0] || session.sucursalesPropias?.[0] || SUCURSALES_NAMES[0]);
   const [d, setD] = useState(null); const [err, setErr] = useState(""); const [anterior, setAnterior] = useState(false);
-  const [siguiente, setSiguiente] = useState(null); const [sel, setSel] = useState({}); const [confirmar, setConfirmar] = useState(null); const [busy, setBusy] = useState(false); const [listo, setListo] = useState(null);
+  const [siguiente, setSiguiente] = useState(null); const [suelta, setSuelta] = useState(null); const [sel, setSel] = useState({}); const [confirmar, setConfirmar] = useState(null); const [busy, setBusy] = useState(false); const [listo, setListo] = useState(null);
 
   const cargar = async () => {
     setErr("");
@@ -73,6 +79,12 @@ export default function CerrarSesion({ session, token, onClose }) {
       const r = await apiTarjetas("cerrar_sesion", { token, sucursal, eventoId: c.id, faltaron: noHechas(c), paquete: c.sesionesHoy[0]?.paquete }, { recepcion: true });
       setListo(r); setConfirmar(null); cargar();
     } catch (e) { setErr(e.message); setConfirmar(null); }
+    setBusy(false);
+  };
+
+  const dejarAbierta = async (c) => {
+    setBusy(true); setErr("");
+    try { await apiTarjetas("cita_abierta", { token, sucursal, paquete: c.sesionesHoy[0]?.paquete }, { recepcion: true }); await cargar(); } catch (e) { setErr(e.message); }
     setBusy(false);
   };
 
@@ -101,7 +113,14 @@ export default function CerrarSesion({ session, token, onClose }) {
               {ya ? <div style={{ marginTop: 10 }}>
                 <div style={{ fontWeight: 600 }}>✅ Ya está marcada.{c.cierre?.length ? ` Faltó: ${c.cierre.join(", ")}.` : ""}</div>
                 {siguiente === c.id ? <AgendarSiguiente token={token} sucursal={sucursal} cita={c} paquete={c.sesionesHoy[0]?.paquete} onListo={cargar} />
-                  : <button className="btn-blue" style={{ width: "100%", padding: 12, marginTop: 10 }} onClick={() => setSiguiente(c.id)}>📅 Agendar siguiente sesión</button>}
+                  : suelta === c.id ? <AgendarSiguiente token={token} sucursal={sucursal} cita={c} paquete={c.sesionesHoy[0]?.paquete} zonas={c.cierre} onListo={cargar} />
+                  : <>
+                    {c.cierre?.length > 0 && <button className="btn-blue" style={{ width: "100%", padding: 12, marginTop: 10 }} onClick={() => setSuelta(c.id)}>📅 Agendar zona que faltó: {c.cierre.join(", ")}</button>}
+                    <button className="btn-blue" style={{ width: "100%", padding: 12, marginTop: 10 }} onClick={() => setSiguiente(c.id)}>📅 Agendar siguiente sesión</button>
+                    {(d.abiertas || []).includes(c.sesionesHoy[0]?.paquete)
+                      ? <div style={{ marginTop: 10, fontSize: 13, opacity: .85 }}>🕓 Cita abierta registrada para {c.sesionesHoy[0]?.paquete}.</div>
+                      : <button className="btn-ghost" style={{ width: "100%", padding: 12, marginTop: 10 }} disabled={busy} onClick={() => dejarAbierta(c)}>🕓 Dejar cita abierta (la clienta agenda después)</button>}
+                  </>}
               </div> : <>
                 {zonas.length > 0 && <div style={{ margin: "10px 0 4px", fontSize: 13, opacity: .8 }}>Zonas de hoy: desmarca las que NO se hicieron</div>}
                 {zonas.map((z) => (
