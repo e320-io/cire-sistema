@@ -137,7 +137,8 @@ const t10 = (t) => { const d = String(t ?? "").replace(/\D/g, ""); return d.leng
 const UPs = (x) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 const telDeId = new Map(CLIS.map((c) => [c.id, t10(c.telefono)]));
 const STOPN = new Set(["DE", "LA", "DEL", "LOS", "LAS", "Y"]); const GEN2 = new Set(["MUJER", "HOMBRE", "PACK", "ZONAS", "SES", "SESION", "SESIONES", "COMBO"]);
-const nomTk = (n) => new Set(UPs(n).replace(/[^A-Z ]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !STOPN.has(w)));
+const memoNom = new Map(); // el mismo nombre se normaliza miles de veces (un paquete × cada ticket): se guarda
+  const nomTk = (n) => { let r = memoNom.get(n); if (!r) { r = new Set(UPs(n).replace(/[^A-Z ]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !STOPN.has(w))); memoNom.set(n, r); } return r; };
 const mismoNombre = (A, B) => { if (A.size < 2 || B.size < 2) return false; const [c, l] = A.size <= B.size ? [A, B] : [B, A]; return [...c].every((x) => l.has(x)) || [...c].filter((x) => l.has(x)).length >= 3; };
 const totalDeServ = (s) => { const m = s.match(/\((\d{1,2})\s*SES/) || s.match(/(\d{1,2})\s*SES(?:ION|IONES)?\b/) || s.match(/\bSESIONES?\s*(\d{1,2})\b/); return m ? +m[1] : null; };
 const ticketsDe = (suc) => TKS.filter((t) => t.sucursal_nombre === suc).map((t) => ({ fecha: t.fecha, tel: t.clienta_id ? telDeId.get(t.clienta_id) ?? "" : "", nom: nomTk(t.clienta_nombre),

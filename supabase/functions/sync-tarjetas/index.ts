@@ -68,16 +68,21 @@ Deno.serve(async (req) => {
   if (!env("SYNC_KEY") || req.headers.get("x-sync-key") !== env("SYNC_KEY")) return new Response("no", { status: 401 });
   const q = new URL(req.url).searchParams; const dry = q.get("dry") === "1"; const solo = q.get("suc");
   try {
-    const sucs = (await todas("agenda_sucursales?select=nombre,calendar_id&calendar_id=not.is.null")).filter((s) => !solo || s.nombre === solo);
-    if (!sucs.length) return json({ error: "No hay sucursales con calendario" }, 400);
+    const todasSuc = await todas("agenda_sucursales?select=nombre,calendar_id&calendar_id=not.is.null");
+    // El servidor limita ~2 s de CPU por llamada: se procesa UNA sucursal por llamada (el cron llama una vez por sucursal).
+    if (!solo) return json({ error: "Indica ?suc=<Sucursal>. Sucursales con calendario: " + todasSuc.map((x) => x.nombre).join(", ") }, 400);
+    const sucs = todasSuc.filter((s) => s.nombre === solo);
+    if (!sucs.length) return json({ error: "Esa sucursal no tiene calendario" }, 400);
     const ahora = Date.now(); const desde = new Date(ahora - 420 * 864e5), hasta = new Date(ahora + 150 * 864e5);
     const desdeTk = new Date(ahora - 430 * 864e5).toISOString().slice(0, 10);
-    // datos del sistema, una sola vez para todas las sucursales (solo lectura)
-    const [tickets, clientasSis, paquetesSis] = await Promise.all([
-      todas(`tickets?select=ticket_zettle,servicios,fecha,clienta_nombre,clienta_id,sucursal_nombre&fecha=gte.${desdeTk}`),
-      todas("clientas?select=id,nombre,telefono,sucursal_nombre"),
-      todas("paquetes?select=clienta_id,servicio,sucursal_nombre"),
-    ]);
+    // datos del sistema SOLO de esta sucursal (solo lectura). Los tickets pueden referirse a clientas de otra sucursal: se piden por id.
+    const tickets = await todas(`tickets?select=ticket_zettle,servicios,fecha,clienta_nombre,clienta_id,sucursal_nombre&sucursal_nombre=eq.${enc(solo)}&fecha=gte.${desdeTk}`);
+    const idsTk = [...new Set(tickets.map((t) => t.clienta_id).filter(Boolean))];
+    const delSuc = await todas(`clientas?select=id,nombre,telefono,sucursal_nombre&sucursal_nombre=eq.${enc(solo)}`);
+    const conocidos = new Set(delSuc.map((c) => c.id)); const faltan = idsTk.filter((i) => !conocidos.has(i)); let otras: typeof delSuc = [];
+    for (const lote of trozos(faltan, 150)) otras = otras.concat(await todas(`clientas?select=id,nombre,telefono,sucursal_nombre&id=in.(${lote.join(",")})`));
+    const clientasSis = delSuc.concat(otras);
+    const paquetesSis = await todas(`paquetes?select=clienta_id,servicio,sucursal_nombre&sucursal_nombre=eq.${enc(solo)}`);
     const resumen = [];
     for (const s of sucs) {
       const t0 = Date.now(); let error: string | null = null; let st = { eventos: 0, clientas: 0, paquetes: 0, estrictas: 0, alta: 0 };
