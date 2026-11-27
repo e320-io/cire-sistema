@@ -106,7 +106,7 @@ export default function AgendarPublico() {
                 </span>
               </button>
             )}
-            {opcion("✨", "Agendar mi cita", "Elige tu servicio, día y hora", () => { setErr(""); setModo("nueva"); }, true)}
+            {opcion("✨", "Agendar mi primera cita", "Es mi primera vez: elige tu servicio, día y hora", () => { setErr(""); setModo("nueva"); }, true)}
             {opcion("🔁", "Reagendar mi cita", "Ya tengo cita y quiero cambiarla", () => { setErr(""); setModo("reagendar"); })}
             {opcion("🪪", "Tengo un paquete y no he agendado mi siguiente sesión", "Agenda aquí tu siguiente sesión", () => { setErr(""); setModo("siguiente"); })}
           </>

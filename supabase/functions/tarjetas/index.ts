@@ -48,7 +48,7 @@ async function tarjeta(token: string, interno: boolean) {
   const ps = (await rows(`tarj_paquetes?select=*&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
   ps.sort((a, b) => Number(b.estado === "activo") - Number(a.estado === "activo"));
   const slug = (await rows(`agenda_sucursales?select=slug&nombre=eq.${enc(c.sucursal)}`))[0]?.slug ?? null;
-  const base = { nombre: String(c.nombre).split(/\s+/)[0], sucursal: c.sucursal, slug, agendar: PILOTO.includes(c.sucursal), paquetes: ps.map(paquetePublico) };
+  const base = { nombre: String(c.nombre).split(/\s+/)[0], sucursal: c.sucursal, slug, agendar: AGENDA_CLIENTA.includes(c.sucursal), paquetes: ps.map(paquetePublico) };
   if (!interno) return base;
   return { ...base, interno: { nombreCompleto: c.nombre, nivel: c.nivel, estricta: c.estricta, publicada: c.publicada, tituloCalendario: c.titulo_calendario, tel4: String(c.tel ?? "").slice(-4),
     // deno-lint-ignore no-explicit-any
@@ -76,6 +76,7 @@ async function token(): Promise<string> {
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" });
 
 // deno-lint-ignore no-explicit-any
+const AGENDA_CLIENTA = ["Metepec", "Coapa", "Valle", "Polanco", "Oriente"]; // sucursales donde la clienta puede agendar su siguiente sesión (/agendar)
 const PILOTO = ["Metepec"]; // sucursales donde recepción puede cerrar sesiones (escribe ✅ en Calendar)
 const INI = "🪪 TARJETA CIRE", FIN = "🪪 FIN";
 const QUITAR = new RegExp(`(?:\\s|<br\\s*/?>|&nbsp;)*${INI}[\\s\\S]*?${FIN}[^\\n<]*`, "i");
@@ -180,12 +181,12 @@ async function identificarClienta(b: Record<string, any>) {
 async function contextoClienta(b: Record<string, any>) {
   const { c, suc } = b.token ? await clientaPorToken(b.token) : await identificarClienta(b);
   if (b.token && !c.publicada) await staff(b); // con el enlace de una tarjeta sin publicar solo sirve para probar con sesión de recepción
-  if (!PILOTO.includes(c.sucursal)) falla("Agendar desde tu tarjeta estará disponible pronto en tu sucursal.");
+  if (!AGENDA_CLIENTA.includes(c.sucursal)) falla("Agendar desde tu tarjeta estará disponible pronto en tu sucursal.");
   if (!c.tel) falla("No encontramos tu celular en el calendario. Escríbenos por WhatsApp.");
   const cfg = (await rows(`agenda_sucursales?select=nombre,calendar_id,horario,intervalo_min,capacidad&nombre=eq.${enc(c.sucursal)}`))[0]; if (!cfg) falla("Sucursal sin agenda.");
   const ps = (await rows(`tarj_paquetes?select=nombre,estado,sellos,total,total_supuesto,tipo,mant,regalo,proxima,ultima,sesiones&clienta_id=eq.${c.id}&order=orden`)).filter(visible);
   // deno-lint-ignore no-explicit-any
-  const opciones = ps.filter((p: any) => p.estado === "activo" && p.total && !p.total_supuesto && p.tipo === "laser" && !p.mant && !p.regalo && p.sellos < p.total);
+  const opciones = ps.filter((p: any) => p.estado === "activo" && p.total && !p.total_supuesto && p.tipo === "laser" && !p.mant && !p.regalo && !p.proxima && p.sellos < p.total);
   const evs = await eventosFuturos(suc.calendar_id, Date.now() - 420 * DIA, Date.now() + (VENTANA + 2) * DIA);
   // deno-lint-ignore no-explicit-any
   const mias = evs.filter((e: any) => e.status !== "cancelled" && e.start?.dateTime && telDe(e.summary ?? "") === c.tel);
@@ -193,7 +194,7 @@ async function contextoClienta(b: Record<string, any>) {
   const futura = mias.filter((e: any) => Date.parse(e.start.dateTime) > Date.now() + 2 * 3600e3).sort((p: any, q: any) => p.start.dateTime.localeCompare(q.start.dateTime))[0];
   const H = { Authorization: `Bearer ${await token()}` };
   const base = { c, suc, cfg, opciones, H, p: null, siguiente: 0, minimo: "", durMin: 60, dias: {} as Record<string, string[]>, yaTiene: null, mensaje: null };
-  if (!opciones.length) return { ...base, mensaje: "No encontramos un paquete con sesiones por agendar." };
+  if (!opciones.length) return { ...base, mensaje: "No encontramos un paquete con una siguiente sesión pendiente por agendar. Si ya tienes cita, usa «Reagendar mi cita»; si no, escríbenos por WhatsApp." };
   // deno-lint-ignore no-explicit-any
   const p = opciones.find((x: any) => x.nombre === b.paquete) ?? (opciones.length === 1 ? opciones[0] : null);
   if (!p) return { ...base, mensaje: "Elige el paquete que quieres agendar." };
@@ -382,7 +383,7 @@ async function accion(b: Record<string, any>) {
         falla("Alguien más acaba de tomar ese horario. Elige otro.");
       }
       await sb("tarj_calendario_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sucursal: x.c.sucursal, evento_id: nuevo.id, accion: "crear", antes: null, despues: `CLIENTA | ${cuerpo.summary} | ${cuerpo.description.replace(/\n/g, " / ")} | ${b.fecha} ${b.hora}` }) });
-      try { await llamar("sync-tarjetas", `suc=${enc(x.c.sucursal)}`); await llamar("tarjeta-calendario", `suc=${enc(x.c.sucursal)}&escribir=1&evento=${enc(nuevo.id)}`); } catch (er) { console.error(er); }
+      try { await llamar("sync-tarjetas", `suc=${enc(x.c.sucursal)}`); if (PILOTO.includes(x.c.sucursal)) await llamar("tarjeta-calendario", `suc=${enc(x.c.sucursal)}&escribir=1&evento=${enc(nuevo.id)}`); } catch (er) { console.error(er); }
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), sesion: x.c.estricta ? x.siguiente : null, sucursal: x.c.sucursal };
     }
     default: return falla("Acción desconocida.");
