@@ -30,6 +30,12 @@ export const PLANTILLAS: Record<"nueva" | "comprobante" | "reagendada" | "espera
     body: "¡Hola {{1}}! 🌸 Soy el asistente virtual de Cire Depilación y te confirmo tu cita en CIRE {{2}}.\n\n💆 Servicio: {{3}}\n📅 Cuándo: {{4}}\n📍 Dónde: {{5}}\n\n{{6}}\n\nEn los siguientes mensajes te compartimos las indicaciones para tu sesión. ¡Te esperamos! 🩷\n\nPor favor no respondas a este mensaje.",
     ejemplo: ["María", "Coapa", "Combo Sexy Básico Mujer (8 ses)", "Jueves 26 de noviembre · 13:00 – 13:45", "Calzada del Hueso 123, Coapa · https://maps.app.goo.gl/ejemplo", "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar."],
   },
+  // Misma confirmación pero SIN la frase de "en los siguientes mensajes…": para reagendados y valoraciones, donde no se mandan imágenes.
+  confirmacionSimple: {
+    name: "agenda_confirmacion_clienta_simple",
+    body: "¡Hola {{1}}! 🌸 Soy el asistente virtual de Cire Depilación y te confirmo tu cita en CIRE {{2}}.\n\n💆 Servicio: {{3}}\n📅 Cuándo: {{4}}\n📍 Dónde: {{5}}\n\n{{6}}\n\n¡Te esperamos! 🩷\n\nPor favor no respondas a este mensaje.",
+    ejemplo: ["María", "Coapa", "Valoración", "Jueves 26 de noviembre · 13:00 – 13:30", "Calzada del Hueso 123, Coapa · https://maps.app.goo.gl/ejemplo", "Tu cita fue reagendada ✅"],
+  },
   indicaciones: {
     name: "agenda_indicaciones_previas",
     body: "📋 Indicaciones a considerar antes de tu sesión en CIRE. Revísalas con calma en la imagen 👆 para que tu tratamiento salga perfecto.",

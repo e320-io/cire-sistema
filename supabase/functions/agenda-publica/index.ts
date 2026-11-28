@@ -246,7 +246,7 @@ function avisar(cfg: Cfg, p: Plantilla, vars: string[]) {
 // Capturas de los desplegables "Indicaciones a considerar" y "Cómo debes asistir a tu sesión" de /agendar (public/infografias/ en el repo).
 // Si cambias esos textos en CierreCita.jsx, vuelve a tomar las capturas. Los secretos INFOGRAFIA_*_URL (opcionales) las reemplazan.
 const INFOGRAFIAS = "https://agenda.ciredepilacion.com/infografias";
-function confirmarClienta(cfg: Cfg, tel: string, vars: { nombre: string; servicio: string; cuando: string; estatus: string }) {
+function confirmarClienta(cfg: Cfg, tel: string, vars: { nombre: string; servicio: string; cuando: string; estatus: string }, conImagenes = true) {
   const img1 = env("INFOGRAFIA_INDICACIONES_URL") || `${INFOGRAFIAS}/indicaciones-a-considerar.png`, img2 = env("INFOGRAFIA_DIA_SESION_URL") || `${INFOGRAFIAS}/como-asistir-sesion.png`;
   if (!cfg.confirmar_clienta || !env("WA_TOKEN") || !env("WA_PHONE_ID")) {
     enSegundoPlano(sb("agenda_wa_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ plantilla: "agenda_confirmacion_clienta", destino: tel10(tel).slice(-4), ok: false, detalle: `no se intentó: confirmar_clienta=${cfg.confirmar_clienta} WA_TOKEN=${!!env("WA_TOKEN")} WA_PHONE_ID=${!!env("WA_PHONE_ID")}` }) }).catch(() => {}));
@@ -256,7 +256,9 @@ function confirmarClienta(cfg: Cfg, tel: string, vars: { nombre: string; servici
   const donde = [cfg.direccion || `CIRE ${cfg.nombre}`, cfg.maps_url].filter(Boolean).join(" · ");
   enSegundoPlano((async () => {
     const primer = vars.nombre.split(" ")[0] || vars.nombre;
-    if (!(await mandarPlantilla(a, PLANTILLAS.confirmacion, [primer, cfg.nombre, vars.servicio, vars.cuando, donde, vars.estatus]))) return;
+    const datos = [primer, cfg.nombre, vars.servicio, vars.cuando, donde, vars.estatus];
+    if (!conImagenes) { await mandarPlantilla(a, PLANTILLAS.confirmacionSimple, datos); return; } // reagendados y valoraciones: solo el texto
+    if (!(await mandarPlantilla(a, PLANTILLAS.confirmacion, datos))) return;
     if (await mandarPlantilla(a, PLANTILLAS.indicaciones, [], img1)) await mandarPlantilla(a, PLANTILLAS.diaSesion, [], img2);
   })());
   return true;
@@ -472,7 +474,7 @@ async function equipoAgenda(b: Record<string, unknown>) {
       const estatusEq = [`Agendada por el equipo (${usuario})`, valoracion ? "Valoración (sin anticipo)" : anticipado ? "💰 Anticipo recibido" : "🧊 Pendiente de anticipo", especial ? `horario especial: ${motivoEsp}` : "", nota ? `Nota: ${nota}` : ""].filter(Boolean).join(" · ");
       avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, paqueteTxt, cuando, estatusEq]);
       const clienta = b.confirmarClienta === false || b.confirmarClienta === "false" ? false
-        : confirmarClienta(cfg, tel, { nombre, servicio: paqueteTxt, cuando, estatus: valoracion ? "Esta valoración no tiene costo." : anticipado ? "Tu anticipo ya está registrado ✅" : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." });
+        : confirmarClienta(cfg, tel, { nombre, servicio: paqueteTxt, cuando, estatus: valoracion ? "Esta valoración no tiene costo." : anticipado ? "Tu anticipo ya está registrado ✅" : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." }, !valoracion);
       return { ok: true, sucursal: cfg.nombre, fecha, hora, horaFin: hm(fin), servicio: paqueteTxt, duracionMin: paq.duracionMin, precio: paq.precio, especial, confirmacionClienta: clienta };
     }
     default:
@@ -546,6 +548,9 @@ async function accion(b: Record<string, string>) {
         throw err;
       }
       avisar(cfg, PLANTILLAS.reagendada, [cfg.nombre, nombreLimpio(e.summary ?? "") || "Clienta", tel10(b.telefono), cuandoTxt(ini, fin), cuandoTxt(nuevoIni, nuevoFin)]);
+      // Confirmación a la clienta del nuevo horario (solo texto, sin imágenes). El servicio sale de la reserva en línea si existe.
+      const rsvR = await (await sb(`agenda_reservas?select=servicio&event_id=eq.${encodeURIComponent(e.id)}&limit=1`)).json().catch(() => []);
+      confirmarClienta(cfg, tel10(b.telefono), { nombre: nombreLimpio(e.summary ?? "") || "Clienta", servicio: (Array.isArray(rsvR) && rsvR[0]?.servicio) || "Tu sesión en CIRE", cuando: cuandoTxt(nuevoIni, nuevoFin), estatus: "Tu cita fue reagendada ✅" }, false);
       return { ok: true, fecha: b.fecha, hora: b.hora, horaFin: hm(nuevoFin) };
     }
     case "servicios": {
@@ -617,7 +622,7 @@ async function accion(b: Record<string, string>) {
       avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin),
         (especial ? `⚠️ HORARIO ESPECIAL por aprobar: ${motivoEsp}${valoracion ? "" : " · 🧊 Pendiente de anticipo"}` : valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo")]);
       confirmarClienta(cfg, tel, { nombre, servicio: sv.nombre, cuando: cuandoTxt(ini, fin),
-        estatus: valoracion ? "Esta valoración no tiene costo." : especial ? "Tu horario es especial: te confirmaremos por este medio si podemos habilitarlo." : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." });
+        estatus: valoracion ? "Esta valoración no tiene costo." : especial ? "Tu horario es especial: te confirmaremos por este medio si podemos habilitarlo." : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." }, !valoracion); // la valoración no lleva indicaciones en imagen
       return { ok: true, especial, motivoEspecial: motivoEsp || null, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
     }
 
