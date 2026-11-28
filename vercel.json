@@ -5,6 +5,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/agendar-equipo",
+      "destination": "/index.html"
+    },
+    {
       "source": "/agendar/:slug",
       "destination": "/index.html"
     },

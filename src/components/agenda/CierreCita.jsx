@@ -115,3 +115,4 @@ export default function CierreCita({ info, fecha, hora, horaFin, servicio, estad
     </>
   );
 }
+export { Colapsable, IndicacionesAConsiderar, ComoAsistir };

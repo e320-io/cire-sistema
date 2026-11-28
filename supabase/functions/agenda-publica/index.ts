@@ -13,6 +13,7 @@
 //   agendar       { slug, nombre, telefono, servicioId, fecha, hora } -> { ok, fecha, hora, horaFin, servicio, reservaId, anticipo, reagendarHoras }
 //   espera        { slug, nombre, telefono, servicioId, dias: ['sab'], franja, comentario } -> { ok }  (lista de espera: la clienta que no encontró horario)
 //   espera_listar / espera_conteo / espera_actualizar  { usuario, hash, ... }  -> equipo (recepción) con usuario + hash de system_users
+//   equipo_servicios / equipo_disponibilidad / equipo_agendar  { usuario, hash, ... }  -> variante interna /agendar-equipo (busca en todas las sucursales, suma zonas, nota)
 //   reserva       { slug, reservaId, telefono }                   -> { servicio, fecha, hora, horaFin, comprobante, anticipo, reagendarHoras }  (retomar "Asegura tu lugar")
 //   comprobante   { slug, reservaId, telefono, imagen }           -> { ok }   imagen = dataURL jpeg/png; se guarda en Storage (bucket privado "comprobantes") y el enlace va a la descripción del evento
 //
@@ -52,7 +53,7 @@ type Cfg = {
   slug: string; nombre: string; calendar_id: string; horario: Record<string, [string, string]>;
   horario_especial_min: number; intervalo_min: number; capacidad: number; anticipacion_horas: number; anticipacion_nueva_horas: number; dias_adelante: number;
   direccion: string | null; maps_url: string | null; estacionamiento: boolean; modo_pruebas: boolean;
-  avisos_tel: string[] | null; tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
+  avisos_tel: string[] | null; confirmar_clienta: boolean | null; tema: string; anticipo_concepto: string | null; maps_nombre: string | null; lat: number | null; lng: number | null; maps_embed: string | null;
   anticipo_monto: number; banco: string | null; beneficiario: string | null; cuenta: string | null; clabe: string | null;
 };
 async function getCfg(slug: string): Promise<Cfg> {
@@ -212,21 +213,48 @@ const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const cuandoTxt = (ini: number, fin: number) =>
   `${cap1(new Date(ini).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }))} · ${hm(ini)} – ${hm(fin)}`;
 const paraWA = (t: unknown) => String(t ?? "").replace(/[\n\r\t]+/g, " ").replace(/ {4,}/g, "   ").trim().slice(0, 1000) || "-"; // WhatsApp admite hasta 1024 por variable; el enlace firmado de la captura mide ~335 y recortarlo lo invalida
-async function mandarPlantilla(tel: string, p: Plantilla, vars: string[]) {
+async function mandarPlantilla(tel: string, p: Plantilla, vars: string[], imagen?: string): Promise<boolean> {
+  const components: unknown[] = [];
+  if (imagen) components.push({ type: "header", parameters: [{ type: "image", image: { link: imagen } }] });
+  if (vars.length) components.push({ type: "body", parameters: vars.map((t) => ({ type: "text", text: paraWA(t) })) });
   const r = await fetch(`https://graph.facebook.com/v21.0/${env("WA_PHONE_ID")}/messages`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env("WA_TOKEN")}` },
     body: JSON.stringify({
       messaging_product: "whatsapp", to: tel.replace(/\D/g, ""), type: "template",
-      template: { name: p.name, language: { code: "es_MX" }, components: [{ type: "body", parameters: vars.map((t) => ({ type: "text", text: paraWA(t) })) }] },
+      template: { name: p.name, language: { code: "es_MX" }, components },
     }),
   });
   if (!r.ok) console.error(`aviso WhatsApp (${p.name}) falló para …${tel.slice(-4)}:`, (await r.text()).slice(0, 300));
+  return r.ok;
 }
+const enSegundoPlano = (trabajo: Promise<unknown>) =>
+  (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil?.(trabajo); // sigue después de responder
 function avisar(cfg: Cfg, p: Plantilla, vars: string[]) {
   const tels = cfg.avisos_tel ?? [];
   if (!tels.length || !env("WA_TOKEN") || !env("WA_PHONE_ID")) return; // sin destinatarios = no se manda nada
   const trabajo = Promise.allSettled(tels.map((t) => mandarPlantilla(t, p, vars)));
-  (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime?.waitUntil?.(trabajo); // sigue después de responder
+  enSegundoPlano(trabajo);
+}
+
+// ---------- Confirmación a la CLIENTA por WhatsApp ----------
+// Mensaje de cita agendada + 2 infografías (indicaciones previas e instrucciones del día de la sesión). Cada una es una plantilla
+// con imagen en el encabezado (fuera de las 24 h de una conversación WhatsApp solo admite plantillas). Se manda en orden y se
+// detiene si el primero falla (p. ej. número sin WhatsApp). INACTIVO hasta activar agenda_sucursales.confirmar_clienta y definir
+// los secretos INFOGRAFIA_INDICACIONES_URL e INFOGRAFIA_DIA_SESION_URL (enlaces públicos a las imágenes).
+// Capturas de los desplegables "Indicaciones a considerar" y "Cómo debes asistir a tu sesión" de /agendar (public/infografias/ en el repo).
+// Si cambias esos textos en CierreCita.jsx, vuelve a tomar las capturas. Los secretos INFOGRAFIA_*_URL (opcionales) las reemplazan.
+const INFOGRAFIAS = "https://agenda.ciredepilacion.com/infografias";
+function confirmarClienta(cfg: Cfg, tel: string, vars: { nombre: string; servicio: string; cuando: string; estatus: string }) {
+  const img1 = env("INFOGRAFIA_INDICACIONES_URL") || `${INFOGRAFIAS}/indicaciones-a-considerar.png`, img2 = env("INFOGRAFIA_DIA_SESION_URL") || `${INFOGRAFIAS}/como-asistir-sesion.png`;
+  if (!cfg.confirmar_clienta || !env("WA_TOKEN") || !env("WA_PHONE_ID")) return false;
+  const a = "52" + tel10(tel);
+  const donde = [cfg.direccion || `CIRE ${cfg.nombre}`, cfg.maps_url].filter(Boolean).join(" · ");
+  enSegundoPlano((async () => {
+    const primer = vars.nombre.split(" ")[0] || vars.nombre;
+    if (!(await mandarPlantilla(a, PLANTILLAS.confirmacion, [primer, cfg.nombre, vars.servicio, vars.cuando, donde, vars.estatus]))) return;
+    if (await mandarPlantilla(a, PLANTILLAS.indicaciones, [], img1)) await mandarPlantilla(a, PLANTILLAS.diaSesion, [], img2);
+  })());
+  return true;
 }
 
 // ---------- Agendar cita nueva ----------
@@ -328,6 +356,125 @@ async function esperaEquipo(b: Record<string, unknown>) {
   }
 }
 
+// ---------- Agenda del EQUIPO (variante interna de /agendar: /agendar-equipo) ----------
+// Ventas no tiene acceso a todos los calendarios: aquí busca hueco en TODAS las sucursales a la vez, arma el paquete (cualquier servicio
+// del catálogo + zonas individuales extra), deja una nota y agenda. Sin candados antiabuso ni anticipación mínima; el equipo responde por la cita.
+const EXTRAS_MAX = 6;
+async function servicioEquipo(id: string): Promise<{ sv: Servicio; sucursales: unknown }> {
+  if (id === "valoracion") return { sv: VALORACION, sucursales: null };
+  if (!/^\d+$/.test(String(id))) falla("Elige un servicio.");
+  const rows = await (await sb(`catalogo?select=${COLS}&id=eq.${id}&activo=eq.true&tipo=eq.servicio`)).json();
+  if (!Array.isArray(rows) || !rows[0]) falla("Ese servicio ya no está en el catálogo.");
+  return { sv: fila(rows[0]), sucursales: rows[0].sucursales };
+}
+const aplicaA = (sucursales: unknown, cfg: { nombre: string }) => !Array.isArray(sucursales) || sucursales.some((x) => sinAcentos(String(x)) === sinAcentos(cfg.nombre));
+/** Paquete armado por el equipo: servicio base + zonas extra. La duración y el precio se pueden ajustar a mano. */
+async function armarPaquete(b: Record<string, unknown>) {
+  const base = await servicioEquipo(String(b.servicioId ?? ""));
+  const ids = (Array.isArray(b.extras) ? b.extras : []).map(String).slice(0, EXTRAS_MAX);
+  const extras = [];
+  for (const id of ids) extras.push(await servicioEquipo(id)); // se permite repetir (ej. 2 veces axilas)
+  const durCalc = base.sv.duracionMin + extras.reduce((a, e) => a + e.sv.duracionMin, 0);
+  const durManual = Math.round(Number(b.duracionMin));
+  const duracionMin = durManual >= 15 && durManual <= 480 ? durManual : durCalc;
+  const precioCalc = base.sv.precio + extras.reduce((a, e) => a + e.sv.precio, 0);
+  const precioManual = b.precio === "" || b.precio == null ? NaN : Number(b.precio);
+  const precio = Number.isFinite(precioManual) && precioManual >= 0 && precioManual <= 200000 ? Math.round(precioManual) : precioCalc;
+  return { sv: base.sv, extras, aplica: [base, ...extras].map((x) => x.sucursales), duracionMin, precio, durCalc, precioCalc };
+}
+async function equipoAgenda(b: Record<string, unknown>) {
+  const usuario = await staff(b);
+  switch (b.accion) {
+    case "equipo_servicios": {
+      // Catálogo completo (no solo lo que se vende en línea), con las sucursales donde aplica cada servicio.
+      const rows = await (await sb(`catalogo?select=${COLS}&activo=eq.true&tipo=eq.servicio&order=orden`)).json();
+      if (!Array.isArray(rows)) throw new Error("catalogo: " + JSON.stringify(rows).slice(0, 150));
+      const lista = rows.map((r) => ({ ...fila(r), sucursales: Array.isArray(r.sucursales) ? r.sucursales.map(String) : null }));
+      lista.sort((a, b) => Number(/^combo/i.test(b.categoria)) - Number(/^combo/i.test(a.categoria)));
+      const grupos: { categoria: string; items: Record<string, unknown>[] }[] = [];
+      for (const sv of [{ ...VALORACION, sucursales: null }, ...lista]) {
+        let g = grupos.find((x) => x.categoria === sv.categoria);
+        if (!g) grupos.push((g = { categoria: sv.categoria, items: [] }));
+        g.items.push({ id: sv.id, nombre: sv.nombre, precio: sv.precio, duracionMin: sv.duracionMin, incluye: sv.incluye, sucursales: sv.sucursales });
+      }
+      const suc = await (await sb("agenda_sucursales?select=slug,nombre&activa=eq.true&calendar_id=not.is.null&order=nombre")).json();
+      return { grupos, sucursales: Array.isArray(suc) ? suc : [], usuario };
+    }
+
+    case "equipo_disponibilidad": {
+      // Horarios libres en cada sucursal para el paquete armado (misma duración en todas). Una sucursal con error no tumba a las demás.
+      const paq = await armarPaquete(b);
+      const slugs = Array.isArray(b.slugs) ? b.slugs.map(String) : [];
+      const rows = await (await sb("agenda_sucursales?select=*&activa=eq.true&calendar_id=not.is.null&order=nombre")).json();
+      const cfgs = (Array.isArray(rows) ? rows as Cfg[] : []).filter((c) => (!slugs.length || slugs.includes(c.slug)) && paq.aplica.every((a) => aplicaA(a, c)));
+      const sucursales = await Promise.all(cfgs.map(async (c) => {
+        try {
+          const d = await disponibilidad(c, paq.duracionMin, "", 0, c.horario_especial_min ?? 0);
+          return { slug: c.slug, nombre: c.nombre, dias: d.dias, especiales: d.especiales, horarios: d.horarios };
+        } catch (e) { console.error(`equipo_disponibilidad ${c.slug}:`, e); return { slug: c.slug, nombre: c.nombre, dias: {}, especiales: {}, horarios: {}, error: "No pude leer su calendario." }; }
+      }));
+      return { duracionMin: paq.duracionMin, duracionCalculada: paq.durCalc, precio: paq.precio, precioCalculado: paq.precioCalc, sucursales };
+    }
+
+    case "equipo_agendar": {
+      const cfg = await getCfg(SLUG_OK(b.slug));
+      const nombre = nombreLimpio(String(b.nombre ?? "")), tel = tel10(String(b.telefono ?? ""));
+      if (nombre.length < 3) falla("Escribe el nombre de la clienta.");
+      if (!tel) falla("Escribe el celular de la clienta a 10 dígitos.");
+      const fecha = String(b.fecha ?? ""), hora = String(b.hora ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora)) falla("Horario inválido.");
+      const paq = await armarPaquete(b);
+      if (!paq.aplica.every((a) => aplicaA(a, cfg))) falla(`Ese paquete no se ofrece en ${cfg.nombre}.`);
+      const nota = String(b.nota ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
+      const anticipado = b.anticipo === true || b.anticipo === "true";
+      const valoracion = paq.sv.id === "valoracion" && !paq.extras.length;
+
+      const disp = await disponibilidad(cfg, paq.duracionMin, "", 0, cfg.horario_especial_min ?? 0);
+      const normalOk = !!disp.dias[fecha]?.includes(hora);
+      const especial = !normalOk && !!disp.especiales[fecha]?.includes(hora);
+      if (!normalOk && !especial) falla("Ese horario ya no está disponible. Busca otro.");
+      const ini = inst(fecha, toMin(hora)), fin = ini + paq.duracionMin * 60_000;
+      const motivoEsp = !especial ? "" : `la sucursal cierra a las ${h12(disp.horarios[fecha][1])} y esta cita termina a las ${h12(hm(fin))}`;
+
+      const paqueteTxt = [paq.sv.nombre, ...paq.extras.map((e) => `+ ${e.sv.nombre}`)].join(" ");
+      const ev = await gcal(cfg.calendar_id, "", {
+        method: "POST",
+        body: JSON.stringify({
+          summary: `${valoracion ? "" : anticipado ? "💰" : "🧊"}${nombre} ${tel}`, // 🧊 sin anticipo · 💰 ya mandó anticipo
+          description: [
+            `${cfg.nombre} ${paqueteTxt}${paq.precio > 0 ? " " + pesos(paq.precio) : ""}${valoracion ? "" : anticipado ? " Anticipo recibido" : " Pendiente Anticipo"}`,
+            especial ? `Horario especial autorizado por el equipo: ${motivoEsp}.` : "",
+            nota ? `📝 NOTA: ${nota}` : "",
+            `🧑‍💼 AGENDADA POR EL EQUIPO (${usuario}).`,
+          ].filter(Boolean).join("\n"),
+          start: { dateTime: iso(ini), timeZone: TZ }, end: { dateTime: iso(fin), timeZone: TZ },
+          colorId: TIPOS[paq.sv.tipo]?.colorId ?? "11",
+          reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
+          extendedProperties: { private: { origen: "equipo", servicio_id: paq.sv.id, agendada_por: usuario } },
+        }),
+      }, { sendUpdates: "none" });
+
+      // Google no tiene candados: si dos personas tomaron el mismo hueco a la vez, gana la que se creó primero.
+      const traslapan = (await listEvents(cfg.calendar_id, ini, fin))
+        .filter((e) => e.status !== "cancelled" && e.transparency !== "transparent" && e.start.dateTime && rango(e)[0] < fin && rango(e)[1] > ini)
+        .sort((x, y) => String((x as Ev & { created?: string }).created).localeCompare(String((y as Ev & { created?: string }).created)) || x.id.localeCompare(y.id));
+      if (traslapan.findIndex((e) => e.id === ev.id) >= cfg.capacidad) {
+        await gcal(cfg.calendar_id, `/${encodeURIComponent(ev.id)}`, { method: "DELETE" }).catch(() => {});
+        falla("Alguien acaba de tomar ese horario. Busca otro.");
+      }
+
+      const cuando = cuandoTxt(ini, fin);
+      const estatusEq = [`Agendada por el equipo (${usuario})`, valoracion ? "Valoración (sin anticipo)" : anticipado ? "💰 Anticipo recibido" : "🧊 Pendiente de anticipo", especial ? `horario especial: ${motivoEsp}` : "", nota ? `Nota: ${nota}` : ""].filter(Boolean).join(" · ");
+      avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, paqueteTxt, cuando, estatusEq]);
+      const clienta = b.confirmarClienta === false || b.confirmarClienta === "false" ? false
+        : confirmarClienta(cfg, tel, { nombre, servicio: paqueteTxt, cuando, estatus: valoracion ? "Esta valoración no tiene costo." : anticipado ? "Tu anticipo ya está registrado ✅" : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." });
+      return { ok: true, sucursal: cfg.nombre, fecha, hora, horaFin: hm(fin), servicio: paqueteTxt, duracionMin: paq.duracionMin, precio: paq.precio, especial, confirmacionClienta: clienta };
+    }
+    default:
+      return falla("Acción desconocida.");
+  }
+}
+
 // ---------- Acciones ----------
 async function accion(b: Record<string, string>) {
   if (b.accion === "sucursales") {
@@ -335,6 +482,7 @@ async function accion(b: Record<string, string>) {
     const rows = await r.json();
     return { sucursales: Array.isArray(rows) ? rows : [] };
   }
+  if (String(b.accion ?? "").startsWith("equipo_")) return await equipoAgenda(b as unknown as Record<string, unknown>);
   if (String(b.accion ?? "").startsWith("espera_")) return await esperaEquipo(b as unknown as Record<string, unknown>);
   const cfg = await getCfg(String(b.slug ?? ""));
   switch (b.accion) {
@@ -463,6 +611,8 @@ async function accion(b: Record<string, string>) {
       const rsv = await (await sb("agenda_reservas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ event_id: ev.id, slug: cfg.slug, telefono: tel, nombre, servicio: sv.nombre, inicio: new Date(ini).toISOString(), especial }) })).json();
       avisar(cfg, PLANTILLAS.nueva, [cfg.nombre, nombre, tel, sv.nombre, cuandoTxt(ini, fin),
         (especial ? `⚠️ HORARIO ESPECIAL por aprobar: ${motivoEsp}${valoracion ? "" : " · 🧊 Pendiente de anticipo"}` : valoracion ? "Valoración (sin anticipo)" : "🧊 Pendiente de anticipo")]);
+      confirmarClienta(cfg, tel, { nombre, servicio: sv.nombre, cuando: cuandoTxt(ini, fin),
+        estatus: valoracion ? "Esta valoración no tiene costo." : especial ? "Tu horario es especial: te confirmaremos por este medio si podemos habilitarlo." : "Tu anticipo está pendiente: envíanos tu comprobante para asegurar tu lugar." });
       return { ok: true, especial, motivoEspecial: motivoEsp || null, fecha: b.fecha, hora: b.hora, horaFin: hm(fin), servicio: sv.nombre, reservaId: Array.isArray(rsv) ? rsv[0]?.id ?? null : null, anticipo: infoAnticipo(cfg, sv.nombre), reagendarHoras: cfg.anticipacion_horas };
     }
 

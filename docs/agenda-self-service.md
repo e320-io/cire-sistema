@@ -87,3 +87,21 @@ La validación del anticipo sigue siendo manual en Google Calendar (cambiar 🧊
 - **QR del sello** (`urlSello`): ahora genera `ciredepilacion.com/sistema/sello/<token>`; los QR ya impresos con `sistema.` siguen sirviendo.
 - Tras desplegar, el CDN puede dar 404 unos minutos en la ruta recién creada.
 - **`agenda.` y `sistema.` redirigen:** `src/main.jsx` manda a quien abra directo `agenda.ciredepilacion.com/…` o `sistema.ciredepilacion.com/…` a `ciredepilacion.com/…` (el sistema bajo `/sistema`). Siguen existiendo solo como origen de los rewrites del sitio principal; no se deben borrar del proyecto de Vercel ni del DNS.
+
+## Agenda del equipo (`/agendar-equipo`)
+Variante **interna** para ventas y recepción, que no tienen acceso a todos los calendarios. Entra con el usuario y contraseña del sistema (la función valida usuario + hash de `system_users`, igual que la lista de espera; la sesión vive solo en la pestaña). Dirección: `https://sistema.ciredepilacion.com/agendar-equipo`.
+Flujo: **paquete** (cualquier servicio activo del catálogo, no solo los de venta en línea) → **＋ zonas individuales** (hasta 6; suman duración y precio) → duración y precio **ajustables a mano** → **buscar espacio en todas las sucursales a la vez** (o solo en las que se marquen) → día y hora por sucursal → nombre, celular, **nota** y casilla "ya mandó anticipo" (💰 en vez de 🧊) → agenda.
+Acciones en `agenda-publica`: `equipo_servicios`, `equipo_disponibilidad`, `equipo_agendar`.
+- Sin anticipación mínima, sin candados antiabuso, y no se guarda en `agenda_reservas` (no cuenta contra el límite de 3 reservas por celular de la clienta).
+- Se ofrecen también los horarios especiales (terminan hasta `horario_especial_min` después del cierre); el evento lo anota como "autorizado por el equipo".
+- Evento: título `🧊/💰Nombre 55…`, descripción `Sucursal Paquete + Zona $Total Pendiente Anticipo|Anticipo recibido`, `📝 NOTA: …` y `🧑‍💼 AGENDADA POR EL EQUIPO (usuario)`; propiedad privada `origen=equipo`.
+- Al agendar sale el mismo aviso de WhatsApp al equipo (`agenda_cita_nueva`), con el usuario, el estatus y la nota en "Estatus".
+
+## Confirmación por WhatsApp a la clienta (INACTIVA)
+Al agendar una cita **nueva** (en línea o por el equipo) se le puede mandar a la clienta, en orden: (1) `agenda_confirmacion_clienta` (cita agendada: servicio, cuándo, dónde y estatus del anticipo), (2) `agenda_indicaciones_previas` con la infografía de indicaciones a considerar y (3) `agenda_instrucciones_dia_sesion` con la infografía del día de la sesión. Las dos últimas son plantillas con **imagen en el encabezado** (fuera de las 24 h de una conversación WhatsApp solo admite plantillas). Si el primero falla se detiene. Reagendar NO manda nada a la clienta.
+Textos exactos en `plantillas.ts`. Para activarla hace falta, en este orden:
+1. Crear y que Meta **apruebe** las 3 plantillas (UTILITY, es_MX); las dos con imagen necesitan una imagen de ejemplo en el encabezado.
+2. Tener el número de WhatsApp **definitivo** conectado (el de prueba de Meta solo escribe a 5 destinatarios verificados) y el WABA sin bloqueo de pago.
+3. Las 2 infografías son capturas de los desplegables "Indicaciones a considerar" y "Cómo debes asistir a tu sesión" de /agendar, guardadas en `public/infografias/` (se sirven en `agenda.ciredepilacion.com/infografias/…png`, deben estar desplegadas en Vercel). Si cambias esos textos en `CierreCita.jsx`, vuelve a capturarlas. Los secretos opcionales `INFOGRAFIA_INDICACIONES_URL` / `INFOGRAFIA_DIA_SESION_URL` las reemplazan.
+4. Migración `057_confirmacion_clienta.sql` y activar por sucursal: `update agenda_sucursales set confirmar_clienta = true where slug = '…'` (conviene probar primero con una).
+En `/agendar-equipo` hay una casilla para no enviarla en una cita concreta.
