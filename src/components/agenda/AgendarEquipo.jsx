@@ -14,7 +14,26 @@ const hashPassword = async (pass) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("CIRE_2026:" + pass));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 };
-const leerSesion = () => { try { return JSON.parse(sessionStorage.getItem(CLAVE) || "null"); } catch { return null; } };
+// "Recuérdame": la sesión se guarda 30 días en ese dispositivo (localStorage); si no, solo mientras dure la pestaña (sessionStorage).
+// Lo que se guarda es el hash de la contraseña, nunca la contraseña.
+const DIAS_RECUERDAME = 30;
+const leerSesion = () => {
+  try {
+    const t = JSON.parse(sessionStorage.getItem(CLAVE) || "null"); if (t) return t;
+    const r = JSON.parse(localStorage.getItem(CLAVE) || "null");
+    if (r && r.hasta > Date.now()) return { usuario: r.usuario, hash: r.hash };
+    localStorage.removeItem(CLAVE);
+  } catch { /* sin almacenamiento */ }
+  return null;
+};
+const guardarSesion = (c, recordar) => {
+  try {
+    sessionStorage.setItem(CLAVE, JSON.stringify(c));
+    if (recordar) localStorage.setItem(CLAVE, JSON.stringify({ ...c, hasta: Date.now() + DIAS_RECUERDAME * 864e5 })); else localStorage.removeItem(CLAVE);
+  } catch { /* sin almacenamiento */ }
+};
+const borrarSesion = () => { try { sessionStorage.removeItem(CLAVE); localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento */ } };
+const esCelular = () => { try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; } };
 
 const api = crearApi("");
 
@@ -23,7 +42,7 @@ export default function AgendarEquipo() {
   const [err, setErr] = useState("");
   const [cargando, setCargando] = useState(false);
   const [paso, setPaso] = useState("paquete"); // paquete | horarios | datos | listo
-  const [user, setUser] = useState(""); const [pass, setPass] = useState("");
+  const [user, setUser] = useState(""); const [pass, setPass] = useState(""); const [recordar, setRecordar] = useState(esCelular);
 
   const [cat, setCat] = useState(null); // { grupos, sucursales }
   const [q, setQ] = useState(""); const [abierta, setAbierta] = useState("");
@@ -49,7 +68,7 @@ export default function AgendarEquipo() {
   const correr = async (fn) => {
     setErr(""); setCargando(true);
     try { await fn(); } catch (e) {
-      if (/Sesión no válida/.test(e.message)) { sessionStorage.removeItem(CLAVE); setCred(null); }
+      if (/Sesión no válida/.test(e.message)) { borrarSesion(); setCred(null); }
       setErr(e.message);
     }
     setCargando(false);
@@ -62,11 +81,11 @@ export default function AgendarEquipo() {
       if (!user.trim() || !pass) throw new Error("Escribe tu usuario y contraseña del sistema.");
       const c = { usuario: user.trim(), hash: await hashPassword(pass) };
       const j = await api("equipo_servicios", c); // valida la sesión y trae el catálogo
-      sessionStorage.setItem(CLAVE, JSON.stringify(c));
+      guardarSesion(c, recordar);
       setCat(j); setCred(c); setPass("");
     });
   };
-  const salir = () => { sessionStorage.removeItem(CLAVE); setCred(null); setCat(null); reiniciar(); };
+  const salir = () => { borrarSesion(); setCred(null); setCat(null); reiniciar(); };
 
   useEffect(() => {
     if (!cred || cat) return;
@@ -161,6 +180,10 @@ export default function AgendarEquipo() {
             <input style={S.input} value={user} onChange={(e) => setUser(e.target.value)} autoCapitalize="none" autoComplete="username" />
             <label style={S.etiqueta}>Contraseña</label>
             <input style={S.input} type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="current-password" />
+            <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14, color: C.texto, marginBottom: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} style={{ width: 20, height: 20 }} />
+              <span>Recuérdame en este dispositivo<span style={{ display: "block", fontSize: 12, color: C.suave }}>Se mantiene la sesión {DIAS_RECUERDAME} días. No lo marques en equipos compartidos.</span></span>
+            </label>
             <button style={S.boton(!cargando)} disabled={cargando}>{cargando ? "Entrando…" : "Entrar"}</button>
           </form>
         )}
