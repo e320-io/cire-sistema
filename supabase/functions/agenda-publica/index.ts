@@ -224,7 +224,9 @@ async function mandarPlantilla(tel: string, p: Plantilla, vars: string[], imagen
       template: { name: p.name, language: { code: "es_MX" }, components },
     }),
   });
-  if (!r.ok) console.error(`aviso WhatsApp (${p.name}) falló para …${tel.slice(-4)}:`, (await r.text()).slice(0, 300));
+  const cuerpo = (await r.text()).slice(0, 400);
+  if (!r.ok) console.error(`aviso WhatsApp (${p.name}) falló para …${tel.slice(-4)}:`, cuerpo.slice(0, 300));
+  await sb("agenda_wa_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ plantilla: p.name, destino: tel.replace(/\D/g, "").slice(-4), ok: r.ok, detalle: r.ok ? null : cuerpo }) }).catch(() => {}); // bitácora (migración 058)
   return r.ok;
 }
 const enSegundoPlano = (trabajo: Promise<unknown>) =>
@@ -246,7 +248,10 @@ function avisar(cfg: Cfg, p: Plantilla, vars: string[]) {
 const INFOGRAFIAS = "https://agenda.ciredepilacion.com/infografias";
 function confirmarClienta(cfg: Cfg, tel: string, vars: { nombre: string; servicio: string; cuando: string; estatus: string }) {
   const img1 = env("INFOGRAFIA_INDICACIONES_URL") || `${INFOGRAFIAS}/indicaciones-a-considerar.png`, img2 = env("INFOGRAFIA_DIA_SESION_URL") || `${INFOGRAFIAS}/como-asistir-sesion.png`;
-  if (!cfg.confirmar_clienta || !env("WA_TOKEN") || !env("WA_PHONE_ID")) return false;
+  if (!cfg.confirmar_clienta || !env("WA_TOKEN") || !env("WA_PHONE_ID")) {
+    enSegundoPlano(sb("agenda_wa_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ plantilla: "agenda_confirmacion_clienta", destino: tel10(tel).slice(-4), ok: false, detalle: `no se intentó: confirmar_clienta=${cfg.confirmar_clienta} WA_TOKEN=${!!env("WA_TOKEN")} WA_PHONE_ID=${!!env("WA_PHONE_ID")}` }) }).catch(() => {}));
+    return false;
+  }
   const a = "52" + tel10(tel);
   const donde = [cfg.direccion || `CIRE ${cfg.nombre}`, cfg.maps_url].filter(Boolean).join(" · ");
   enSegundoPlano((async () => {
